@@ -1,0 +1,50 @@
+Object-InsideOut version 0.01.00
+================================
+
+This module provides a comprehensive framework for working with objects under
+the inside-out object model.
+
+The code for this module has been optimized for speed.  It is 2.5 to 4.5 times
+faster than Class::Std.
+
+INSTALLATION
+
+To install this module type the following:
+
+    perl Makefile.PL
+    make
+    make test
+    make install
+
+or if you have Module::Build installed:
+
+    perl Build.PL
+    perl Build
+    perl Build test
+    perl Build install
+
+DEPENDENCIES
+
+Requires Perl 5.6.0 or later.
+
+This module uses the following 'standard' modules:
+
+  ExtUtils::MakeMaker   - For installation
+  Test::More            - For installation
+
+This module requires the following module available from CPAN:
+
+  Exception::Class (1.22 or higher)
+
+This module will use the following if available:
+
+  Scalar::Util - Standard in 5.8 or obtain from CPAN (strongly recommended)
+
+COPYRIGHT AND LICENCE
+
+Copyright 2005 Jerry D. Hedden <jdhedden AT 1979 DOT usna DOT com>
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+
+# EOF
