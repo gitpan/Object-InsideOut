@@ -2,6 +2,7 @@ MANIFEST
 README
 Changes
 Makefile.PL
+Build.PL
 lib/Object/InsideOut.pm
 lib/Object/InsideOut/Util.pm
 lib/Object/InsideOut/Cumulative.pm

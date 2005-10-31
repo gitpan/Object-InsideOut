@@ -5,9 +5,9 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.01.00';
+our $VERSION = '0.02.00';
 
-my $phase = 'COMPILE';   # Initial phase
+my $phase = 'COMPILE';   # Phase of the Perl interpreter
 
 ### Exception Processing ###
 
@@ -114,11 +114,12 @@ sub OIO::full_message
 }
 
 
-# Install at application level using:  $SIG{__DIE__} = 'OIO::trap';
+# Catch untrapped errors
+# Usage:  local $SIG{__DIE__} = 'OIO::trap';
 sub OIO::trap
 {
     # Just rethrow if already an exception object
-    if (Object::InsideOut::Util::is_it($_[0], 'OIO')) {
+    if (Object::InsideOut::Util::is_it($_[0], 'Exception::Class::Base')) {
         $_[0]->rethrow();
     }
 
@@ -889,7 +890,12 @@ sub CLONE
 
             # Replace the old object ID with a new one
             Internals::SvREADONLY($$obj, 0);    # Unlock the object
-            $$obj = ($id_sub) ? &$id_sub : Scalar::Util::refaddr($obj);
+            if ($id_sub) {
+                local $SIG{__DIE__} = 'OIO::trap';
+                $$obj = &$id_sub;
+            } else {
+                $$obj = Scalar::Util::refaddr($obj);
+            }
             Internals::SvREADONLY($$obj, 1);    # Lock the object again
 
             # Update the keys of the attribute hashes with the new object ID
@@ -908,6 +914,7 @@ sub CLONE
                 my $pseudo_object = \(my $scalar = $old_id);
                 for my $pkg (@tree) {
                     if (my $replicate = $REPLICATORS{$pkg}) {
+                        local $SIG{__DIE__} = 'OIO::trap';
                         $replicate->($pseudo_object, $obj);
                     }
                 }
@@ -1006,6 +1013,7 @@ sub new
 
         if ($init) {
             # Send remaining args, if any, to Init subroutine
+            local $SIG{__DIE__} = 'OIO::trap';
             $init->($self, $args);
 
         } elsif (%$args) {
@@ -1068,6 +1076,7 @@ sub clone
 
         # Dispatch any special replication handling
         if (my $replicate = $REPLICATORS{$pkg}) {
+            local $SIG{__DIE__} = 'OIO::trap';
             $replicate->($parent, $clone);
         }
     }
@@ -1132,6 +1141,7 @@ sub DESTROY
         for my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
             # Dispatch any special destruction handling
             if (my $destroy = $DESTROYERS{$pkg}) {
+                local $SIG{__DIE__} = 'OIO::trap';
                 $destroy->($self);
             }
 
@@ -1214,6 +1224,7 @@ sub create_AUTOLOAD : HIDDEN
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
+                local $SIG{__DIE__} = 'OIO::trap';
                 if (my $code = $automethod->(@_)) {
                     # Go to the code ref returned by the Automethod
                     goto &{$code};
@@ -1250,6 +1261,7 @@ sub create_UNIVERSAL_can : HIDDEN
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $_[1];    # Method name
+                local $SIG{__DIE__} = 'OIO::trap';
                 if (my $code = $automethod->(@_)) {
                     # Use the code ref returned by the Automethod
                     my $method_name = $_[1];
@@ -1501,6 +1513,7 @@ sub create_CUMULATIVE : HIDDEN
         # Accumulate results
         for my $pkg (@{$tree->{$class}}) {
             if (my $code = $code_refs->{$pkg}) {
+                local $SIG{__DIE__} = 'OIO::trap';
                 if (defined($list_context)) {
                     push(@classes, $pkg);
                     if ($list_context) {
@@ -1601,7 +1614,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 0.01.00
+This document describes Object::InsideOut version 0.02.00
 
 =head1 SYNOPSIS
 
@@ -2172,7 +2185,7 @@ supported:
 Coercing an object to a scalar (C<:Scalarify>) is not supported as C<$$obj> is
 the ID of the object and cannot be overridden.
 
-=head2 The C<_DUMP()) Method
+=head2 The C<_DUMP()> Method
 
 Object::InsideOut exports a method called C<_DUMP> to each class that returns
 either a hash or string representation of the object that invokes the method.
@@ -2395,7 +2408,9 @@ L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
 
 =head1 REQUIREMENTS
 
-Scalar::Util
+L<Exception::Class> v1.22 or higher
+
+L<Scalar::Util> v1.17 or higher recommended
 
 =head1 TO DO
 

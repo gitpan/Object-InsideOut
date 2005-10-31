@@ -10,7 +10,9 @@ package AA; {
 
     my $id = 1;
 
-    sub id : ID { return ($id++); };
+    sub id : ID {
+        return ($id++);
+    }
 }
 
 

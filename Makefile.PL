@@ -47,7 +47,10 @@ WriteMakefile(
     'VERSION_FROM'  => 'lib/Object/InsideOut.pm',
     'ABSTRACT_FROM' => 'lib/Object/InsideOut.pm',
     'PREREQ_PM'     => { 'Exception::Class' => 1.22,
-                         'Test::More'       => 0 },
+                         'Test::More'       => 0,
+                         'attributes'       => 0,
+                         'overload'         => 0,
+                         'Data::Dumper'     => 0 },
     (($ExtUtils::MakeMaker::VERSION < 6.25) ?
         ('PL_FILES' => { })            : ()),
     (($ExtUtils::MakeMaker::VERSION > 6.30) ?

@@ -3,7 +3,7 @@ package Object::InsideOut::Cumulative; {
 use strict;
 use warnings;
 
-our $VERSION = '0.01.00';
+our $VERSION = '0.02.00';
 
 use Object::InsideOut;
 

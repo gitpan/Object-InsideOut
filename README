@@ -1,11 +1,28 @@
-Object-InsideOut version 0.01.00
+Object-InsideOut version 0.02.00
 ================================
 
-This module provides a comprehensive framework for working with objects under
-the inside-out object model.
+This module provides comprehensive support for implementing classes using the
+inside-out object model.
 
-The code for this module has been optimized for speed.  It is 2.5 to 4.5 times
-faster than Class::Std.
+This module implements inside-out objects as anonymous scalar references that
+have been blessed into a class with the scalar containing the ID for the
+object (usually its 'refaddr').  Object data (i.e., fields) are stored in
+hashes within the class's package and are keyed to the object's ID.
+
+This module offers all the capabilities of Class::Std with the following
+additional key advantages:
+
+= Speed
+As fast as 'blessed hash' objects for fetching and setting data, and 2.5-4.5
+times faster than Class::Std.
+
+= Threads
+Class::Std is not thread safe.  Object::InsideOUt is thread safe, and
+thoroughly supports sharing objects between threads using 'threads::shared'.
+
+= Flexibility
+Allows control over object ID specification, accessor naming, parameter name
+matching, and more.
 
 INSTALLATION
 
