@@ -45,6 +45,8 @@ MAIN:
 
     my $rc = threads->create(
                         sub {
+                            Object::InsideOut->CLONE() if ($] < 5.007002);
+
                             is($obj->x(), 5, 'Thread class data');
                             is($obj2->x(), 9, 'Thread subclass data');
                             is($obj2->y(), 3, 'Thread subclass data');
@@ -56,9 +58,6 @@ MAIN:
                             is_deeply($obj->x(), [ 1, 2, 3], 'Thread class data');
                             is($obj2->x(), 99, 'Thread subclass data');
                             is($obj2->y(), 2, 'Thread subclass data');
-
-                            $obj->DESTROY() if ($] < 5.007002);
-                            $obj2->DESTROY() if ($] < 5.007002);
 
                             return (1);
                         }

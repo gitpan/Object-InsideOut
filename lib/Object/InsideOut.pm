@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.02.00';
+our $VERSION = '0.03.00';
 
 my $phase = 'COMPILE';   # Phase of the Perl interpreter
 
@@ -335,6 +335,14 @@ my %CUMULATIVE;
 # 'Cumulative(bottom up)'.
 my %ANTICUMULATIVE;
 
+# Methods that support 'chaining' from the top of the class tree downwards.
+# These chained methods are marked with an attributed called 'Chained'.
+my %CHAINED;
+
+# Methods that support 'chaining' from the bottom of the class tree upwards.
+# These chained methods are marked with an attributed 'Chained(bottom up)'.
+my %ANTICHAINED;
+
 # Restricted methods are only callable from within the class hierarchy, and
 # are marked with an attributed called 'Restricted'.
 my %RESTRICTED;
@@ -457,29 +465,36 @@ sub MODIFY_CODE_ATTRIBUTES
             $INITORS{$pkg} = $code;
             push(@attrs, $arg);
 
-        } elsif ($attr =~ /^REPL(ICATE)?$/) {
+        } elsif ($attr =~ /^REPL(?:ICATE)?$/) {
             $REPLICATORS{$pkg} = $code;
             push(@attrs, $arg);
 
-        } elsif ($attr =~ /^DEST(ROY)?$/) {
+        } elsif ($attr =~ /^DEST(?:ROY)?$/) {
             $DESTROYERS{$pkg} = $code;
             push(@attrs, $arg);
 
-        } elsif ($attr =~ /^AUTO(METHOD)?$/) {
+        } elsif ($attr =~ /^AUTO(?:METHOD)?$/) {
             $AUTOMETHODS{$pkg} = $code;
             push(@attrs, $arg);
 
-        } elsif ($attr =~ /^CUM(ULATIVE)?$/) {
+        } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
             if (($arg =~ /BOTTOM\s+UP/) || ($arg =~ /BASE\s+FIRST/)) {
                 push(@{$ANTICUMULATIVE{$pkg}}, $info);
             } else {
                 push(@{$CUMULATIVE{$pkg}}, $info);
             }
 
-        } elsif ($attr =~ /^RESTRICT(ED)?$/) {
+        } elsif ($attr =~ /^CHAIN(?:ED)?$/) {
+            if (($arg =~ /BOTTOM\s+UP/) || ($arg =~ /BASE\s+FIRST/)) {
+                push(@{$ANTICHAINED{$pkg}}, $info);
+            } else {
+                push(@{$CHAINED{$pkg}}, $info);
+            }
+
+        } elsif ($attr =~ /^RESTRICT(?:ED)?$/) {
             push(@{$RESTRICTED{$pkg}}, $info);
 
-        } elsif ($attr =~ /^PRIV(ATE)?$/) {
+        } elsif ($attr =~ /^PRIV(?:ATE)?$/) {
             push(@{$PRIVATE{$pkg}}, $info);
 
         } elsif ($attr eq 'HIDDEN') {
@@ -514,12 +529,12 @@ sub MODIFY_CODE_ATTRIBUTES
 ### 'CHECK' Phase Attribute Handling ###
 
 # Forward declaration of thread object sharing flag hash
-# (Used in CHECK block below)
+# (Used in INITIALIZE below)
 my %IS_SHARING;
 
 
 # Finds a subroutine's name in a package from its code ref
-sub sub_name # :HIDDEN attribute set 'by hand' at end of CHECK block
+sub sub_name : PRIVATE
 {
     my ($pkg, $ref, $attr, $location) = @_;
     no strict 'refs';
@@ -538,7 +553,10 @@ sub sub_name # :HIDDEN attribute set 'by hand' at end of CHECK block
 }
 
 
-CHECK {
+# This subroutine is normally only meant to be run as part of the CHECK phase.
+# It has been made a subroutine to accommodate usage with mod_perl.
+sub INITIALIZE
+{
     no warnings 'redefine';
     no strict 'refs';
 
@@ -614,20 +632,26 @@ CHECK {
     for my $pkg (keys(%FIELDS)) {
         my @hashes;
         for my $item (@{$FIELDS{$pkg}}) {
-            my ($hash, $decl) = @{$item};
+            if (ref($item) eq 'ARRAY') {
+                my ($hash, $decl) = @{$item};
 
-            # Share the hash, if applicable
-            if (is_sharing($pkg)) {
-                threads::shared::share($hash)
+                # Share the hash, if applicable
+                if (is_sharing($pkg)) {
+                    threads::shared::share($hash)
+                }
+
+                # Process any accessor declarations
+                if ($decl) {
+                    create_accessors($pkg, $hash, $decl);
+                }
+
+                # Save hash refs
+                push(@hashes, $hash);
+
+            } else {
+                # Already processed
+                push(@hashes, $item);
             }
-
-            # Process any accessor declarations
-            if ($decl) {
-                create_accessors($pkg, $hash, $decl);
-            }
-
-            # Save hash refs
-            push(@hashes, $hash);
         }
 
         # :FIELD declarations have been removed
@@ -635,22 +659,43 @@ CHECK {
     }
 
 
+    # Methods exported to all classes
+    my @EXPORT = qw(new clone DESTROY _DUMP);
+
+
     # Only install AUTOLOAD if we have Automethods
     if (%AUTOMETHODS) {
-        # Create AUTOLOAD under Object::InsideOut
-        *Object::InsideOut::AUTOLOAD = create_AUTOLOAD(\%AUTOMETHODS,
-                                                       \%TREE_BOTTOM_UP);
+        if (! Object::InsideOut->can('AUTOLOAD')) {
+            # Create AUTOLOAD under Object::InsideOut
+            *Object::InsideOut::AUTOLOAD = create_AUTOLOAD(\%AUTOMETHODS,
+                                                           \%TREE_BOTTOM_UP);
 
-        # Install our version of UNIVERSAL::can that understands :Automethod
-        *UNIVERSAL::can = create_UNIVERSAL_can(\&UNIVERSAL::can,
-                                               \%AUTOMETHODS,
-                                               \%TREE_BOTTOM_UP);
+            # Install our version of UNIVERSAL::can that understands :Automethod
+            *UNIVERSAL::can = create_UNIVERSAL_can(\&UNIVERSAL::can,
+                                                   \%AUTOMETHODS,
+                                                   \%TREE_BOTTOM_UP);
+        }
+
+        # Add AUTOLOAD to export list
+        push(@EXPORT, 'AUTOLOAD');
+    }
+
+
+    # Export certain methods to all classes
+    for my $pkg (keys(%TREE_TOP_DOWN)) {
+        for my $sym (@EXPORT) {
+            my $full_sym = $pkg.'::'.$sym;
+            # Only export if method doesn't already exist
+            if (! *{$full_sym}{CODE}) {
+                *{$full_sym} = \&{$sym};
+            }
+        }
     }
 
 
     # Implement cumulative methods
     if (%CUMULATIVE || %ANTICUMULATIVE) {
-        require Object::InsideOut::Cumulative;
+        require Object::InsideOut::Results;
 
         # Get names for :CUMULATIVE methods
         my (%cum, %cum_loc);
@@ -711,6 +756,69 @@ CHECK {
     }
 
 
+    # Implement chained methods
+    if (%CHAINED || %ANTICHAINED) {
+        require Object::InsideOut::Results;
+
+        # Get names for :CHAINED methods
+        my (%chain, %chain_loc);
+        for my $package (keys(%CHAINED)) {
+            for my $info (@{$CHAINED{$package}}) {
+                my ($code, $location) = @{$info};
+                my $name = sub_name($package, $code, ':CHAINED', $location);
+                $chain{$name}{$package} = $code;
+                $chain_loc{$name}{$package} = $location;
+            }
+        }
+
+        # Get names for :CHAINED(BOTTOM UP) methods
+        my %antichain;
+        for my $package (keys(%ANTICHAINED)) {
+            for my $info (@{$ANTICHAINED{$package}}) {
+                my ($code, $location) = @{$info};
+                my $name = sub_name($package, $code, ':CHAINED(BOTTOM UP)', $location);
+
+                # Check for conflicting definitions of $name
+                if ($chain{$name}) {
+                    for my $other_package (keys(%{$chain{$name}})) {
+                        if ($other_package->isa($package) ||
+                            $package->isa($other_package))
+                        {
+                            my ($pkg,  $file,  $line)  = @{$chain_loc{$name}{$other_package}};
+                            my ($pkg2, $file2, $line2) = @{$location};
+                            OIO::Attribute->die(
+                                'location' => $location,
+                                'message'  => "Conflicting definitions for chained method '$name'",
+                                'Info'     => "Declared as :CHAINED in class '$pkg' (file '$file', line $line), but declared as :CHAINED(BOTTOM UP) in class '$pkg2' (file '$file2' line $line2)");
+                        }
+                    }
+                }
+
+                $antichain{$name}{$package} = $code;
+            }
+        }
+        undef(%CHAINED);      # No longer needed
+        undef(%ANTICHAINED);
+        undef(%chain_loc);
+
+        # Implement :CHAINED methods
+        for my $name (keys(%chain)) {
+            for my $package (keys(%{$chain{$name}})) {
+                *{$package.'::'.$name} = create_CHAINED(\%TREE_TOP_DOWN,
+                                                        $chain{$name});
+            }
+        }
+
+        # Implement :CHAINED(BOTTOM UP) methods
+        for my $name (keys(%antichain)) {
+            for my $package (keys(%{$antichain{$name}})) {
+                *{$package.'::'.$name} = create_CHAINED(\%TREE_BOTTOM_UP,
+                                                        $antichain{$name});
+            }
+        }
+    }
+
+
     # Implement overload (-ify) operators
     for my $package (keys(%OVERLOAD)) {
         for my $operation (@{$OVERLOAD{$package}}) {
@@ -743,6 +851,13 @@ _CODE_
     }
     undef(%OVERLOAD);   # No longer needed
 
+    # Bless an object into every class
+    # This works around an obscure 'overload' bug reported against Class::Std
+    # http://rt.cpan.org/NoAuth/Bug.html?id=14048
+    for my $package (keys(%TREE_TOP_DOWN)) {
+        bless(\(my $scalar), $package);
+    }
+
 
     # Implement restricted methods - only callable within hierarchy
     for my $package (keys(%RESTRICTED)) {
@@ -767,7 +882,6 @@ _CODE_
 
 
     # Implement hidden methods - no longer callable by name
-    # Must be done last in this CHECK block
     for my $package (keys(%HIDDEN)) {
         for my $info (@{$HIDDEN{$package}}) {
             my ($code, $location) = @{$info};
@@ -777,9 +891,18 @@ _CODE_
     }
     undef(%HIDDEN);   # No longer needed
 
-    # These must be done 'by hand' because they're inside the for-loop above
-    create_HIDDEN(__PACKAGE__, 'sub_name');
-    create_HIDDEN(__PACKAGE__, 'create_HIDDEN');
+
+    # Set the next phase
+    $phase = 'RUNNING';
+}
+
+
+# Execute CHECK phase code
+{
+    no warnings 'void';
+    CHECK {
+        INITIALIZE();
+    }
 }
 
 
@@ -925,34 +1048,6 @@ sub CLONE
 
 
 ### Object Methods ###
-
-# For performance considerations, certain methods are exported to all classes
-INIT {
-    # Default export list
-    my @EXPORT = qw(new clone DESTROY _DUMP);
-
-    # Additional exports
-    if (Object::InsideOut->can('AUTOLOAD')) {
-        push(@EXPORT, 'AUTOLOAD');
-    }
-
-    # Export methods to all classes
-    no strict 'refs';
-
-    for my $pkg (keys(%TREE_TOP_DOWN)) {
-        for my $sym (@EXPORT) {
-            my $full_sym = $pkg.'::'.$sym;
-            # Only export if method doesn't already exist
-            if (! *{$full_sym}{CODE}) {
-                *{$full_sym} = \&{$sym};
-            }
-        }
-    }
-
-    # Set the next phase
-    $phase = 'RUNNING';
-}
-
 
 # Object Constructor
 sub new
@@ -1204,8 +1299,8 @@ sub _DUMP
 ### Code Generators ###
 
 # Dynamically creates an AUTOLOAD subroutine
-# Called from CHECK block only if some Automethods are defined
-sub create_AUTOLOAD : HIDDEN
+# Called from INITIALIZE only if some Automethods are defined
+sub create_AUTOLOAD : PRIVATE
 {
     # $AUTOMETHODS    - ref to %AUTOMETHODS
     # $TREE_BOTTOM_UP - ref to %TREE_BOTTOM_UP
@@ -1239,9 +1334,9 @@ sub create_AUTOLOAD : HIDDEN
 }
 
 
-# Returns a closure back to the CHECK block that is used to redefine
+# Returns a closure back to INITIALIZE that is used to redefine
 # UNIVERSAL::can()
-sub create_UNIVERSAL_can : HIDDEN
+sub create_UNIVERSAL_can : PRIVATE
 {
     # $univ_can       - ref to the orginal UNIVERSAL::can()
     # $AUTOMETHODS    - ref to %AUTOMETHODS
@@ -1496,16 +1591,15 @@ _GET_
 }
 
 
-# Returns a closure back to the CHECK block that is used to setup CUMULATIVE
+# Returns a closure back to INITIALIZE that is used to setup CUMULATIVE
 # and CUMULATIVE(BOTTOM UP) methods for a particular method name.
-sub create_CUMULATIVE : HIDDEN
+sub create_CUMULATIVE : PRIVATE
 {
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
     my ($tree, $code_refs) = @_;
 
     return sub {
-        my @args  = @_;
         my $class = ref($_[0]) || $_[0];
         my $list_context = wantarray;
         my (@results, @classes);
@@ -1514,6 +1608,7 @@ sub create_CUMULATIVE : HIDDEN
         for my $pkg (@{$tree->{$class}}) {
             if (my $code = $code_refs->{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
+                my @args  = @_;
                 if (defined($list_context)) {
                     push(@classes, $pkg);
                     if ($list_context) {
@@ -1537,16 +1632,53 @@ sub create_CUMULATIVE : HIDDEN
                 return (@results);
             }
             # Scalar context - returns object
-            return (Object::InsideOut::Cumulative->new('VALUES'  => \@results,
-                                                       'CLASSES' => \@classes));
+            return (Object::InsideOut::Results->new('VALUES'  => \@results,
+                                                    'CLASSES' => \@classes));
         }
     };
 }
 
 
-# Returns a 'wrapper' closure back to the CHECK block that restricts a method
+# Returns a closure back to INITIALIZE that is used to setup CHAINED
+# and CHAINED(BOTTOM UP) methods for a particular method name.
+sub create_CHAINED : PRIVATE
+{
+    # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
+    # $code_refs - hash ref by package of code refs for a particular method name
+    my ($tree, $code_refs) = @_;
+
+    return sub {
+        my @args = @_;
+        my $class = ref($_[0]) || $_[0];
+        my $list_context = wantarray;
+        my @classes;
+
+        # Chain results together
+        for my $pkg (@{$tree->{$class}}) {
+            if (my $code = $code_refs->{$pkg}) {
+                local $SIG{__DIE__} = 'OIO::trap';
+                @args = $code->(@args);
+                push(@classes, $pkg);
+            }
+        }
+
+        # Return results
+        if (defined($list_context)) {
+            if ($list_context) {
+                # List context
+                return (@args);
+            }
+            # Scalar context - returns object
+            return (Object::InsideOut::Results->new('VALUES'  => \@args,
+                                                    'CLASSES' => \@classes));
+        }
+    };
+}
+
+
+# Returns a 'wrapper' closure back to INITIALIZE that restricts a method
 # to being only callable from within its class hierarchy
-sub create_RESTRICTED : HIDDEN
+sub create_RESTRICTED : PRIVATE
 {
     my ($package, $method, $code) = @_;
     return sub {
@@ -1559,9 +1691,9 @@ sub create_RESTRICTED : HIDDEN
 }
 
 
-# Returns a 'wrapper' closure back to the CHECK block that makes a method
+# Returns a 'wrapper' closure back to INITIALIZE that makes a method
 # private (i.e., only callable from within its own class).
-sub create_PRIVATE : HIDDEN
+sub create_PRIVATE : PRIVATE
 {
     my ($package, $method, $code) = @_;
     return sub {
@@ -1576,7 +1708,7 @@ sub create_PRIVATE : HIDDEN
 
 # Redefines a subroutine in this package to make it uncallable from the outside
 # world.
-sub create_HIDDEN #: HIDDEN attribute set 'by hand' at end of CHECK block
+sub create_HIDDEN : PRIVATE
 {
     my ($package, $method) = @_;
 
@@ -1614,7 +1746,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 0.02.00
+This document describes Object::InsideOut version 0.03.00
 
 =head1 SYNOPSIS
 
@@ -1636,6 +1768,7 @@ This document describes Object::InsideOut version 0.02.00
      # Takes 'INFO' as an optional parameter to ->new()
      my %init_args :InitArgs = (
          'INFO' => {
+             'Field'   => \%info,
              'Default' => 'none',
              'Type'    => 'LIST',
          },
@@ -1706,7 +1839,7 @@ Multiple inheritance is supported:
 
     use Object::InsideOut qw(My::Parent Another::Parent);
 
-There is no need for 'use base ...', or to set up @ISA arrays:
+There is no need for C<use base ...>, or to set up C<@ISA> arrays:
 Object::InsideOut loads the parent module(s), calls their C<import> functions
 and sets up the sub-class's @ISA array.
 
@@ -2108,9 +2241,121 @@ scope, it is available as C<$CALLER::_>.
 
 As with C<Class::Std>, Object::InsideOut provides a mechanism for creating
 methods whose effects accumulate through the class hierarchy.  See
-L<Class::Std/"C<:CUMULATIVE()>"> for details.  Such methods are tagged with the C<:Cumulative> attribute, and propogate from the I<top down>
-through the class hierarchy.  If tagged with C<:Cumulative(bottom up)>, they
-will propogated from the object's class upward.
+L<Class::Std/"C<:CUMULATIVE()>"> for details.  Such methods are tagged with
+the C<:Cumulative> attribute, and propogate from the I<top down> through the
+class hierarchy.  If tagged with C<:Cumulative(bottom up)>, they will
+propogated from the object's class upward.
+
+=head2 Chained Methods
+
+In addition to C<:Cumulative>, Object::InsideOut provides a way of creating
+methods that are chained together so that their return values are passed as
+input arguments to other similarly named methods in the same class hierarchy.
+
+For example, imagine you had a method called C<format_name> that formats a
+name for display:
+
+    package Subscriber; {
+        use Object::InsideOut;
+
+        sub format_name {
+            my ($self, $name) = @_;
+
+            # Strip leading and trailing whitespace
+            $name =~ s/^\s+//;
+            $name =~ s/\s+$//;
+
+            return ($name);
+        }
+    }
+
+And elsewhere you have a second class that formats the case of names:
+
+    package Person; {
+        use Lingua::EN::NameCase qw(nc);
+        use Object::InsideOut;
+
+        sub format_name {
+            my ($self, $name) = @_;
+
+            # Attempt to properly case names
+            return (nc($name));
+        }
+    }
+
+And you decide that you'd like to perform some formatting of your own, and
+then have all the parent methods apply their own formatting.  Normally, if you
+have a single parent class, you'd just call the method directly with
+C<$self->SUPER::format_name($name)>, but if you have more than one parent
+class you'd have to explicitly call each method directly:
+
+    package Customer; {
+        use Object::InsideOut qw(Person Subscriber);
+
+        sub format_name {
+            my ($self, $name) = @_;
+
+            # Compress all whitespace into a single space
+            $name =~ s/\s+/ /g;
+
+            $name = $self->Subscriber::format_name($name);
+            $name = $self->Person::format_name($name);
+
+            return $name;
+        }
+    }
+
+With Object::InsideOut you'd add the C<:CHAINED> attribute to each class's
+C<format_name> method, and the methods will be chained together automatically:
+
+    package Subscriber; {
+        use Object::InsideOut;
+
+        sub format_name :Chained {
+            my ($self, $name) = @_;
+
+            # Strip leading and trailing whitespace
+            $name =~ s/^\s+//;
+            $name =~ s/\s+$//;
+
+            return ($name);
+        }
+    }
+
+    package Person; {
+        use Lingua::EN::NameCase qw(nc);
+        use Object::InsideOut;
+
+        sub format_name :Chained {
+            my ($self, $name) = @_;
+
+            # Attempt to properly case names
+            return (nc($name));
+        }
+    }
+
+    package Customer; {
+        use Object::InsideOut qw(Person Subscriber);
+
+        sub format_name :Chained {
+            my ($self, $name) = @_;
+
+            # Compress all whitespace into a single space
+            $name =~ s/\s+/ /g;
+
+            return ($name);
+        }
+    }
+
+So passing in someone's name to C<format_name> in C<Customer> would cause
+leading and trailing whitespace to be removed, then the name to be properly
+cased, and finally whitespace to be compressed to a single space.  The
+resulting C<$name> would be returned to the caller.
+
+If you label the method with the C<:Chained(bottom up)> attribute, then the
+chained methods are called starting with the object's class and working
+upwards through the class hierarchy, similar to how C<:Cumulative(bottom up)>
+works.
 
 =head2 Restricted and Private Methods
 
@@ -2142,7 +2387,7 @@ For subroutines marked with the following attributes:
 
 Object::InsideOut normally renders them uncallable (hidden) to class and
 application code (as they should normally only be needed by Object::InsideOut
-itself).  If needed, this behavior can be overridden adding the C<PUBLIC>,
+itself).  If needed, this behavior can be overridden by adding the C<PUBLIC>,
 C<RESTRICTED> or C<PRIVATE> keywords following the attribute:
 
     sub _init :Init(private)    # Callable from within this class
@@ -2152,8 +2397,8 @@ C<RESTRICTED> or C<PRIVATE> keywords following the attribute:
         ...
     }
 
-NOTE:  That the above cannot be accomplished by using the corresponding
-attributes.  For example:
+NOTE:  The above cannot be accomplished by using the corresponding attributes.
+For example:
 
     # sub _init :Init :Private    # Wrong syntax - doesn't work
 
@@ -2227,7 +2472,7 @@ C<threads->create()>:
     my $obj = My::Class->new();
 
     my $thr = threads->create(sub {
-            Object::InsideOut->CLONE();
+            Object::InsideOut->CLONE() if ($] < 5.007002);
 
             ...
             $obj->method();
@@ -2338,6 +2583,30 @@ Here is a complete example with thread object sharing enabled:
     # I.e., this shows that the object was indeed shared between threads
     print(join(', ', @{$obj->data()}), "\n");              # "bar, baz, zooks"
 
+=head1 USAGE WITH C<require> and C<mod_perl>
+
+Object::InsideOut performs most of its I<magic> during Perl's C<CHECK> phase.
+This causes problems when trying to load packages/classes at runtime using
+C<require>, or when using C<mod_perl>.  To overcome this issue,
+Object::InsideOut's C<CHECK> phase processing has been packaged into a
+subroutine that can be called by the application in these instances.
+
+For an application that loads packages/classes at runtime,
+C<Object::InsideOut::INITIALIZE> should be run immediately after the
+C<require> statement:
+
+    eval {
+        require My::Class;
+        Object::InsideOut::INITIALIZE;
+    };
+
+For CGIs running under C<mod_perl>, C<Object::InsideOut::INITIALIZE> should be
+run prior to any objects being created - preferrably right after all C<use>
+statements that load inside-out object classes:
+
+    use My::Class;
+    Object::InsideOut::INITIALIZE;
+
 =head1 DIAGNOSTICS
 
 This module uses C<Exception::Class> for reporting errors.  The base error
@@ -2360,16 +2629,13 @@ Forgot to 'use Object::InsideOut qw(Parent::Class ...);'
 
 =head1 BUGS AND LIMITATIONS
 
-Cannot use C<require Object::InsideOut;>, nor can you require a class that
-uses Object::InsideOut.
-
 Cannot overload an object to a scalar context (i.e., can't C<:SCALARIFY>).
 
 You cannot use two instances of the same class with mixed thread object
 sharing in same application.
 
-Cannot use attributes on 'subroutine stubs' (i.e., forward declaration without
-later definition) with C:<:Automethod>:
+Cannot use attributes on I<subroutine stubs> (i.e., forward declaration
+without later definition) with C:<:Automethod>:
 
     package My::Class; {
         sub method : Private;   # Will not work
@@ -2384,8 +2650,9 @@ later definition) with C:<:Automethod>:
 Due to limitations in the Perl parser, you cannot use line wrapping with the
 C<:Field> attribute.
 
-If 'set' accessor type is 'SCALAR', then can store any inside-out object type
-in it.  If 'HASH', then can store any 'ordinary' object type.
+If a I<set> accessor's type is C<SCALAR>, then it can store any inside-out
+object type in it.  If it is C<HASH>, then it can store any I<ordinary> object
+type.
 
 If you save an object inside another object when thread-sharing, you must
 rebless it when you get it out:
@@ -2396,12 +2663,27 @@ rebless it when you get it out:
     my $cc = $aa->get();
     bless($cc, 'BB');
 
-If your version of Perl does not support the C<weaken> function:
-If you C<use threads;>, then you need to manually destroy objects using
-C<$obj->DESTROY()>.  If C<use threads;> and C<use threads::shared>, then you
-need to manually destroy non-shared objects using C<$obj->DESTROY()>.
+If your version of Perl does not support the C<weaken> function found in
+L<Scalar::Util>, and you C<use threads;>, then you need to manually destroy
+objects using C<$obj->DESTROY()>.  If no C<weaken> and you C<use threads;> and
+C<use threads::shared>, then you need to manually destroy non-shared objects
+using C<$obj->DESTROY()>.
 
-There are no known bugs in this module.
+There are numerous bugs related to L<threads> and L<threads::shared> in
+various versions of Perl on various platforms that cause Object::InsideOut
+tests to fail:
+
+=over
+
+=item ActiveState Perl 5.8.4 on Windows - Object methods I<missing> in threads
+
+=item Perl 5.8.4 through 5.8.6 on Solaris - Perl core dumps when destroying
+shared objects
+
+=back
+
+The best solution for the above is to upgrade your version of Perl.  Barring
+that, you can tell CPAN to I<force> the installation of Object::InsideOut.
 
 Please submit any bugs, problems, suggestions, patches, etc. to:
 L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
@@ -2424,6 +2706,18 @@ Inside-out Object Model:
 L<http://www.perlmonks.org/index.pl?node_id=219378>,
 L<http://www.perlmonks.org/index.pl?node_id=483162>,
 Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
+
+=head1 ACKNOWLEDGEMENTS
+
+I<Abigail-II> on Perl Monks inside-out objects in general.
+
+Damian Conway for Class::Std.
+
+David A. Golden S<E<lt>david AT dagolden DOT comE<gt>> for thread handling for
+inside-out objects.
+
+Dan Kubb S<E<lt>dan.kubb-cpan AT autopilotmarketing DOT comE<gt>> for
+C<:CHAINED> methods.
 
 =head1 AUTHOR
 

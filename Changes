@@ -1,9 +1,14 @@
 Revision history for Perl extension Object::InsideOut.
 
+0.03.00 Tue Nov 01 14:27:30 2005
+	- Added :Chained method attribute
+	- Renamed Cumulative.pm to Results.pm
+	- Added INITIALIZE() subroutine to overcome CHECK/INIT phase issues
+	  with mod_perl and with runtime loading of classes
+
 0.02.00 Mon Oct 31 14:27:30 2005
 	- Error trapping on user-supplied subroutines
 	- Added Build.PL
-	- Corrected the date below
 
 0.01.00 Mon Oct 31 13:15:00 2005
 	- Initial release

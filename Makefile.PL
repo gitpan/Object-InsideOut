@@ -71,7 +71,7 @@ vcheck:
 	@if ! grep "VERSION = '$(VERSION)'" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in lib/Object/InsideOut.pm"; fi
 	@if ! grep "version $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in POD of lib/Object/InsideOut.pm"; fi
 	@if ! grep "VERSION = '$(VERSION)'" lib/Object/InsideOut/Util.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Util.pm"; fi
-	@if ! grep "VERSION = '$(VERSION)'" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Cumulative.pm"; fi
+	@if ! grep "VERSION = '$(VERSION)'" lib/Object/InsideOut/Results.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Results.pm"; fi
 
 chmod:
 	@$(CHMOD) 644 Build.PL `cat MANIFEST`

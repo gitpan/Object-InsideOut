@@ -5,9 +5,11 @@ Makefile.PL
 Build.PL
 lib/Object/InsideOut.pm
 lib/Object/InsideOut/Util.pm
-lib/Object/InsideOut/Cumulative.pm
+lib/Object/InsideOut/Results.pm
 t/01-basic.t
 t/02-auto.t
 t/03-threads.t
 t/04-shared.t
+t/05-require.t
+t/05-require.pm
 META.yml                                 Module meta-data (added by MakeMaker)

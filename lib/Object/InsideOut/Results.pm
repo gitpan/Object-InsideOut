@@ -1,9 +1,9 @@
-package Object::InsideOut::Cumulative; {
+package Object::InsideOut::Results; {
 
 use strict;
 use warnings;
 
-our $VERSION = '0.02.00';
+our $VERSION = '0.03.00';
 
 use Object::InsideOut;
 
