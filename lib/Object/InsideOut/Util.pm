@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.03.00';
+our $VERSION = '0.04.00';
 
 
 ### Module Initialization ###
@@ -135,7 +135,14 @@ sub process_args
     EXTRACT: {
         # Find arguments using regex's
         while (my ($key, $regex) = each(%regex)) {
-            $found{$key} = hash_re($args, $regex);
+            my $value = hash_re($args, $regex);
+            if (defined($found{$key})) {
+                if (defined($value)) {
+                    $found{$key} = $value;
+                }
+            } else {
+                $found{$key} = $value;
+            }
         }
 
         # Check for class-specific argument hash ref

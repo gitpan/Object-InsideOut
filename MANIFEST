@@ -6,10 +6,14 @@ Build.PL
 lib/Object/InsideOut.pm
 lib/Object/InsideOut/Util.pm
 lib/Object/InsideOut/Results.pm
+t/00-load.t
 t/01-basic.t
 t/02-auto.t
 t/03-threads.t
 t/04-shared.t
 t/05-require.t
 t/05-require.pm
+t/06-id.t
+t/07-dump.t
+t/08-access.t
 META.yml                                 Module meta-data (added by MakeMaker)

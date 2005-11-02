@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Object-InsideOut
-version:      0.03.00
+version:      0.04.00
 version_from: lib/Object/InsideOut.pm
 installdirs:  site
 requires:

@@ -1,6 +1,11 @@
 Revision history for Perl extension Object::InsideOut.
 
-0.03.00 Tue Nov 01 14:27:30 2005
+0.04.00 Wed Nov 02 12:00:00 2005
+	- Added specifier for 'standard' (i.e., get_X/set_X) accessor methods
+	- More tests
+	- Fixed bugs
+
+0.03.00 Tue Nov 01 15:41:00 2005
 	- Added :Chained method attribute
 	- Renamed Cumulative.pm to Results.pm
 	- Added INITIALIZE() subroutine to overcome CHECK/INIT phase issues

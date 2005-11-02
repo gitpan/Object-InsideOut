@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.03.00';
+our $VERSION = '0.04.00';
 
 my $phase = 'COMPILE';   # Phase of the Perl interpreter
 
@@ -285,7 +285,11 @@ sub import
 # 'Field'.
 my %FIELDS;
 
+# Field information for the _DUMP() method
 my %DUMP_FIELDS;
+
+# Packages with :InitArgs that need to be processed for _DUMP() field info
+my @DUMP_INITARGS;
 
 # Allow a single object ID specifier subroutine per class tree.  The
 # subroutine ref provided will return the object ID to be used for the object
@@ -407,21 +411,7 @@ sub MODIFY_HASH_ATTRIBUTES
         # Declaration for object initializer hash
         elsif ($attr =~ /^InitArgs?$/i) {
             $INIT_ARGS{$pkg} = $hash;
-
-            # Extract field info for '_DUMP'
-            while (my ($name, $val) = each(%{$hash})) {
-                if (ref($val) eq 'HASH') {
-                    if (my $field = hash_re($val, qr/^FIELD$/i)) {
-                        while (my ($name2, $field2) = each(%{$DUMP_FIELDS{$pkg}})) {
-                            if ($field == $field2) {
-                                delete($DUMP_FIELDS{$pkg}{$name2});
-                                last;
-                            }
-                        }
-                        $DUMP_FIELDS{$pkg}{$name} = $field;
-                    }
-                }
-            }
+            push(@DUMP_INITARGS, $pkg);
         }
 
         # Handle ':shared' attribute associated with threads::shared
@@ -1259,6 +1249,24 @@ sub _DUMP
 {
     my $self = shift;
 
+    # Extract field info for '_DUMP' from any :InitArgs hashes
+    while (my $pkg = shift(@DUMP_INITARGS)) {
+        while (my ($name, $val) = each(%{$INIT_ARGS{$pkg}})) {
+            if (ref($val) eq 'HASH') {
+                if (my $field = Object::InsideOut::Util::hash_re($val, qr/^FIELD$/i)) {
+                    # Remove any field info set during accessors creation
+                    while (my ($name2, $field2) = each(%{$DUMP_FIELDS{$pkg}})) {
+                        if ($field == $field2) {
+                            delete($DUMP_FIELDS{$pkg}{$name2});
+                            last;
+                        }
+                    }
+                    $DUMP_FIELDS{$pkg}{$name} = $field;
+                }
+            }
+        }
+    }
+
     # Gather the data from all the fields in the object's class tree
     my %dump;
     for my $pkg (@{$TREE_TOP_DOWN{ref($self)}}) {
@@ -1286,7 +1294,6 @@ sub _DUMP
         my $dump = Data::Dumper::Dumper(\%dump);
         chomp($dump);
         $dump =~ s/^.{8}//gm;   # Remove initial 8 chars from each line
-        $dump =~ s/ {8}/ /gm;   # Reduce indentation to 1 space per level
         $dump =~ s/;$//s;       # Remove trailing semi-colon
         return $dump;
     }
@@ -1402,21 +1409,30 @@ sub create_accessors : PRIVATE
     }
 
     # Get info for accessors
-    my $get  = Object::InsideOut::Util::hash_re($acc_spec, qr/(^acc|get)/i);
-    my $set  = Object::InsideOut::Util::hash_re($acc_spec, qr/(^acc|set)/i);
-    my $type = Object::InsideOut::Util::hash_re($acc_spec, qr/^type/i);
-
-    # Add field info for '_DUMP', if not already in added from :INIT_ARGS
-    my $add_dump = 1;
-    while (my ($name, $field) = each(%{$DUMP_FIELDS{$package}})) {
-        if ($field == $hash_ref) {
-            $add_dump = 0;
-            last;
+    my ($get, $set, $type);
+    while (my ($key, $name) = each(%{$acc_spec})) {
+        if ($key =~ /^st.*d/i) {
+            $get = 'get_' . $name;
+            $set = 'set_' . $name;
+        } elsif ($key =~ /^acc|^com|[gs]et/i) {
+            if ($key =~ /acc|com|get/i) {
+                $get = $name;
+            }
+            if ($key =~ /acc|com|set/i) {
+                $set = $name;
+            }
+        } elsif ($key =~ /^type$/i) {
+            $type = $name;
+        } else {
+            OIO::Attribute->die(
+                'caller_level' => 2,
+                'message'      => q/Can't create accessor method/,
+                'Info'         => "Unknown accessor specifier: $key");
         }
     }
-    if ($add_dump) {
-        $DUMP_FIELDS{$package}{($get) ? $get : $set} = $hash_ref;
-    }
+
+    # Add field info for '_DUMP'
+    $DUMP_FIELDS{$package}{($get) ? $get : $set} = $hash_ref;
 
     # Check on accessor names
     my $have_one = 0;
@@ -1746,7 +1762,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 0.03.00
+This document describes Object::InsideOut version 0.04.00
 
 =head1 SYNOPSIS
 
@@ -2075,12 +2091,36 @@ case-insensitive, as well.)
 =head2 Automatic Accessor Generation
 
 As part of the L</"Field Declarations">, you can optionally specify the
-automatic generation of accessor methods:
+automatic generation of accessor methods.  You can specify the generation of a
+pair of I<standard-named> accessor methods (i.e., prefixed by I<get_> and
+I<set_>):
+
+    my %data :Field('Standard' => 'data');
+
+The above results in Object::InsideOut automatically generating accessor
+methods named C<get_data> and C<set_data>.  (The keyword C<Standard> is
+case-insensitive, and can be abbreviated to C<Std>.)
+
+You can also separately specify the I<get> and/or I<set> accessors:
+
+    my %name :Field('Get' => 'name', 'Set' => 'change_name');
+        # or
+    my %name :Field('Get' => 'get_name');
+        # or
+    my %name :Field('Set' => 'new_name');
+
+For the above, you specify the full name of the accessor(s) (i.e., no prefix
+is added to the given name(s)).  (The C<Get> and C<Set> keywords are
+case-insensitive.)
+
+You can specify the automatic generation of a combined I<get/set> accessor
+method:
 
     my %comment :Field('Accessor' => 'comment');
 
-The above results in Object::InsideOut automatically generating a combined
-I<get/set> accessor method that is equivalent to:
+(The keyword C<Accessor> is case-insensitive, and can be abbreviated to
+C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)  The
+above generates a method called C<comment> that is equivalent to:
 
     sub comment
     {
@@ -2093,16 +2133,10 @@ I<get/set> accessor method that is equivalent to:
         return ($comment{$$self});
     }
 
-Or you can specify separate I<get> and/or I<set> accessors:
+For any of the automatically generated methods that perform I<set> operations,
+the method's return value is the value being set.
 
-    my %name :Field('Get' => 'name', 'Set' => 'change_name');
-        # or
-    my %name :Field('Get' => 'get_name', 'Set' => 'set_name');
-
-Note that the I<set> method (and the combined accessor method when used to set
-data) has return value which is the value being set.
-
-Type-checking for the I<set> operation can be specified as well:
+Type-checking for the I<set> operation can be specified, as well:
 
     my %level :Field('Accessor' => 'level', 'Type' => 'Numeric');
 
@@ -2126,9 +2160,6 @@ C<:Field> attribute:
 
     # Must be all on one line
     my %level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
-
-(The word I<Accessor> can be shortened to I<Acc>.  It and the other accessor
-specifier keys are case-insensitive.)
 
 =head2 Object ID
 

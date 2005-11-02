@@ -1,51 +1,115 @@
 use strict;
 use warnings;
 
-use Test::More tests => 23;
+use Test::More 'no_plan';
 
-package AA; {
+package MyBase; {
     use Object::InsideOut;
 
-    my %aa : Field({'acc'=>'aa', 'type' => 'num'});
+    my %name :Field('Get' => 'get_name');
+    my %rank :Field('Std' => 'rank');
+    my %snum :Field('Get' => 'get_snum');
+    my %priv :Field('get/set' => 'priv');
+    my %def  :Field('Get' => 'get_default');
 
-    my $id = 1;
+    my %init_args :InitArgs = (
+        'name' => { 'Field' => \%name },
+        'rank' => { 'Field' => \%rank },
+        'SNUM' => {
+            'Regexp'    => qr/^snum$/i,
+            'Mandatory' => 1
+        },
+        'PRIV' => qr/^priv(?:ate)?$/,
+        'def'  => {
+            'Field'   => \%def,
+            'Default' => 'MyBase::def',
+        },
+    );
 
-    sub id : ID {
-        return ($id++);
+    sub init :Init
+    {
+        my ($self, $args) = @_;
+
+        Test::More::is(ref($args), 'HASH'
+                            => 'Args passed to MyBase::init in hash-ref');
+        Test::More::is(Scalar::Util::refaddr($self), $$self
+                            => 'Identity correct in MyBase::init');
+
+        $priv{$$self} = $args->{'PRIV'};
+        Test::More::is($priv{$$self}, 'MyBase::priv'
+                            => 'MyBase priv arg unpacked correctly');
+
+        $snum{$$self} = $args->{'SNUM'} . '!';
+        Test::More::is($snum{$$self}, 'MyBase::snum!'  => 'MyBase snum arg unpacked correctly');
+    }
+
+    sub destroy :Destroy
+    {
+        my $self = $_[0];
+
+        Test::More::is(Scalar::Util::refaddr($self), $$self
+                            => 'Identity correct in MyBase::destroy');
+    }
+
+    sub verify :Cumulative {
+        my $self = $_[0];
+
+        Test::More::is($name{$$self}, 'MyBase::name'  => 'MyBase::name initialized');
+        Test::More::is($rank{$$self}, 'MyBase::rank'  => 'MyBase::rank initialized');
+        Test::More::is($snum{$$self}, 'MyBase::snum!' => 'MyBase::snum initialized');
+        Test::More::is($priv{$$self}, 'MyBase::priv'  => 'MyBase::name initialized');
+        Test::More::is($def{$$self},  'MyBase::def'   => 'MyBase::def initialized');
     }
 }
 
 
-package BB; {
-    use Object::InsideOut;
+package Der; {
+    use Object::InsideOut qw(MyBase);
 
-    my %bb : Field( { 'get' => 'bb', 'Set' => 'set_bb' } );
+    my %name :Field;
+    my %rank :Field;
+    my %snum :Field('Get' => 'get_snum');
+    my %priv :Field('Get' => 'get_priv');
+    my %def  :Field('Get' => 'get_default');
 
-    my %init_args : InitArgs = (
-        'BB' => {
-            'Field'     => \%bb,
-            'Default'   => 'def',
-            'Regex'     => qr/bb/i,
+    my %init_args :InitArgs = (
+        'name' => { 'Field' => \%name },
+        'rank' => { 'Field' => \%rank },
+        'snum' => { 'Field' => \%snum },
+        'priv' => { 'Field' => \%priv },
+        'def'  => {
+            'Field'   => \%def,
+            'Default' => 'default def',
         },
     );
-}
 
+    sub init :Init
+    {
+        my ($self, $args) = @_;
 
-package AB; {
-    use Object::InsideOut qw(AA BB);
+        Test::More::is(ref($args), 'HASH'
+                            => 'Args passed to Der::init in hash-ref');
+        Test::More::is(Scalar::Util::refaddr($self), $$self
+                            => 'Identity correct in Der::init');
+    }
 
-    my %data : Field({'acc'=>'data'});
-    my %info : Field('gET'=>'info_get', 'SET'=>'info_set');
+    sub destroy :Destroy
+    {
+        my $self = $_[0];
 
-    my %init_args : InitArgs = (
-        'data' => {
-            'Field' => \%data,
-        },
-        'info' => {
-            'FIELD' => \%info,
-            'DEF'   => ''
-        },
-    );
+        Test::More::is(Scalar::Util::refaddr($self), $$self
+                            => 'Identity correct in Der::destroy');
+    }
+
+    sub verify :Cumulative {
+        my $self = $_[0];
+
+        Test::More::is($name{$$self}, 'MyBase::name' => 'Der::name initialized');
+        Test::More::is($rank{$$self}, 'generic rank' => 'Der::rank initialized');
+        Test::More::is($snum{$$self}, 'Der::snum'    => 'Der::snum initialized');
+        Test::More::is($priv{$$self}, 'Der::priv'    => 'Der::name initialized');
+        Test::More::is($def{$$self},  'Der::def'     => 'Der::def initialized');
+    }
 }
 
 
@@ -53,38 +117,94 @@ package main;
 
 MAIN:
 {
-    my $obj;
-    eval { $obj = AA->new(); };
-    ok(! $@, '->new() ' . $@);
-    can_ok($obj, qw(new clone DESTROY CLONE aa));
+    my $obj = MyBase->new({
+        name => 'MyBase::name',
+        rank => 'generic rank',
+        snum => 'MyBase::snum',
+        priv => 'generic priv',
+        MyBase => {
+            rank => 'MyBase::rank',
+            private => 'MyBase::priv',
+        }
+    });
 
-    ok($$obj == 1,                  'Object ID: ' . $$obj);
-    ok(! defined($obj->aa),         'No default');
-    ok($obj->aa(42) == 42,          'Set ->aa()');
-    ok($obj->aa == 42,              'Get ->aa() == ' . $obj->aa);
+    can_ok($obj, qw(new clone DESTROY CLONE get_name get_rank set_rank
+                        get_snum priv get_default verify));
+    $obj->verify();
 
-    eval { $obj = BB->new(); };
-    can_ok($obj, qw(bb set_bb));
-    ok(! $@, '->new() ' . $@);
-    ok($$obj == 2,                  'Object ID: ' . $$obj);
-    is($obj->bb, 'def',             'Default: ' . $obj->bb);
-    is($obj->set_bb('foo'), 'foo',  'Set ->set_bb()');
-    is($obj->bb, 'foo',             'Get ->bb() eq ' . $obj->bb);
+    $obj->priv('Modified');
+    is($obj->priv(), 'Modified' => 'MyBase combined accessor');
 
-    eval { $obj = BB->new('bB' => 'baz'); };
-    ok(! $@, '->new() ' . $@);
-    ok($$obj == 3,                  'Object ID: ' . $$obj);
-    is($obj->bb, 'baz',             'Init: ' . $obj->bb);
-    is($obj->set_bb('foo'), 'foo',  'Set ->set_bb()');
-    is($obj->bb, 'foo',             'Get ->bb() eq ' . $obj->bb);
+    my $derobj = Der->new({
+        name => 'MyBase::name',
+        rank => 'generic rank',
+        snum => 'MyBase::snum',
+        priv => 'generic priv',
+        MyBase => {
+            rank => 'MyBase::rank',
+            priv => 'MyBase::priv',
+        },
+        Der => {
+            snum => 'Der::snum',
+            priv => 'Der::priv',
+            def  => 'Der::def',
+        },
+    });
 
-    eval { $obj = AB->new(); };
-    can_ok($obj, qw(aa bb set_bb data info_get info_set));
-    ok(! $@, '->new() ' . $@);
-    ok($$obj == 4,                  'Object ID: ' . $$obj);
-    is($obj->bb, 'def',             'Default: ' . $obj->bb);
-    is($obj->set_bb('foo'), 'foo',  'Set ->set_bb()');
-    is($obj->bb, 'foo',             'Get ->bb() eq ' . $obj->bb);
+    can_ok($derobj, qw(new clone DESTROY CLONE get_name get_rank set_rank
+                        get_snum get_priv get_default verify));
+    $derobj->verify();
+
+    is($derobj->get_name(), 'MyBase::name'  => 'Der name read accessor');
+    is($derobj->get_rank(), 'MyBase::rank'  => 'Der rank read accessor');
+    is($derobj->get_snum(), 'Der::snum'     => 'Der rank read accessor');
+    is($derobj->get_priv(), 'Der::priv'     => 'Der priv read accessor');
+
+    $derobj->set_rank('new rank');
+    is($derobj->get_rank(), 'new rank'      => 'Der rank write accessor');
+
+    eval { $derobj->set_name('new name') };
+    ok($@ =~ m/\ACan't locate object method "set_name" via package "Der"/
+                                            => 'Read only name attribute');
+
+    my $der2 = Der->new({
+        name => undef,
+        rank => 'generic rank',
+        priv => '',
+        MyBase => {
+            rank => 'MyBase::rank',
+            snum => 'MyBase::snum',
+            priv => 'MyBase::priv',
+        },
+        Der => {
+            snum => 0,
+        },
+    });
+
+    my $name = $der2->get_name();
+    ok(! defined($name)      => 'undef values processes as initializers');
+    is($der2->get_snum(), 0  => 'False values allowable as initializers');
+    is($der2->get_priv(), '' => 'False values allowable as initializers');
+
+    eval { my $obj2 = MyBase->new(
+                                    name => undef,
+                                    rank => 'generic rank',
+                                    priv => '',
+                                    MyBase => {
+                                        rank => 'MyBase::rank',
+                                        priv => 'MyBase::priv',
+                                    },
+                                    Der => {
+                                        snum => 'MyBase::snum',
+                                    }
+                                  );
+    };
+    if (my $e = OIO->caught()) {
+        ok($e->error() =~ /Missing mandatory initializer/
+                                => 'Missing mandatory initializer caught');
+    } else {
+        fail("Uncaught exception: $@");
+    }
 }
 
 exit(0);
