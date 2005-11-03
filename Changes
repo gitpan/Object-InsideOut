@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+0.06.00 Thu Nov 03 14:44:20 2005
+	- Fix for ->can('SUPER::method')
+
 0.05.00 Thu Nov 03 10:48:05 2005
 	- More tests (and fixes to a couple of bugs they turned up)
 

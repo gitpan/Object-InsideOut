@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.05.00';
+our $VERSION = '0.06.00';
 
 my $phase = 'COMPILE';   # Phase of the Perl interpreter
 
@@ -1352,26 +1352,36 @@ sub create_UNIVERSAL_can : PRIVATE
     my ($univ_can, $AUTOMETHODS, $TREE_BOTTOM_UP) = @_;
 
     return sub {
+        my ($thing, $method) = @_;
+
+        # Special handling for 'SUPER::'
+        # http://rt.cpan.org/NoAuth/Bug.html?id=14431
+        # 'SUPER::' refers to the context of the caller.  Therefore, need to
+        # preface 'SUPER::' with the caller's package name.
+        if ($method =~ /SUPER::/) {
+            my $caller = caller();
+            $method =~ s/SUPER::/${caller}::SUPER::/;
+        }
+
         # First, try the original UNIVERSAL::can()
-        if (my $code = $univ_can->(@_)) {
+        if (my $code = $univ_can->($thing, $method)) {
             return $code;
         }
 
         # Next, check with the Automethods
-        my $thing = $_[0];
         for my $package (@{$TREE_BOTTOM_UP->{ref($thing) || $thing}}) {
             if (my $automethod = $AUTOMETHODS->{$package}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $_[1];    # Method name
                 local $SIG{__DIE__} = 'OIO::trap';
-                if (my $code = $automethod->(@_)) {
+                if (my $code = $automethod->($thing, $method)) {
                     # Use the code ref returned by the Automethod
                     my $method_name = $_[1];
                     return sub {
                         my $self = shift;
                         no strict 'refs';
-                        $self->$method_name(@_);
+                        $self->$method_name($thing, $method);
                     };
                 }
             }
@@ -1764,7 +1774,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 0.05.00
+This document describes Object::InsideOut version 0.06.00
 
 =head1 SYNOPSIS
 
@@ -2754,7 +2764,7 @@ Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
 
 =head1 ACKNOWLEDGEMENTS
 
-I<Abigail-II> on Perl Monks inside-out objects in general.
+Abigail S<E<lt>perl AT abigail DOT nlE<gt>> for inside-out objects in general.
 
 Damian Conway for Class::Std.
 
@@ -2762,7 +2772,7 @@ David A. Golden S<E<lt>david AT dagolden DOT comE<gt>> for thread handling for
 inside-out objects.
 
 Dan Kubb S<E<lt>dan.kubb-cpan AT autopilotmarketing DOT comE<gt>> for
-C<:CHAINED> methods.
+C<:Chained> methods.
 
 =head1 AUTHOR
 

@@ -44,22 +44,8 @@ package DerClass2; {
     sub as_array  : ARRAYIFY   { return \@global_array2    }
 }
 
-# Test inheritance with change and they didn't "use Object::InsideOut"
-package DerClass3; {
-    use base qw(BaseClass);
-
-    sub as_str    : STRINGIFY  { return 'goodbye world' }
-    sub as_num    : NUMERIFY   { return 86 }
-    sub as_bool   : BOOLIFY    { return 1 }
-
-    sub as_code   : CODIFY     { return \&::global_sub2    }
-    sub as_glob   : GLOBIFY    { return \*::global_glob2   }
-    sub as_hash   : HASHIFY    { return \%global_hash2     }
-    sub as_array  : ARRAYIFY   { return \@global_array2    }
-}
-
 # Test inheritance with change and they don't re-specify the coercions
-package DerClass4; {
+package DerClass3; {
     use Object::InsideOut qw(BaseClass);
 
     sub as_str     { return 'goodbye world' }
@@ -73,7 +59,7 @@ package DerClass4; {
 }
 
 # Test inheritance with changing the subs used for the coercions
-package DerClass5; {
+package DerClass4; {
     use Object::InsideOut qw(BaseClass);
 
     sub as_str_changed    : STRINGIFY { return 'goodbye world' }
@@ -135,8 +121,7 @@ MAIN:
     is \@{$obj}, \@global_array2        => 'Der2 Array coercion';
 
 
-    # Redefining coercions on inheritance and there is no
-    # "use Object::InsideOut" in the subclass
+    # Inheritance with change and they don't re-specify the coercions
 
     $obj = DerClass3->new();
 
@@ -150,7 +135,7 @@ MAIN:
     is \@{$obj}, \@global_array2        => 'Der3 Array coercion';
 
 
-    # The subclass doesn't need to specify the coercions again
+    # Inheritance with changing the subs used for the coercions
 
     $obj = DerClass4->new();
 
@@ -162,20 +147,6 @@ MAIN:
     is \*{$obj}, \*global_glob2         => 'Der4 Glob coercion';
     is \%{$obj}, \%global_hash2         => 'Der4 Hash coercion';
     is \@{$obj}, \@global_array2        => 'Der4 Array coercion';
-
-
-    # The subclass doesn't need to specify the coercions again
-
-    $obj = DerClass5->new();
-
-    ok $obj                             => 'Der5 Boolean coercion';
-    is 0+$obj, 86                       => 'Der5 Numeric coercion';
-    is "$obj", 'goodbye world'          => 'Der5 String coercion';
-
-    is \&{$obj}, \&global_sub2          => 'Der5 Code coercion';
-    is \*{$obj}, \*global_glob2         => 'Der5 Glob coercion';
-    is \%{$obj}, \%global_hash2         => 'Der5 Hash coercion';
-    is \@{$obj}, \@global_array2        => 'Der5 Array coercion';
 }
 
 exit(0);

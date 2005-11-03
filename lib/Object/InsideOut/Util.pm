@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.05.00';
+our $VERSION = '0.06.00';
 
 
 ### Module Initialization ###
@@ -118,12 +118,8 @@ sub process_args
         if (ref($regex) eq 'HASH') {
             $regex = hash_re($regex, qr/^RE(?:GEXp?)?$/i);
         }
-        # If no regex, then just use the key itself
-        if (! $regex) {
-            $regex = $key;
-        }
         # Turn $regex into an actual 'Regexp', if needed
-        if (ref($regex) ne 'Regexp') {
+        if ($regex && ref($regex) ne 'Regexp') {
             $regex = qr/^$regex$/;
         }
         # Store it
@@ -135,7 +131,7 @@ sub process_args
     EXTRACT: {
         # Find arguments using regex's
         while (my ($key, $regex) = each(%regex)) {
-            my $value = hash_re($args, $regex);
+            my $value = ($regex) ? hash_re($args, $regex) : $args->{$key};
             if (defined($found{$key})) {
                 if (defined($value)) {
                     $found{$key} = $value;
