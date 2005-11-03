@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.04.00';
+our $VERSION = '0.05.00';
 
 my $phase = 'COMPILE';   # Phase of the Perl interpreter
 
@@ -468,14 +468,14 @@ sub MODIFY_CODE_ATTRIBUTES
             push(@attrs, $arg);
 
         } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
-            if (($arg =~ /BOTTOM\s+UP/) || ($arg =~ /BASE\s+FIRST/)) {
+            if ($arg =~ /BOTTOM\s+UP/) {
                 push(@{$ANTICUMULATIVE{$pkg}}, $info);
             } else {
                 push(@{$CUMULATIVE{$pkg}}, $info);
             }
 
         } elsif ($attr =~ /^CHAIN(?:ED)?$/) {
-            if (($arg =~ /BOTTOM\s+UP/) || ($arg =~ /BASE\s+FIRST/)) {
+            if ($arg =~ /BOTTOM\s+UP/) {
                 push(@{$ANTICHAINED{$pkg}}, $info);
             } else {
                 push(@{$CHAINED{$pkg}}, $info);
@@ -547,6 +547,11 @@ sub sub_name : PRIVATE
 # It has been made a subroutine to accommodate usage with mod_perl.
 sub INITIALIZE
 {
+    # Bring in support class if needed
+    if (%CUMULATIVE || %ANTICUMULATIVE || %CHAINED || %ANTICHAINED) {
+        require Object::InsideOut::Results;
+    }
+
     no warnings 'redefine';
     no strict 'refs';
 
@@ -685,8 +690,6 @@ sub INITIALIZE
 
     # Implement cumulative methods
     if (%CUMULATIVE || %ANTICUMULATIVE) {
-        require Object::InsideOut::Results;
-
         # Get names for :CUMULATIVE methods
         my (%cum, %cum_loc);
         for my $package (keys(%CUMULATIVE)) {
@@ -748,8 +751,6 @@ sub INITIALIZE
 
     # Implement chained methods
     if (%CHAINED || %ANTICHAINED) {
-        require Object::InsideOut::Results;
-
         # Get names for :CHAINED methods
         my (%chain, %chain_loc);
         for my $package (keys(%CHAINED)) {
@@ -1624,7 +1625,7 @@ sub create_CUMULATIVE : PRIVATE
         for my $pkg (@{$tree->{$class}}) {
             if (my $code = $code_refs->{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
-                my @args  = @_;
+                my @args = @_;
                 if (defined($list_context)) {
                     push(@classes, $pkg);
                     if ($list_context) {
@@ -1664,8 +1665,9 @@ sub create_CHAINED : PRIVATE
     my ($tree, $code_refs) = @_;
 
     return sub {
+        my $thing = shift;
+        my $class = ref($thing) || $thing;
         my @args = @_;
-        my $class = ref($_[0]) || $_[0];
         my $list_context = wantarray;
         my @classes;
 
@@ -1673,7 +1675,7 @@ sub create_CHAINED : PRIVATE
         for my $pkg (@{$tree->{$class}}) {
             if (my $code = $code_refs->{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
-                @args = $code->(@args);
+                @args = $code->($thing, @args);
                 push(@classes, $pkg);
             }
         }
@@ -1762,7 +1764,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 0.04.00
+This document describes Object::InsideOut version 0.05.00
 
 =head1 SYNOPSIS
 
@@ -1838,6 +1840,10 @@ thoroughly supports sharing objects between threads using L<threads::shared>.
 
 Allows control over object ID specification, accessor naming, parameter name
 matching, and more.
+
+=item mod_perl
+
+Usable from within L<mod_perl>.
 
 =back
 
@@ -2273,9 +2279,17 @@ scope, it is available as C<$CALLER::_>.
 As with C<Class::Std>, Object::InsideOut provides a mechanism for creating
 methods whose effects accumulate through the class hierarchy.  See
 L<Class::Std/"C<:CUMULATIVE()>"> for details.  Such methods are tagged with
-the C<:Cumulative> attribute, and propogate from the I<top down> through the
-class hierarchy.  If tagged with C<:Cumulative(bottom up)>, they will
-propogated from the object's class upward.
+the C<:Cumulative> attribute (or C<:Cumulative(top down)>), and propogate from
+the I<top down> through the class hierarchy (i.e., from the base classes down
+through the child classes).  If tagged with C<:Cumulative(bottom up)>, they
+will propogated from the object's class upwards through the parent classes.
+
+Note that this directionality is the reverse of Class::Std which defaults to
+bottom up, and uses I<BASE FIRST> to mean from the base classes downward
+through the children.  (I eschewed the use of the term I<BASE FIRST> because I
+felt it was ambiguous:  I<base> could refer to the base classes at the top of
+the hierarchy, or the child classes at the base (i.e., bottom) of the
+hierarchy.)
 
 =head2 Chained Methods
 

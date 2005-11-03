@@ -16,4 +16,7 @@ t/05-require.pm
 t/06-id.t
 t/07-dump.t
 t/08-access.t
+t/09-chained.t
+t/10-cumulative.t
+t/11-coercion.t
 META.yml                                 Module meta-data (added by MakeMaker)

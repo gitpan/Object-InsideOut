@@ -1,4 +1,4 @@
-Object-InsideOut version 0.04.00
+Object-InsideOut version 0.05.00
 ================================
 
 This module provides comprehensive support for implementing classes using the
@@ -23,6 +23,9 @@ thoroughly supports sharing objects between threads using 'threads::shared'.
 = Flexibility
 Allows control over object ID specification, accessor naming, parameter name
 matching, and more.
+
+= Usable with mod_perl
+
 
 INSTALLATION
 

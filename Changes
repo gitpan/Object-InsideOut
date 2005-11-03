@@ -1,9 +1,11 @@
 Revision history for Perl extension Object::InsideOut.
 
-0.04.00 Wed Nov 02 12:00:00 2005
+0.05.00 Thu Nov 03 10:48:05 2005
+	- More tests (and fixes to a couple of bugs they turned up)
+
+0.04.00 Wed Nov 02 16:05:00 2005
 	- Added specifier for 'standard' (i.e., get_X/set_X) accessor methods
-	- More tests
-	- Fixed bugs
+	- More tests (and fixes to a couple of bugs they turned up)
 
 0.03.00 Tue Nov 01 15:41:00 2005
 	- Added :Chained method attribute

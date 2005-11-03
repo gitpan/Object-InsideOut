@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.04.00';
+our $VERSION = '0.05.00';
 
 
 ### Module Initialization ###
