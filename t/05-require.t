@@ -1,12 +1,14 @@
 use strict;
 use warnings;
 
-use Test::More tests => 23;
+use Test::More 'no_plan';
 
 eval {
     require "t/05-require.pm";
     Object::InsideOut::INITIALIZE();
 };
+ok(! $@, 'require ' . $@);
+
 
 package main;
 

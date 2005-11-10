@@ -27,6 +27,7 @@ package MyDer; {
 
     my %public  :Field;
     my %private :Field;
+    my %misc :Field;
 
     my %init_args :InitArgs = (
         'pub' => {
@@ -36,9 +37,17 @@ package MyDer; {
             'field' => \%private,
             'def'   => 'der priv',
         },
+        'misc' => '',
     );
 
-    # No :Init sub needed
+    sub _init :Init
+    {
+        my ($self, $args) = @_;
+
+        if (exists($args->{'misc'})) {
+            $misc{$$self} = $args->{'misc'};
+        }
+    }
 }
 
 package main;
@@ -48,6 +57,7 @@ MAIN:
     my $obj = MyDer->new({
                   MyBase => { pub => 'base pub' },
                   MyDer  => { pub => 'der pub'  },
+                  'misc' => 'other',
               });
 
     my $hash = $obj->_DUMP();
@@ -60,8 +70,12 @@ MAIN:
 
     is($hash->{MyDer}{'pub'}, 'der pub'       => 'Public derived attribute');
     is($hash->{MyDer}{'priv'}, 'der priv'     => 'Private derived attribute');
+    is(Object::InsideOut::Util::hash_re($hash->{MyDer}, qr/^HASH/), 'other'
+                                              => 'Hidden derived attribute');
 
     my $str = $obj->_DUMP(1);
+    #print(STDERR $str, "\n");
+
     my $hash2 = eval $str;
 
     ok($str && ! ref($str)                    => 'String dump');

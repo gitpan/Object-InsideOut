@@ -5,9 +5,9 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.06.00';
+our $VERSION = '0.07.00';
 
-my $phase = 'COMPILE';   # Phase of the Perl interpreter
+my $phase ||= 'COMPILE';   # Phase of the Perl interpreter
 
 ### Exception Processing ###
 
@@ -137,44 +137,14 @@ sub OIO::trap
 
 require Object::InsideOut::Util;
 
+use Scalar::Util 1.09;
 
-# Obtain certain functionality either directly from Scalar::Util (best),
-# or from code that we install ourselves
 BEGIN {
-    # Try to use an available version of Scalar::Util
-    eval { require Scalar::Util; };
-
-    # Check for success by looking for 'weaken'
+    # Verify usable 'refaddr'
     if (! Scalar::Util->can('weaken')) {
-        # Regardless of the reason for the above failure, install our own
-        # versions of necessary functions
-
-        # Create a 'no-op' version of 'weaken'
-        *Scalar::Util::weaken = sub ($) { };
-
-        no warnings 'redefine';
-
-        # A simplified version of 'blessed'
-        *Scalar::Util::blessed = sub ($) {
-            UNIVERSAL::can($_[0], 'can');
-        };
-
-        # A adequate version of 'refaddr'
-        *Scalar::Util::refaddr = sub ($) {
-            0+bless($_[0], 'UNIVERSAL');
-        };
-    }
-
-    # This is copied from Scalar::Util
-    if (! Scalar::Util->can('looks_like_number')) {
-        *Scalar::Util::looks_like_number = sub {
-            local $_ = shift;
-            return $] < 5.008005 unless defined;
-            return 1 if (/^[+-]?\d+$/); # is a +/- integer
-            return 1 if (/^([+-]?)(?=\d|\.\d)\d*(\.\d*)?([Ee]([+-]?\d+))?$/); # a C float
-            return 1 if ($] >= 5.008 and /^(Inf(inity)?|NaN)$/i) or ($] >= 5.006001 and /^Inf$/i);
-            0;
-        };
+        OIO::Code->die(
+            'message' => q/Cannot use 'pure perl' version of Scalar::Util - 'refaddr' unusable/,
+            'Info'    => q/Upgrade your version of Scalar::Util/);
     }
 }
 
@@ -198,13 +168,11 @@ sub import
         set_sharing($class, ${$class.'::shared'}, (caller())[1..2]);
     }
 
-    # Import packages
+    # Import packages and handle :SHARED flag
     my @packages;
     while (@_) {
         my $pkg = shift;
-        if (! $pkg) {
-            next;
-        }
+        next if (! $pkg);    # Ignore empty strings and such
 
         # Handle thread object sharing flag
         if ($pkg =~ /^:(NOT?_?|!)?SHAR/i) {
@@ -213,8 +181,8 @@ sub import
             next;
         }
 
+        # Load the package, if needed
         if (! $class->isa($pkg)) {
-            # Load the package, if needed
             if (! @{$pkg.'::ISA'}) {
                 eval "require $pkg";
                 if ($@) {
@@ -238,7 +206,7 @@ sub import
             eval { import $pkg @{$imports}; };
             if ($@) {
                 OIO::Code->die(
-                    'message' => "Failure importing package '$pkg'",
+                    'message' => "Failure running 'import' on package '$pkg'",
                     'Error'   => $@);
             }
         }
@@ -386,7 +354,7 @@ sub MODIFY_HASH_ATTRIBUTES
     for my $attr (@attrs) {
         # Declaration for object attribute hash
         if ($attr =~ /^Field/i) {
-            if ($phase eq 'COMPILE') {
+            if (! $phase || $phase eq 'COMPILE') {
                 # Save save hash ref and accessor declarations
                 # Accessors will be build during CHECK phase
                 my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i;
@@ -437,6 +405,8 @@ sub MODIFY_HASH_ATTRIBUTES
 sub MODIFY_CODE_ATTRIBUTES
 {
     my ($pkg, $code, @attrs) = @_;
+
+    # Save caller info with code ref for error reporting purposes
     my $info = [ $code, [ $pkg, (caller(2))[1,2] ] ];
 
     my @unused_attrs;   # List of any unhandled attributes
@@ -446,26 +416,34 @@ sub MODIFY_CODE_ATTRIBUTES
     while (my $attribute = shift(@attrs)) {
         my ($attr, $arg) = $attribute =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
         $attr = uc($attr);
+        # Attribute may be followed by 'PUBLIC', 'PRIVATE' or 'RESTRICED'
+        # Default to 'HIDDEN' if none.
         $arg = ($arg) ? uc($arg) : 'HIDDEN';
+
         if ($attr eq 'ID') {
             $ID_SUBS{$pkg} = $info;
-            push(@attrs, $arg);
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
 
         } elsif ($attr eq 'INIT') {
             $INITORS{$pkg} = $code;
-            push(@attrs, $arg);
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
 
         } elsif ($attr =~ /^REPL(?:ICATE)?$/) {
             $REPLICATORS{$pkg} = $code;
-            push(@attrs, $arg);
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
 
         } elsif ($attr =~ /^DEST(?:ROY)?$/) {
             $DESTROYERS{$pkg} = $code;
-            push(@attrs, $arg);
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
 
         } elsif ($attr =~ /^AUTO(?:METHOD)?$/) {
             $AUTOMETHODS{$pkg} = $code;
-            push(@attrs, $arg);
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
 
         } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
             if ($arg =~ /BOTTOM\s+UP/) {
@@ -565,7 +543,7 @@ sub INITIALIZE
                         my ($p,    $file,  $line)  = @{$ID_SUBS{$pkg}->[1]};
                         my ($pkg2, $file2, $line2) = @{$ID_SUBS{$id_sub_pkg}->[1]};
                         OIO::Attribute->die(
-                            'caller_level' => 1,
+                            'caller_level' => ($phase eq 'COMPILE') ? 2 : 1,
                             'message'      => "Multiple :ID subs defined within hierarchy for '$class'",
                             'Info'         => ":ID subs in class '$pkg' (file '$file', line $line), and class '$pkg2' (file '$file2' line $line2)");
                     }
@@ -842,12 +820,23 @@ _CODE_
     }
     undef(%OVERLOAD);   # No longer needed
 
-    # Bless an object into every class
-    # This works around an obscure 'overload' bug reported against Class::Std
-    # http://rt.cpan.org/NoAuth/Bug.html?id=14048
     for my $package (keys(%TREE_TOP_DOWN)) {
+        # Bless an object into every class
+        # This works around an obscure 'overload' bug reported against
+        # Class::Std (http://rt.cpan.org/NoAuth/Bug.html?id=14048)
         bless(\(my $scalar), $package);
+
+        # Verify that scalar dereferencing is not overloaded in any class
+        if (exists(${$package.'::'}{'(${}'})) {
+            (my $file = $package . '.pm') =~ s/::/\//g;
+            OIO::Code->die(
+                'location' => [ $package, $INC{$file} || '', '' ],
+                'message'  => q/Overloading scalar dereferencing '${}' is not allowed/,
+                'Info'     => q/The scalar of an object is its object ID, and can't be redefined/);
+        }
     }
+
+    # Check that scalar dereferencing is not not overloaded
 
 
     # Implement restricted methods - only callable within hierarchy
@@ -882,9 +871,7 @@ _CODE_
     }
     undef(%HIDDEN);   # No longer needed
 
-
-    # Set the next phase
-    $phase = 'RUNNING';
+    $phase = 'RUNNING';   # Set the next phase
 }
 
 
@@ -892,6 +879,7 @@ _CODE_
 {
     no warnings 'void';
     CHECK {
+        $phase = 'COMPILE';   # Phase of the Perl interpreter
         INITIALIZE();
     }
 }
@@ -952,7 +940,10 @@ my %OBJECTS;
 
 # Thread tracking registry - maintains thread lists for thread-shared objects
 # to control object destruction
-my %SHARED : shared;
+my %SHARED;
+if ($threads::shared::threads_shared) {
+    threads::shared::share(%SHARED);
+}
 
 # Thread ID is used to keep CLONE from executing more than once
 my $THREAD_ID = 0;
@@ -975,7 +966,7 @@ sub CLONE
     $THREAD_ID = threads->tid();
 
     # Process thread-shared objects
-    if (%SHARED) {
+    if (keys(%SHARED)) {    # Need keys() due to bug in older Perls
         lock(%SHARED);
 
         # Add thread ID to every object in the thread tracking registry
@@ -1002,15 +993,17 @@ sub CLONE
             # Get cloned object associated with old ID
             my $obj = delete($OBJECTS{$class}{$old_id});
 
+            # Unlock the object
+            Internals::SvREADONLY($$obj, 0) if ($] >= 5.008003);
             # Replace the old object ID with a new one
-            Internals::SvREADONLY($$obj, 0);    # Unlock the object
             if ($id_sub) {
                 local $SIG{__DIE__} = 'OIO::trap';
                 $$obj = &$id_sub;
             } else {
                 $$obj = Scalar::Util::refaddr($obj);
             }
-            Internals::SvREADONLY($$obj, 1);    # Lock the object again
+            # Lock the object again
+            Internals::SvREADONLY($$obj, 1) if ($] >= 5.008003);
 
             # Update the keys of the attribute hashes with the new object ID
             for my $pkg (@tree) {
@@ -1197,28 +1190,31 @@ sub DESTROY
         if (is_sharing($class)) {
             # Thread-shared object
 
-            # Remove thread ID for this object's thread tracking list
-            lock(%SHARED);
-            my $tid = pop(@{$SHARED{$class}{$$self}});
-            while ($tid != $THREAD_ID) {
-                unshift(@{$SHARED{$class}{$$self}}, $tid);
-                $tid = pop(@{$SHARED{$class}{$$self}});
-            }
+            local $SIG{__WARN__} = sub { };     # Suppress spurious msg
+            if (keys(%SHARED)) {                # Perl bug workaround
 
-            # If object is still active in other threads, then just return
-            if (@{$SHARED{$class}{$$self}}) {
-                return;
-            }
+                # Remove thread ID for this object's thread tracking list
+                lock(%SHARED);
+                my $tid = pop(@{$SHARED{$class}{$$self}});
+                while ($tid != $THREAD_ID) {
+                    unshift(@{$SHARED{$class}{$$self}}, $tid);
+                    $tid = pop(@{$SHARED{$class}{$$self}});
+                }
 
-            # Delete the object from the thread tracking registry
-            delete($SHARED{$class}{$$self});
+                # If object is still active in other threads, then just return
+                if (@{$SHARED{$class}{$$self}}) {
+                    return;
+                }
+
+                # Delete the object from the thread tracking registry
+                delete($SHARED{$class}{$$self});
+            }
 
         } else {
             # Delete this non-thread-shared object from the thread cloning
             # registry
             delete($OBJECTS{$class}{$$self});
         }
-
 
         # If sharing, then must lock object attribute hashes when updating
         my $lock_field = is_sharing($class);
@@ -1238,8 +1234,9 @@ sub DESTROY
             }
         }
 
+        # Unlock the object
+        Internals::SvREADONLY($$self, 0) if ($] >= 5.008003);
         # Erase the object ID - just in case
-        Internals::SvREADONLY($$self, 0);       # Unlock the object
         $$self = undef;
     }
 }
@@ -1412,8 +1409,8 @@ sub create_accessors : PRIVATE
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
             OIO::Attribute->die(
-                'caller_level' => 2,
-                'message'      => 'Malformed attribute',
+                'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+                'message'      => "Malformed attribute in package '$package'",
                 'Error'        => $err,
                 'Attribute'    => "Field( $decl )");
         }
@@ -1436,8 +1433,8 @@ sub create_accessors : PRIVATE
             $type = $name;
         } else {
             OIO::Attribute->die(
-                'caller_level' => 2,
-                'message'      => q/Can't create accessor method/,
+                'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+                'message'      => "Can't create accessor method for package '$package'",
                 'Info'         => "Unknown accessor specifier: $key");
         }
     }
@@ -1454,14 +1451,14 @@ sub create_accessors : PRIVATE
                 # Do not overwrite existing methods
                 if (*{$package.'::'.$name}{CODE}) {
                     OIO::Attribute->die(
-                        'caller_level' => 2,
+                        'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
                         'message'      => q/Can't create accessor method/,
                         'Info'         => "Method '$name' already exists in class '$package'");
                 }
             } else {
                 OIO::Attribute->die(
-                    'caller_level' => 2,
-                    'message'      => q/Can't create accessor method/,
+                    'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+                    'message'      => "Can't create accessor method for package '$package'",
                     'Info'         => q/Accessor name missing in :Field attribute/,
                     'Attribute'    => "Field( $decl )");
             }
@@ -1470,8 +1467,8 @@ sub create_accessors : PRIVATE
     }
     if (! $have_one) {
         OIO::Attribute->die(
-            'caller_level' => 2,
-            'message'      => q/Accessor name missing in :Field attribute/,
+            'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+            'message'      => "Accessor name missing in :Field attribute in package '$package'",
             'Info'         => q/Need 'GET', 'SET' or 'ACCESSOR' designator/,
             'Attribute'    => "Field( $decl )");
     }
@@ -1774,44 +1771,62 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 0.06.00
+This document describes Object::InsideOut version 0.07.00
 
 =head1 SYNOPSIS
 
  package My::Class; {
      use Object::InsideOut;
 
-     # Generic field with combined accessor
-     my %data :Field('Accessor' => 'data');
+     # Numeric field with combined get+set accessor
+     my %data :Field('Accessor' => 'data', 'Type' => 'NUMERIC');
 
-     # No paramters to ->new()
+     # Takes 'DATA' (or 'data', etc.) as a manatory parameter to ->new()
+     my %init_args :InitArgs = (
+         'DATA' => {
+             'Regex'     => qr/^data$/i,
+             'Mandatory' => 1,
+             'Type'      => 'NUMERIC',
+         },
+     )
+
+     # Handle class specific args as part of ->new()
+     sub init :Init
+     {
+         my ($self, $args) = @_;
+
+         $data{$$self} = $args->{'DATA'};
+     }
  }
 
  package My::Class::Sub; {
      use Object::InsideOut qw(My::Class);
 
-     # List field with separate 'get' and 'set' accessors
-     my %info :Field('Get' => 'get_info', 'Set' => 'set_info', 'Type' => 'LIST');
+     # List field with standard 'get_X' and 'set_X' accessors
+     my %info :Field('Standard' => 'info', 'Type' => 'LIST');
 
-     # Takes 'INFO' as an optional parameter to ->new()
+     # Takes 'INFO' as an optional list parameter to ->new()
+     # Value automatically added to %info hash
+     # Defaults to [ 'empty' ]
      my %init_args :InitArgs = (
          'INFO' => {
-             'Field'   => \%info,
-             'Default' => 'none',
              'Type'    => 'LIST',
+             'Field'   => \%info,
+             'Default' => 'empty',
          },
      );
  }
 
  package main;
 
- my $obj = My::Class::Sub->new();
- my $info = $obj->get_info();                    # [ 'none' ]
- my $data = $obj->data();                        # undef
+ my $obj = My::Class::Sub->new('Data' => 69);
+ my $info = $obj->get_info();                    # [ 'empty' ]
+ my $data = $obj->data();                        # 69
  $obj->data(42);
  $data = $obj->data();                           # 42
 
- $obj = My::Class::Sub->new('info' => 'help');
+ $obj = My::Class::Sub->new('INFO' => 'help', 'DATA' => 86);
+ $data = $obj->data();                           # 86
  $info = $obj->get_info();                       # [ 'help' ]
  $obj->set_info(qw(foo bar baz));
  $info = $obj->get_info();                       # [ 'foo', 'bar', 'baz' ]
@@ -1822,14 +1837,44 @@ This module provides comprehensive support for implementing classes using the
 inside-out object model.
 
 This module implements inside-out objects as anonymous scalar references that
-have been blessed into a class with the scalar containing the ID for the
-object (usually its L<refaddr|Scalar::Util/"refaddr EXPR">).  Object data
-(i.e., fields) are stored in hashes within the class's package and are keyed
-to the object's ID.
+have are into a class with the scalar containing the ID for the object
+(usually its L<refaddr|Scalar::Util/"refaddr EXPR">).  Object data (i.e.,
+fields) are stored in hashes within the class's package and are keyed to the
+object's ID.
 
-The advantages of the inside-out object model over the I<blessed hash> object
-model have been extolled elsewhere.  See the informational links under L</"SEE
-ALSO">.
+The virtues of the inside-out object model over the I<blessed hash> object
+model have been extolled in detail elsewhere.  See the informational links
+under L</"SEE ALSO">.  Briefly, inside-out objects offer the following
+advantages over I<blessed hash> objects:
+
+=over
+
+=item Encapsulation
+
+Object data is enclosed within the class's code and is accessible only through
+the class-defined interface.
+
+=item Field Name Collision Avoidance
+
+Inheritance using I<blessed hash> classes can lead to conflicts if any classes
+use the same name for a field (i.e., hash key).  Inside-out objects are immune
+to this problem because object data is stored in hashes inside each class's
+package, and not in the object itself.
+
+=item Compile-time Name Checking
+
+A common error with I<blessed hash> classes is the misspelling of field names:
+
+    $obj->{'coment'} = 'No comment';   # Should be 'comment' not 'coment'
+
+As there is no compile-time checking on hash keys, such errors do not usually
+manifest themselves until runtime.
+
+With inside-out objects, data is accessed using methods, the names of which
+are checked by the Perl compiler such that any typos are easily caught using
+S<C<perl -c>>.
+
+=back
 
 This module offers all the capabilities of L<Class::Std> with the following
 additional key advantages:
@@ -1838,53 +1883,79 @@ additional key advantages:
 
 =item Speed
 
-As fast as I<blessed hash> objects for fetching and setting data, and 2.5-4.5
-times faster than Class::Std.
+Slightly faster than I<blessed hash> objects for fetching and setting data,
+and 2.5-4.5 times faster than Class::Std.
 
 =item Threads
 
-Class::Std is not thread safe.  Object::InsideOUt is thread safe, and
-thoroughly supports sharing objects between threads using L<threads::shared>.
+Object::InsideOut is thread safe, and thoroughly supports sharing objects
+between threads using L<threads::shared>.  Class::Std is not usable in
+threaded applications (or applications that use C<fork> under ActiverPerl).
 
 =item Flexibility
 
 Allows control over object ID specification, accessor naming, parameter name
 matching, and more.
 
-=item mod_perl
+=item L<mod_perl> and Runtime Loading
 
-Usable from within L<mod_perl>.
+Usable from within L<mod_perl>, and supports classes that may be loaded at
+runtime (i.e., using S<C<eval { require ...; };>>).
+
+=item Perl 5.6
+
+Usable with Perl 5.6.0 and later.  Class::Std is only usable with Perl 5.8.1
+and later.
+
+=item Exception Objects
+
+As recommended in I<Perl Best Practices>, Object::InsideOut uses
+L<Exception::Class> for handling errors in an OO-compatible manner.
 
 =back
 
 =head2 Class Declarations
 
-To use this module, your classes will start with:
+To use this module, your classes will start with S<C<use Object::InsideOut;>>:
 
-    use Object::InsideOut;
+    package My::Class: {
+        use Object::InsideOut;
+        ...
+    }
 
-Sub-classes inherit from base classes with:
+Sub-classes inherit from base classes by telling Object::InsideOut what the
+parent class is:
 
-    use Object::InsideOut 'My::Parent';
+    package My::Sub {
+        use Object::InsideOut qw(My::Parent);
+        ...
+    }
 
-Multiple inheritance is supported:
+Multiple inheritance is also supported:
 
-    use Object::InsideOut qw(My::Parent Another::Parent);
+    package My::Project {
+        use Object::InsideOut qw(My::Class Another::Class);
+        ...
+    }
 
-There is no need for C<use base ...>, or to set up C<@ISA> arrays:
-Object::InsideOut loads the parent module(s), calls their C<import> functions
-and sets up the sub-class's @ISA array.
+There is no need for S<C<use base ...>>, or to set up C<@ISA> arrays.  (In
+fact, you shouldn't do either:  Object::InsideOut acts as a replacement for
+the C<base> pragma.)  Object::InsideOut loads the parent module(s), calls
+their C<import> functions, and sets up the sub-class's @ISA array.
 
-If a parent module takes parameters, enclose them in an array ref (mandatory)
+If a parent class takes parameters, enclose them in an array ref (mandatory)
 following the name of the parent class:
 
-    use Object::InsideOut 'My::Parent'      => [ 'param1', 'param2' ],
-                          'Another::Parent' => [ 'param' ];
+    package My::Project {
+        use Object::InsideOut 'My::Class'      => [ 'param1', 'param2' ],
+                              'Another::Class' => [ 'param' ];
+        ...
+    }
 
 =head2 Field Declarations
 
 Object data fields consist of hashes within a class's package into which data
-are stored using the object's ID as the key.  A hash is declared as begin an
+are stored using the object's ID as the key.  A hash is declared as being an
 object field by following its declaration with the C<:Field> attribute:
 
     my %info :Field;
@@ -1900,11 +1971,11 @@ Object::InsideOut to each class:
     my $obj = My::Class->new();
 
 Classes do not implement their own C<new> method.  Class-specific object
-initialization actions may be handled by C<:Init> methods (see L</"Object
-Initialization">).
+initialization actions may be handled by C<:Init> labelled methods (see
+L</"Object Initialization">).
 
-Parameters are passed in as combinations of C<key =E<gt> value> pairs and/or
-hash refs:
+Parameters are passed in as combinations of S<C<key =E<gt> value>> pairs
+and/or hash refs:
 
     my $obj = My::Class->new('param1' => 'value1');
         # or
@@ -1930,9 +2001,9 @@ Additionally, parameters can be segregated in hash refs for specific classes:
         'Parent::Class'  => { 'data'  => 'info'  },
     );
 
-The initialization methods for both classes in the above will get C<'foo'
-=E<gt> 'bar'>, C<My::Class> will also get C<'param' =E<gt> 'value'>, and
-C<Parent::Class> will also get C<'data' =E<gt> 'info'>.  In this scheme,
+The initialization methods for both classes in the above will get S<C<'foo'
+=E<gt> 'bar'>>, C<My::Class> will also get S<C<'param' =E<gt> 'value'>>, and
+C<Parent::Class> will also get S<C<'data' =E<gt> 'info'>>.  In this scheme,
 class-specific parameters will override general parameters specified at a
 higher level:
 
@@ -1941,8 +2012,8 @@ higher level:
         'Parent::Class'  => { 'default' => 'baz' },
     );
 
-C<My::Class> will get C<'default' =E<gt> 'bar'>, and C<Parent::Class> will get
-C<'default' =E<gt> 'baz'>.
+C<My::Class> will get S<C<'default' =E<gt> 'bar'>>, and C<Parent::Class> will
+get S<C<'default' =E<gt> 'baz'>>.
 
 Calling C<new> on an object works, too, and operates the same as calling
 C<new> for the class of the object (i.e., C<$obj-E<gt>new()> is the same as
@@ -1999,7 +2070,7 @@ sent to the C<:Init> labelled subroutine for processing:
 convention should not be all lowercase.)
 
 This C<:Init> labelled subroutine will receive two arguments:  The newly
-created object requiring further initialization (i.e., C<$self>); and a hash
+created object requiring further initialization (i.e., C<$self>), and a hash
 ref of supplied arguments that matched C<:InitArgs> specifications.  Data
 processed by the subroutine can be placed into the class's field hashes using
 the object's ID (i.e., C<$$self>).
@@ -2015,10 +2086,10 @@ The simplest parameter specification is just a tag:
         'DATA' => '',
     );
 
-In this case, if a C<key =E<gt> value> pair with an exact match of C<DATA> for
-the key is found in the arguments sent to the C<new> method, then C<'DATA'
-=E<gt> value> will be included in the argument hash ref sent to the C<:Init>
-labelled subroutine.
+In this case, if a S<C<key =E<gt> value>> pair with an exact match of C<DATA>
+for the key is found in the arguments sent to the C<new> method, then
+S<C<'DATA' =E<gt> value>> will be included in the argument hash ref sent to
+the C<:Init> labelled subroutine.
 
 Rather than counting on exact matches, regular expressions can be used to
 specify the parameter:
@@ -2028,8 +2099,8 @@ specify the parameter:
     );
 
 In this case, the argument key could be any of the following: PARAM, PARM,
-Param, Parm, param, parm, and so on.  If a match is found, then C<'Param'
-=E<gt> value> is sent to the C<:Init> subroutine.  Note that the C<:InitArgs>
+Param, Parm, param, parm, and so on.  If a match is found, then S<C<'Param'
+=E<gt> value>> is sent to the C<:Init> subroutine.  Note that the C<:InitArgs>
 hash key is substituted for the original argument key.  This eliminates the
 need for any parameter key pattern matching within the C<:Init> subroutine.
 
@@ -2089,16 +2160,16 @@ placed directly info a field hash and not sent to the C<:Init> subroutine:
             'Mandatory' => 1,
             # Allow single value or array ref
             'Type'      => 'List',
-            # Automatically put the parameter in %hosts
+            # Automatically put the parameter into %hosts
             'Field'     => \%hosts,
         },
     );
 
-In this case, when a host parameter is found, it is automatically put into the
-C<%hosts> hash, and a C<'HOSTS' =E<gt> value> pair is B<not> sent to the
-C<:Init> subroutine.  In fact, if you specify fields for all your parameters,
-then you don't even need to have an C<:Init> subroutine!  All the work will be
-taken care of for you.
+In this case, when the host parameter is found, it is automatically put into
+the C<%hosts> hash, and a S<C<'HOSTS' =E<gt> value>> pair is B<not> sent to
+the C<:Init> subroutine.  In fact, if you specify fields for all your
+parameters, then you don't even need to have an C<:Init> subroutine!  All the
+work will be taken care of for you.
 
 (In the above, I<Regex> may be I<Regexp> or just I<Re>, and I<Default> may be
 I<Defaults> or I<Def>.  They and the other specifier keys are
@@ -2163,8 +2234,8 @@ types, exact case and spelling are required.
 
 The C<List/Array> type permits the accessor to accept multiple value (that are
 then placed in an array ref) or a single array ref.  The C<Hash> type allows
-multiple C<key =E<gt> value> pairs (that are then placed in a hash ref) or a
-single hash ref.
+multiple S<C<key =E<gt> value>> pairs (that are then placed in a hash ref) or
+a single hash ref.
 
 Due to limitations in the Perl parser, you cannot use line wrapping with the
 C<:Field> attribute:
@@ -2222,7 +2293,7 @@ This subroutine will be sent two objects:  The parent and the clone:
         # Special object replication processing
     }
 
-In the case of thread cloning, the C<$parent> object is just an blessed
+In the case of thread cloning, the C<$parent> object is just an un-blessed
 anonymous scalar reference that contains the ID for the object in the parent
 thread.
 
@@ -2258,7 +2329,7 @@ Classes requiring C<AUTOLOAD> capabilities must provided a subroutine labelled
 with the C<:Automethod> attribute.  The C<:Automethod> subroutine will be
 called with the object and the arguments in the original method call (the same
 as for C<AUTOLOAD>).  The C<:Automethod> subroutine should return either a
-subroutine reference that implements the requested method functionality, or
+subroutine reference that implements the requested method's functionality, or
 else C<undef> to indicate that it doesn't know how to handle the request.
 
 The name of the method being called is passed as C<$_> instead of
@@ -2289,14 +2360,15 @@ scope, it is available as C<$CALLER::_>.
 As with C<Class::Std>, Object::InsideOut provides a mechanism for creating
 methods whose effects accumulate through the class hierarchy.  See
 L<Class::Std/"C<:CUMULATIVE()>"> for details.  Such methods are tagged with
-the C<:Cumulative> attribute (or C<:Cumulative(top down)>), and propogate from
-the I<top down> through the class hierarchy (i.e., from the base classes down
-through the child classes).  If tagged with C<:Cumulative(bottom up)>, they
-will propogated from the object's class upwards through the parent classes.
+the C<:Cumulative> attribute (or S<C<:Cumulative(top down)>>), and propogate
+from the I<top down> through the class hierarchy (i.e., from the base classes
+down through the child classes).  If tagged with S<C<:Cumulative(bottom up)>>,
+they will propogated from the object's class upwards through the parent
+classes.
 
 Note that this directionality is the reverse of Class::Std which defaults to
-bottom up, and uses I<BASE FIRST> to mean from the base classes downward
-through the children.  (I eschewed the use of the term I<BASE FIRST> because I
+bottom up, and uses S<I<BASE FIRST>> to mean from the base classes downward
+through the children.  (I eschewed the use of the term S<I<BASE FIRST>> because I
 felt it was ambiguous:  I<base> could refer to the base classes at the top of
 the hierarchy, or the child classes at the base (i.e., bottom) of the
 hierarchy.)
@@ -2307,8 +2379,8 @@ In addition to C<:Cumulative>, Object::InsideOut provides a way of creating
 methods that are chained together so that their return values are passed as
 input arguments to other similarly named methods in the same class hierarchy.
 
-For example, imagine you had a method called C<format_name> that formats a
-name for display:
+For example, imagine you had a method called C<format_name> that formats some
+text for display:
 
     package Subscriber; {
         use Object::InsideOut;
@@ -2360,7 +2432,7 @@ class you'd have to explicitly call each method directly:
         }
     }
 
-With Object::InsideOut you'd add the C<:CHAINED> attribute to each class's
+With Object::InsideOut you'd add the C<:Chained> attribute to each class's
 C<format_name> method, and the methods will be chained together automatically:
 
     package Subscriber; {
@@ -2407,10 +2479,14 @@ leading and trailing whitespace to be removed, then the name to be properly
 cased, and finally whitespace to be compressed to a single space.  The
 resulting C<$name> would be returned to the caller.
 
-If you label the method with the C<:Chained(bottom up)> attribute, then the
+The default direction is to chain methods from the base classes at the top of
+the class hierarchy down through the child classes.  You may use the attribute
+S<C<:Chained(top down)>> to make this more explicit.
+
+If you label the method with the S<C<:Chained(bottom up)>> attribute, then the
 chained methods are called starting with the object's class and working
-upwards through the class hierarchy, similar to how C<:Cumulative(bottom up)>
-works.
+upwards through the class hierarchy, similar to how S<C<:Cumulative(bottom
+up)>> works.
 
 =head2 Restricted and Private Methods
 
@@ -2451,6 +2527,10 @@ C<RESTRICTED> or C<PRIVATE> keywords following the attribute:
 
         ...
     }
+
+NOTE:  A bug in Perl 5.6.0 prevents using these access keywords.  As such,
+subroutines marked with the above attributes will be left with I<public>
+access.
 
 NOTE:  The above cannot be accomplished by using the corresponding attributes.
 For example:
@@ -2493,8 +2573,8 @@ either a hash or string representation of the object that invokes the method.
 The hash representation is returned when C<_DUMP> is called without arguments.
 The hash ref that is returned has keys for each of the classes that make up
 the object's hierarchy.  The values for those keys are hash refs containing
-C<key =E<gt> value> pairs for the object's fields.  The name for a field will
-be either the tag from the C<:InitArgs> array that is associated with the
+S<C<key =E<gt> value>> pairs for the object's fields.  The name for a field
+will be either the tag from the C<:InitArgs> array that is associated with the
 field, its I<get> method name, its I<set> method name, or, failing all that, a
 string of the form C<HASH(0x....)>.
 
@@ -2503,46 +2583,22 @@ hash representation using L<Data::Dumper>.
 
 =head1 THREAD SUPPORT
 
-This module fully supports threads (i.e., is thread safe), and for Perl 5.8.0
-and beyond also supports the sharing of Object::InsideOut objects between
-threads using L<threads::shared>.  To use Object::InsideOut in a threaded
-application, you must put C<use threads;> at the beginning of the application.
-(The use of C<require threads;> after the program is running is not
-supported.)  If object sharing it to be utilized, then C<use threads::shared;>
-should follow.
+For Perl 5.8.0 and later, this module fully supports threads (i.e., is thread
+safe).  For Perl 5.8.1 and later, this module supports the sharing of
+Object::InsideOut objects between threads using L<threads::shared>.
 
-For Perl 5.6.0 to 5.7.1, you can C<use threads;>, but you must call
-C<Object::InsideOut->CLONE()> as the first line of the subroutine argument to
-C<threads->create()>:
+To use Object::InsideOut in a threaded application, you must put S<C<use
+threads;>> at the beginning of the application.  (The use of S<C<require
+threads;>> after the program is running is not supported.)  If object sharing
+it to be utilized, then S<C<use threads::shared;>> should follow.
 
-    use threads;
+If you just S<C<use threads;>>, then objects from one thread will be copied
+and made available in a child thread.
 
-    package My::Class; {
-        use Object::InsideOut;
-        ...
-    }
-
-    package main;
-
-    my $obj = My::Class->new();
-
-    my $thr = threads->create(sub {
-            Object::InsideOut->CLONE() if ($] < 5.007002);
-
-            ...
-            $obj->method();
-            ...
-        });
-
-For Perl 5.7.2 and 5.7.3, you can C<use threads;> with no restrictions.
-
-For Perl 5.8.0 onwards, if you just C<use threads;>, then objects from one
-thread will be copied and made available in a child thread.
-
-The addition of <use threads::shared;> in and of itself does not alter the
+The addition of S<C<use threads::shared;>> in and of itself does not alter the
 behavior of Object::InsideOut objects.  The default behavior is to I<not>
-share objects between threads (i.e., they act the same as with C<use
-threads;> alone).
+share objects between threads (i.e., they act the same as with S<C<use
+threads;>> alone).
 
 To enable the sharing of objects between threads, you must specify which
 classes will be involved with thread object sharing.  There are two methods
@@ -2555,8 +2611,8 @@ class prior to its use:
     $My::Class::shared = 1;
     use My::Class;
 
-The other method is for a class to add a C<:SHARED> flag to its C<use
-Object::InsideOut ...> declaration:
+The other method is for a class to add a C<:SHARED> flag to its S<C<use
+Object::InsideOut ...>> declaration:
 
     package My::Class; {
         use Object::InsideOut ':SHARED';
@@ -2652,15 +2708,15 @@ C<require> statement:
 
     eval {
         require My::Class;
-        Object::InsideOut::INITIALIZE;
+        Object::InsideOut::INITIALIZE();
     };
 
-For CGIs running under C<mod_perl>, C<Object::InsideOut::INITIALIZE> should be
-run prior to any objects being created - preferrably right after all C<use>
+For CGIs running under C<mod_perl>, C<Object::InsideOut::INITIALIZE()> should
+be run prior to any objects being created - preferrably right after all C<use>
 statements that load inside-out object classes:
 
     use My::Class;
-    Object::InsideOut::INITIALIZE;
+    Object::InsideOut::INITIALIZE();
 
 =head1 DIAGNOSTICS
 
@@ -2684,7 +2740,7 @@ Forgot to 'use Object::InsideOut qw(Parent::Class ...);'
 
 =head1 BUGS AND LIMITATIONS
 
-Cannot overload an object to a scalar context (i.e., can't C<:SCALARIFY>).
+You cannot overload an object to a scalar context (i.e., can't C<:SCALARIFY>).
 
 You cannot use two instances of the same class with mixed thread object
 sharing in same application.
@@ -2718,36 +2774,39 @@ rebless it when you get it out:
     my $cc = $aa->get();
     bless($cc, 'BB');
 
-If your version of Perl does not support the C<weaken> function found in
-L<Scalar::Util>, and you C<use threads;>, then you need to manually destroy
-objects using C<$obj->DESTROY()>.  If no C<weaken> and you C<use threads;> and
-C<use threads::shared>, then you need to manually destroy non-shared objects
-using C<$obj->DESTROY()>.
+For Perl 5.8.1 through 5.8.4, a Perl bug produces spurious warning messages
+when threads are destroyed.  These messages are innocuous, and can be
+suppressed by adding the following to your application code:
 
-There are numerous bugs related to L<threads> and L<threads::shared> in
-various versions of Perl on various platforms that cause Object::InsideOut
-tests to fail:
+    $SIG{__WARN__} = sub {
+            if ($_[0] !~ /^Attempt to free unreferenced scalar/) {
+                print(STDERR @_);
+            }
+        };
 
-=over
-
-=item ActiveState Perl 5.8.4 on Windows - Object methods I<missing> in threads
-
-=item Perl 5.8.4 through 5.8.6 on Solaris - Perl core dumps when destroying
-shared objects
-
-=back
-
-The best solution for the above is to upgrade your version of Perl.  Barring
-that, you can tell CPAN to I<force> the installation of Object::InsideOut.
+It is known that thread support is broken in ActiveState Perl 5.8.4 on
+Windows.  (It is not know which other version of ActivePerl may be affected.)
+The best solution is to upgrade your version of ActivePerl.  Barring that, you
+can tell CPAN to I<force> the installation of Object::InsideOut, and use it in
+non-threaded applications.
 
 Please submit any bugs, problems, suggestions, patches, etc. to:
 L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
 
 =head1 REQUIREMENTS
 
-L<Exception::Class> v1.22 or higher
+Perl 5.6.0 or later
 
-L<Scalar::Util> v1.17 or higher recommended
+L<Exception::Class> v1.22 or later
+
+L<Scalar::Util> v1.10 or later.  It is possible to install a I<pure perl>
+version of Scalar::Util, however, the version of C<refaddr> that is thus
+available is unusable.  You'll need to upgrade your version of Scalar::Util to
+one that supports its C<XS> code.
+
+L<Test::More> v0.50 or later (for installation)
+
+L<Data::Dumper>
 
 =head1 TO DO
 

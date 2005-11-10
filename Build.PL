@@ -12,7 +12,7 @@ Module::Build->new(
     'dist_author' => 'Jerry D. Hedden <jdhedden AT 1979 DOT usna DOT com>',
 
     'build_requires' => {
-                            'Test::More'          => 0,
+                            'Test::More'          => 0.50,
                         },
 
     'requires'       => {
@@ -20,10 +20,8 @@ Module::Build->new(
                             'Exception::Class'    => 1.22,
                             'attributes'          => 0,
                             'overload'            => 0,
-                            'Data::Dumper'        => 0
-                        },
-    'recommends'     => {
-                            'Scalar::Util'        => 1.17,
+                            'Data::Dumper'        => 0,
+                            'Scalar::Util'        => 1.10,
                         },
 
 )->create_build_script();

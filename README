@@ -1,4 +1,4 @@
-Object-InsideOut version 0.06.00
+Object-InsideOut version 0.07.00
 ================================
 
 This module provides comprehensive support for implementing classes using the
@@ -26,6 +26,7 @@ matching, and more.
 
 = Usable with mod_perl
 
+= Usable with Perl 5.6.0 and later
 
 INSTALLATION
 
@@ -49,16 +50,13 @@ Requires Perl 5.6.0 or later.
 
 This module uses the following 'standard' modules:
 
-  ExtUtils::MakeMaker   - For installation
-  Test::More            - For installation
+  ExtUtils::MakeMaker          - For installation
+  Test::More (0.50 or later)   - For installation
+  Scalar::Util (1.10 or later) - Standard in 5.8 or obtain from CPAN
 
 This module requires the following module available from CPAN:
 
-  Exception::Class (1.22 or higher)
-
-This module will use the following if available:
-
-  Scalar::Util - Standard in 5.8 or obtain from CPAN (strongly recommended)
+  Exception::Class (1.22 or later)
 
 COPYRIGHT AND LICENCE
 

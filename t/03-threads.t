@@ -3,15 +3,20 @@ use warnings;
 
 use Config;
 BEGIN {
-    if (! $Config{useithreads}) {
+    if (! $Config{useithreads} || $] < 5.008) {
         print("1..0 # Skip Threads not supported\n");
+        exit(0);
+    }
+    if ($^O eq 'Win32' && $] == 5.008004) {
+        print("1..0 # Skip Thread support not working for ActivePerl 5.8.4\n");
         exit(0);
     }
 }
 
+
 use threads;
 
-use Test::More tests => 12;
+use Test::More 'no_plan';
 
 
 package My::Obj; {
@@ -32,7 +37,6 @@ package main;
 
 MAIN:
 {
-
     my $obj = My::Obj->new();
     $obj->x(5);
     is($obj->x(), 5, 'Class set data');
@@ -45,8 +49,6 @@ MAIN:
 
     my $rc = threads->create(
                         sub {
-                            Object::InsideOut->CLONE() if ($] < 5.007002);
-
                             is($obj->x(), 5, 'Thread class data');
                             is($obj2->x(), 9, 'Thread subclass data');
                             is($obj2->y(), 3, 'Thread subclass data');

@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.06.00';
+our $VERSION = '0.07.00';
 
 
 ### Module Initialization ###
@@ -13,7 +13,7 @@ our $VERSION = '0.06.00';
 # 1. Install our own 'no-op' version of Internals::SvREADONLY for Perl < 5.8
 BEGIN {
     if (! Internals->can('SvREADONLY')) {
-        *Internals::SvREADONLY = sub (\[$%@];$) { return; };
+        *Internals::SvREADONLY = sub (\$;$) { return; };
     }
 }
 
@@ -87,7 +87,7 @@ sub create_object
     }
 
     # Make the object 'readonly' (Perl 5.8)
-    Internals::SvREADONLY($$obj, 1);
+    Internals::SvREADONLY($$obj, 1) if ($] >= 5.008003);
 
     # Done - return the object
     return ($obj);

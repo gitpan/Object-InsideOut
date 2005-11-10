@@ -6,39 +6,7 @@ use strict;
 use warnings;
 
 use ExtUtils::MakeMaker;
-use Config;
 
-# Check for Scalar::Util
-eval { require Scalar::Util; };
-if ($@) {
-    # Missing
-    print <<'_MISSING_';
-
-Scalar::Util not found!  It is strongly recommended that you download
-the lastest version of the Scalar-List-Utils module from CPAN.
-
-_MISSING_
-
-} elsif (! Scalar::Util->can('weaken')) {
-    print <<'_WEAK_';
-
-Locally installed version of Scalar::Util does not support weakened
-references.  It is strongly recommended that you download the lastest version
-of the Scalar-List-Utils module from CPAN, and attempt to remedy this
-deficiency.  View this module's documentation for further information.
-
-_WEAK_
-
-} elsif ($Scalar::Util::VERSION < 1.17) {
-    # Old version
-    print <<'_OLD_VERSION_';
-
-Locally installed version of Scalar::Util is out-of-date.  It is strongly
-recommended that you download the lastest version of the Scalar-List-Utils
-module from CPAN.
-
-_OLD_VERSION_
-}
 
 # Construct make file
 WriteMakefile(
@@ -47,13 +15,15 @@ WriteMakefile(
     'VERSION_FROM'  => 'lib/Object/InsideOut.pm',
     'ABSTRACT_FROM' => 'lib/Object/InsideOut.pm',
     'PREREQ_PM'     => { 'Exception::Class' => 1.22,
-                         'Test::More'       => 0,
+                         'Test::More'       => 0.50,
                          'attributes'       => 0,
                          'overload'         => 0,
-                         'Data::Dumper'     => 0 },
-    (($ExtUtils::MakeMaker::VERSION < 6.25) ?
+                         'Data::Dumper'     => 0,
+                         'Scalar::Util'     => 1.10,
+                       },
+    ((ExtUtils::MakeMaker->VERSION() < 6.25) ?
         ('PL_FILES' => { })            : ()),
-    (($ExtUtils::MakeMaker::VERSION > 6.30) ?
+    ((ExtUtils::MakeMaker->VERSION() > 6.30) ?
         ('LICENSE'  => 'perl')         : ()),
 );
 
@@ -61,7 +31,7 @@ WriteMakefile(
 # Add additional targets to Makefile for use by module maintainer
 sub MY::postamble
 {
-    if (exists($Config{'osname'}) && $Config{'osname'} eq 'cygwin') {
+    if ($^O eq 'cygwin') {
         return <<'_EXTRAS_';
 # Check version strings in various files
 vcheck:
