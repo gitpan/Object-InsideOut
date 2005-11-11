@@ -5,9 +5,9 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.07.00';
+our $VERSION = '1.00.00';
 
-my $phase ||= 'COMPILE';   # Phase of the Perl interpreter
+my $DO_INIT = 1;   # Flag for running package initialization routine
 
 ### Exception Processing ###
 
@@ -137,17 +137,16 @@ sub OIO::trap
 
 require Object::InsideOut::Util;
 
-use Scalar::Util 1.09;
+use Scalar::Util 1.10;
 
 BEGIN {
-    # Verify usable 'refaddr'
+    # Verify we have 'weaken'
     if (! Scalar::Util->can('weaken')) {
         OIO::Code->die(
-            'message' => q/Cannot use 'pure perl' version of Scalar::Util - 'refaddr' unusable/,
+            'message' => q/Cannot use 'pure perl' version of Scalar::Util - 'weaken' missing/,
             'Info'    => q/Upgrade your version of Scalar::Util/);
     }
 }
-
 
 ### Class Tree Building (via 'import()') ###
 
@@ -247,9 +246,9 @@ sub import
 
 ### Attribute Support ###
 
-# Maintain references to all object attribute hashes by package for easy
-# manipulation of attribute data during global object actions (e.g., cloning,
-# destruction).  Object attribute hashes are marked with an attribute called
+# Maintain references to all object field hashes by package for easy
+# manipulation of field data during global object actions (e.g., cloning,
+# destruction).  Object field hashes are marked with an attribute called
 # 'Field'.
 my %FIELDS;
 
@@ -262,11 +261,8 @@ my @DUMP_INITARGS;
 # Allow a single object ID specifier subroutine per class tree.  The
 # subroutine ref provided will return the object ID to be used for the object
 # that is created by this package.  The ID subroutine is marked with an
-# attribute called 'ID', and is :HIDDEN during the CHECK phase by default.
+# attribute called 'ID', and is :HIDDEN during initialization by default.
 my %ID_SUBS;
-
-# Contains the ID sub, if any, to be used for each class
-my %ID_SUB_CACHE;
 
 # Allow a single object initialization hash per class.  The data in these
 # hashes is used to initialize newly create objects. The initialization hash
@@ -275,25 +271,25 @@ my %INIT_ARGS;
 
 # Allow a single initialization subroutine per class that is called as part of
 # initializing newly created objects.  The initialization subroutine is marked
-# with an attributed called 'Init', and is :HIDDEN during the CHECK phase by
+# with an attributed called 'Init', and is :HIDDEN during initialization by
 # default.
 my %INITORS;
 
 # Allow a single data replication subroutine per class that is called when
 # objects are cloned.  The data replication subroutine is marked with an
-# attributed called 'Replicate', and is :HIDDEN during the CHECK phase by
+# attributed called 'Replicate', and is :HIDDEN during initialization by
 # default.
 my %REPLICATORS;
 
 # Allow a single data destruction subroutine per class that is called when
 # objects are destroyed.  The data destruction subroutine is marked with an
-# attributed called 'Destroy', and is :HIDDEN during the CHECK phase by
+# attributed called 'Destroy', and is :HIDDEN during initialization by
 # default.
 my %DESTROYERS;
 
 # Allow a single 'autoload' subroutine per class that is called when an object
 # method is not found.  The automethods subroutine is marked with an
-# attributed called 'Automethod', and is :HIDDEN during the CHECK phase by
+# attributed called 'Automethod', and is :HIDDEN during initialization by
 # default.
 my %AUTOMETHODS;
 
@@ -319,12 +315,12 @@ my %ANTICHAINED;
 # are marked with an attributed called 'Restricted'.
 my %RESTRICTED;
 
-# Restricted methods are only callable from within the class itself, and
-# are marked with an attributed called 'Private'.
+# Restricted methods are only callable from within the class itself, and are
+# marked with an attributed called 'Private'.
 my %PRIVATE;
 
-# Methods that are made uncallable after the CHECK phase.  They are marked
-# with an attributed called 'HIDDEN'.
+# Methods that are made uncallable after initialization.  They are marked with
+# an attributed called 'HIDDEN'.
 my %HIDDEN;
 
 # Methods that are support overloading capabilities for objects.
@@ -352,28 +348,13 @@ sub MODIFY_HASH_ATTRIBUTES
 
     # Process attributes
     for my $attr (@attrs) {
-        # Declaration for object attribute hash
+        # Declaration for object field hash
         if ($attr =~ /^Field/i) {
-            if (! $phase || $phase eq 'COMPILE') {
-                # Save save hash ref and accessor declarations
-                # Accessors will be build during CHECK phase
-                my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i;
-                push(@{$FIELDS{$pkg}}, [ $hash, $decl ]);
-
-            } else {   # $phase eq 'RUNNING'
-                # Save the hash ref
-                push(@{$FIELDS{$pkg}}, $hash);
-
-                # Share the hash, if applicable
-                if (is_sharing($pkg)) {
-                    threads::shared::share($hash)
-                }
-
-                # Process any accessor declarations
-                if (my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i) {
-                    create_accessors($pkg, $hash, $decl);
-                }
-            }
+            # Save save hash ref and accessor declarations
+            # Accessors will be build during initialization
+            my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i;
+            push(@{$FIELDS{$pkg}}, [ $hash, $decl ]);
+            $DO_INIT = 1;   # Flag that initialization is required
         }
 
         # Declaration for object initializer hash
@@ -386,6 +367,43 @@ sub MODIFY_HASH_ATTRIBUTES
         elsif ($attr eq 'shared') {
             if ($threads::shared::threads_shared) {
                 threads::shared::share($hash);
+            }
+        }
+
+        # Unhandled
+        else {
+            push(@unused_attrs, $attr);
+        }
+    }
+
+    # Return any unused attributes
+    return (@unused_attrs);
+}
+
+
+# This subroutine handles attributes on arrays as part of this package.
+# See 'perldoc attributes' for details.
+sub MODIFY_ARRAY_ATTRIBUTES
+{
+    my ($pkg, $array, @attrs) = @_;
+
+    my @unused_attrs;   # List of any unhandled attributes
+
+    # Process attributes
+    for my $attr (@attrs) {
+        # Declaration for object field array
+        if ($attr =~ /^Field/i) {
+            # Save save array ref and accessor declarations
+            # Accessors will be build during initialization
+            my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i;
+            push(@{$FIELDS{$pkg}}, [ $array, $decl ]);
+            $DO_INIT = 1;   # Flag that initialization is required
+        }
+
+        # Handle ':shared' attribute associated with threads::shared
+        elsif ($attr eq 'shared') {
+            if ($threads::shared::threads_shared) {
+                threads::shared::share($array);
             }
         }
 
@@ -421,9 +439,10 @@ sub MODIFY_CODE_ATTRIBUTES
         $arg = ($arg) ? uc($arg) : 'HIDDEN';
 
         if ($attr eq 'ID') {
-            $ID_SUBS{$pkg} = $info;
+            $ID_SUBS{$pkg} = [ $code, @{$info->[1]} ];
             # Process attribute 'arg' as an attribute
             push(@attrs, $arg) if $] > 5.006;
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr eq 'INIT') {
             $INITORS{$pkg} = $code;
@@ -444,6 +463,7 @@ sub MODIFY_CODE_ATTRIBUTES
             $AUTOMETHODS{$pkg} = $code;
             # Process attribute 'arg' as an attribute
             push(@attrs, $arg) if $] > 5.006;
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
             if ($arg =~ /BOTTOM\s+UP/) {
@@ -451,6 +471,7 @@ sub MODIFY_CODE_ATTRIBUTES
             } else {
                 push(@{$CUMULATIVE{$pkg}}, $info);
             }
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr =~ /^CHAIN(?:ED)?$/) {
             if ($arg =~ /BOTTOM\s+UP/) {
@@ -458,15 +479,19 @@ sub MODIFY_CODE_ATTRIBUTES
             } else {
                 push(@{$CHAINED{$pkg}}, $info);
             }
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr =~ /^RESTRICT(?:ED)?$/) {
             push(@{$RESTRICTED{$pkg}}, $info);
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr =~ /^PRIV(?:ATE)?$/) {
             push(@{$PRIVATE{$pkg}}, $info);
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr eq 'HIDDEN') {
             push(@{$HIDDEN{$pkg}}, $info);
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr eq 'SCALARIFY') {
             OIO::Attribute->die(
@@ -482,6 +507,7 @@ sub MODIFY_CODE_ATTRIBUTES
                     next ATTR;
                 }
             }
+            $DO_INIT = 1;   # Flag that initialization is required
 
         } elsif ($attr !~ /^PUB(LIC)?$/) {   # PUBLIC is ignored
             # Not handled
@@ -494,10 +520,52 @@ sub MODIFY_CODE_ATTRIBUTES
 }
 
 
-### 'CHECK' Phase Attribute Handling ###
+### Array Field Object Support ###
+
+# Object ID counters - one for each class tree
+my %ID_COUNTERS;
+# Reclaimed object IDs
+my %RECLAIMED_IDS;
+
+if ($threads::shared::threads_shared) {
+    threads::shared::share(%ID_COUNTERS);
+    threads::shared::share(%RECLAIMED_IDS);
+}
+
+# Supplies an ID for an object being created in a class tree
+sub _ID
+{
+    my $class = shift;                # The object's class
+    my $tree = $ID_SUBS{$class}[1];   # The object's class tree
+
+    # Save deleted IDs for later reuse
+    if (@_) {
+        local $SIG{__WARN__} = sub { };   # Suppress spurious msg
+        if (keys(%RECLAIMED_IDS)) {       # Perl bug workaround
+            if (! exists($RECLAIMED_IDS{$tree})) {
+                $RECLAIMED_IDS{$tree} = ($threads::shared::threads_shared)
+                                            ? &threads::shared::share([])
+                                            : [];
+            }
+            push(@{$RECLAIMED_IDS{$tree}}, $_[0]);
+        }
+        return;
+    }
+
+    # Use a reclaimed ID if available
+    if (exists($RECLAIMED_IDS{$tree}) && @{$RECLAIMED_IDS{$tree}}) {
+        return (shift(@{$RECLAIMED_IDS{$tree}}));
+    }
+
+    # Return the next ID
+    return (++$ID_COUNTERS{$tree});
+}
+
+
+### Initialization Handling ###
 
 # Forward declaration of thread object sharing flag hash
-# (Used in INITIALIZE below)
+# (Used in initialize() below)
 my %IS_SHARING;
 
 
@@ -521,9 +589,11 @@ sub sub_name : PRIVATE
 }
 
 
-# This subroutine is normally only meant to be run as part of the CHECK phase.
-# It has been made a subroutine to accommodate usage with mod_perl.
-sub INITIALIZE
+# The old INITIALIZE subroutine is deprecated
+sub INITIALIZE { return; }
+
+
+sub initialize : Private
 {
     # Bring in support class if needed
     if (%CUMULATIVE || %ANTICUMULATIVE || %CHAINED || %ANTICHAINED) {
@@ -533,32 +603,48 @@ sub INITIALIZE
     no warnings 'redefine';
     no strict 'refs';
 
-    # Verify that there is only one :ID sub in each class tree
-    if (%ID_SUBS) {
+    PROPAGATE_ID_SUBS:
+    {
+        # Propagate ID subs through the class hierarchies
         for my $class (keys(%TREE_TOP_DOWN)) {
+            # Find and ID sub for this class somewhere in its hierarchy
             my $id_sub_pkg;
             for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
                 if ($ID_SUBS{$pkg}) {
                     if ($id_sub_pkg) {
-                        my ($p,    $file,  $line)  = @{$ID_SUBS{$pkg}->[1]};
-                        my ($pkg2, $file2, $line2) = @{$ID_SUBS{$id_sub_pkg}->[1]};
-                        OIO::Attribute->die(
-                            'caller_level' => ($phase eq 'COMPILE') ? 2 : 1,
-                            'message'      => "Multiple :ID subs defined within hierarchy for '$class'",
-                            'Info'         => ":ID subs in class '$pkg' (file '$file', line $line), and class '$pkg2' (file '$file2' line $line2)");
+                        # Verify that all the ID subs in heirarchy are the same
+                        if (($ID_SUBS{$pkg}[0] != $ID_SUBS{$id_sub_pkg}[0]) ||
+                            ($ID_SUBS{$pkg}[1] ne $ID_SUBS{$id_sub_pkg}[1]))
+                        {
+                            my ($p,    $file,  $line)  = @{$ID_SUBS{$pkg}}[1..3];
+                            my ($pkg2, $file2, $line2) = @{$ID_SUBS{$id_sub_pkg}[1..3]};
+                            OIO::Attribute->die(
+                                'caller_level' => 2,
+                                'message'      => "Multiple :ID subs defined within hierarchy for '$class'",
+                                'Info'         => ":ID subs in class '$pkg' (file '$file', line $line), and class '$pkg2' (file '$file2' line $line2)");
+                        }
+                    } else {
+                        $id_sub_pkg = $pkg;
                     }
-                    $id_sub_pkg = $pkg;
                 }
             }
 
-            # Add classes to ID sub cache, if applicable
+            # If ID sub found, propagate it through the class hierarchy
             if ($id_sub_pkg) {
                 for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
-                    $ID_SUB_CACHE{$pkg} = $ID_SUBS{$id_sub_pkg}->[0];
+                    $ID_SUBS{$pkg} = $ID_SUBS{$id_sub_pkg};
                 }
             }
         }
-        undef(%ID_SUBS);   # No longer needed
+
+        # Check for any classes without ID subs
+        for my $class (keys(%TREE_TOP_DOWN)) {
+            if (! exists($ID_SUBS{$class})) {
+                # Default to internal ID sub and propagate it
+                $ID_SUBS{$class} = [ \&_ID, $class, '-', '-' ];
+                redo PROPAGATE_ID_SUBS;
+            }
+        }
     }
 
 
@@ -601,34 +687,34 @@ sub INITIALIZE
     }
 
 
-    # Process :FIELD declarations for shared hashes and accessors
+    # Process :FIELD declarations for shared hashes/arrays and accessors
     for my $pkg (keys(%FIELDS)) {
-        my @hashes;
+        my @fields;
         for my $item (@{$FIELDS{$pkg}}) {
             if (ref($item) eq 'ARRAY') {
-                my ($hash, $decl) = @{$item};
+                my ($fld, $decl) = @{$item};
 
-                # Share the hash, if applicable
+                # Share the field, if applicable
                 if (is_sharing($pkg)) {
-                    threads::shared::share($hash)
+                    threads::shared::share($fld)
                 }
 
                 # Process any accessor declarations
                 if ($decl) {
-                    create_accessors($pkg, $hash, $decl);
+                    create_accessors($pkg, $fld, $decl);
                 }
 
-                # Save hash refs
-                push(@hashes, $hash);
+                # Save hash/array refs
+                push(@fields, $fld);
 
             } else {
                 # Already processed
-                push(@hashes, $item);
+                push(@fields, $item);
             }
         }
 
         # :FIELD declarations have been removed
-        $FIELDS{$pkg} = \@hashes;
+        $FIELDS{$pkg} = \@fields;
     }
 
 
@@ -836,8 +922,6 @@ _CODE_
         }
     }
 
-    # Check that scalar dereferencing is not not overloaded
-
 
     # Implement restricted methods - only callable within hierarchy
     for my $package (keys(%RESTRICTED)) {
@@ -871,16 +955,15 @@ _CODE_
     }
     undef(%HIDDEN);   # No longer needed
 
-    $phase = 'RUNNING';   # Set the next phase
+    $DO_INIT = 0;   # Clear initialization flag
 }
 
 
-# Execute CHECK phase code
+# Initialize as part of the CHECK phase
 {
     no warnings 'void';
     CHECK {
-        $phase = 'COMPILE';   # Phase of the Perl interpreter
-        INITIALIZE();
+        initialize();
     }
 }
 
@@ -983,38 +1066,39 @@ sub CLONE
         my @tree = @{$TREE_TOP_DOWN{$class}};
 
         # Get the ID sub for this class, if any
-        my $id_sub = $ID_SUB_CACHE{$class};
-
-        # If sharing, then must lock object attribute hashes when updating
-        my $lock_field = is_sharing($class);
+        my $id_sub = $ID_SUBS{$class}[0];
 
         # Process each object in the class
         for my $old_id (keys(%{$OBJECTS{$class}})) {
-            # Get cloned object associated with old ID
-            my $obj = delete($OBJECTS{$class}{$old_id});
+            my $obj;
+            if ($id_sub == \&_ID) {
+                # Objects using internal ID sub keep their same ID
+                $obj = $OBJECTS{$class}{$old_id};
 
-            # Unlock the object
-            Internals::SvREADONLY($$obj, 0) if ($] >= 5.008003);
-            # Replace the old object ID with a new one
-            if ($id_sub) {
-                local $SIG{__DIE__} = 'OIO::trap';
-                $$obj = &$id_sub;
             } else {
-                $$obj = Scalar::Util::refaddr($obj);
-            }
-            # Lock the object again
-            Internals::SvREADONLY($$obj, 1) if ($] >= 5.008003);
+                # Get cloned object associated with old ID
+                $obj = delete($OBJECTS{$class}{$old_id});
 
-            # Update the keys of the attribute hashes with the new object ID
-            for my $pkg (@tree) {
-                for my $fld (@{$FIELDS{$pkg}}) {
-                    lock($fld) if ($lock_field);
-                    $fld->{$$obj} = delete($fld->{$old_id});
+                # Unlock the object
+                Internals::SvREADONLY($$obj, 0) if ($] >= 5.008003);
+
+                # Replace the old object ID with a new one
+                local $SIG{__DIE__} = 'OIO::trap';
+                $$obj = $id_sub->($class);
+
+                # Lock the object again
+                Internals::SvREADONLY($$obj, 1) if ($] >= 5.008003);
+
+                # Update the keys of the field hashes/arrays with the new object ID
+                for my $pkg (@tree) {
+                    for my $fld (@{$FIELDS{$pkg}}) {
+                        $fld->{$$obj} = delete($fld->{$old_id});
+                    }
                 }
-            }
 
-            # Resave weakened reference to object
-            Scalar::Util::weaken($OBJECTS{$class}{$$obj} = $obj);
+                # Resave weakened reference to object
+                Scalar::Util::weaken($OBJECTS{$class}{$$obj} = $obj);
+            }
 
             # Dispatch any special replication handling
             if (%REPLICATORS) {
@@ -1044,6 +1128,11 @@ sub new
         OIO::Method->die('message' => q/Can't create objects from 'Object::InsideOut' itself/);
     }
 
+    # Perform package initialization, if required
+    if ($DO_INIT) {
+        initialize();
+    }
+
     # Gather arguments into a single hash ref
     my $all_args = {};
     while (my $arg = shift) {
@@ -1069,7 +1158,7 @@ sub new
 
     # Create a new 'bare' object
     my $self = Object::InsideOut::Util::create_object($class,
-                                                      $ID_SUB_CACHE{$class});
+                                                      $ID_SUBS{$class}[0]);
     if ($am_sharing) {
         threads::shared::share($self);
     }
@@ -1140,17 +1229,21 @@ sub clone
 
     # Create a new 'bare' object
     my $clone = Object::InsideOut::Util::create_object($class,
-                                                       $ID_SUB_CACHE{$class});
+                                                       $ID_SUBS{$class}[0]);
     if ($am_sharing) {
         threads::shared::share($clone);
     }
 
     # Clone the object
     for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
-        # Clone attributes from the parent
+        # Clone field data from the parent
         for my $fld (@{$FIELDS{$pkg}}) {
             lock($fld) if ($am_sharing);
-            $fld->{$$clone} = $fld->{$$parent};
+            if (ref($fld) eq 'HASH') {
+                $fld->{$$clone} = $fld->{$$parent};
+            } else {
+                $fld->[$$clone] = $fld->[$$parent];
+            }
         }
 
         # Dispatch any special replication handling
@@ -1216,7 +1309,7 @@ sub DESTROY
             delete($OBJECTS{$class}{$$self});
         }
 
-        # If sharing, then must lock object attribute hashes when updating
+        # If sharing, then must lock object field hashes/arrays when updating
         my $lock_field = is_sharing($class);
 
         # Destroy object
@@ -1227,11 +1320,20 @@ sub DESTROY
                 $destroy->($self);
             }
 
-            # Delete object attributes
+            # Delete object field data
             for my $fld (@{$FIELDS{$pkg}}) {
                 lock($fld) if ($lock_field);
-                delete($fld->{$$self});
+                if (ref($fld) eq 'HASH') {
+                    delete($fld->{$$self});
+                } else {
+                    delete($fld->[$$self]);
+                }
             }
+        }
+
+        # Reclaim the object ID if applicable
+        if ($ID_SUBS{$class}[0] == \&_ID) {
+            _ID($class, $$self);
         }
 
         # Unlock the object
@@ -1272,16 +1374,28 @@ sub _DUMP
 
         # Fields for which we have names
         while (my ($name, $field) = each(%{$DUMP_FIELDS{$pkg}})) {
-            if (exists($field->{$$self})) {
-                $dump{$pkg}{$name} = $field->{$$self};
+            if (ref($field) eq 'HASH') {
+                if (exists($field->{$$self})) {
+                    $dump{$pkg}{$name} = $field->{$$self};
+                }
+            } else {
+                if (exists($field->[$$self])) {
+                    $dump{$pkg}{$name} = $field->[$$self];
+                }
             }
             @fields = grep { $_ != $field } @fields;
         }
 
         # Fields for which names are not known
         for my $field (@fields) {
-            if (exists($field->{$$self})) {
-                $dump{$pkg}{$field} = $field->{$$self};
+            if (ref($field) eq 'HASH') {
+                if (exists($field->{$$self})) {
+                    $dump{$pkg}{$field} = $field->{$$self};
+                }
+            } else {
+                if (exists($field->[$$self])) {
+                    $dump{$pkg}{$field} = $field->[$$self];
+                }
             }
         }
     }
@@ -1304,7 +1418,7 @@ sub _DUMP
 ### Code Generators ###
 
 # Dynamically creates an AUTOLOAD subroutine
-# Called from INITIALIZE only if some Automethods are defined
+# Called from initialize() only if some Automethods are defined
 sub create_AUTOLOAD : PRIVATE
 {
     # $AUTOMETHODS    - ref to %AUTOMETHODS
@@ -1339,7 +1453,7 @@ sub create_AUTOLOAD : PRIVATE
 }
 
 
-# Returns a closure back to INITIALIZE that is used to redefine
+# Returns a closure back to initialize() that is used to redefine
 # UNIVERSAL::can()
 sub create_UNIVERSAL_can : PRIVATE
 {
@@ -1392,7 +1506,7 @@ sub create_UNIVERSAL_can : PRIVATE
 # Creates object data accessors for classes
 sub create_accessors : PRIVATE
 {
-    my ($package, $hash_ref, $decl) = @_;
+    my ($package, $field_ref, $decl) = @_;
 
     # Parse the accessor declaration
     my $acc_spec;
@@ -1409,7 +1523,7 @@ sub create_accessors : PRIVATE
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
             OIO::Attribute->die(
-                'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+                'caller_level' => 3,
                 'message'      => "Malformed attribute in package '$package'",
                 'Error'        => $err,
                 'Attribute'    => "Field( $decl )");
@@ -1433,14 +1547,14 @@ sub create_accessors : PRIVATE
             $type = $name;
         } else {
             OIO::Attribute->die(
-                'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+                'caller_level' => 3,
                 'message'      => "Can't create accessor method for package '$package'",
                 'Info'         => "Unknown accessor specifier: $key");
         }
     }
 
     # Add field info for '_DUMP'
-    $DUMP_FIELDS{$package}{($get) ? $get : $set} = $hash_ref;
+    $DUMP_FIELDS{$package}{($get) ? $get : $set} = $field_ref;
 
     # Check on accessor names
     my $have_one = 0;
@@ -1451,13 +1565,13 @@ sub create_accessors : PRIVATE
                 # Do not overwrite existing methods
                 if (*{$package.'::'.$name}{CODE}) {
                     OIO::Attribute->die(
-                        'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+                        'caller_level' => 3,
                         'message'      => q/Can't create accessor method/,
                         'Info'         => "Method '$name' already exists in class '$package'");
                 }
             } else {
                 OIO::Attribute->die(
-                    'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+                    'caller_level' => 3,
                     'message'      => "Can't create accessor method for package '$package'",
                     'Info'         => q/Accessor name missing in :Field attribute/,
                     'Attribute'    => "Field( $decl )");
@@ -1467,7 +1581,7 @@ sub create_accessors : PRIVATE
     }
     if (! $have_one) {
         OIO::Attribute->die(
-            'caller_level' => ($phase eq 'COMPILE') ? 3 : 2,
+            'caller_level' => 3,
             'message'      => "Accessor name missing in :Field attribute in package '$package'",
             'Info'         => q/Need 'GET', 'SET' or 'ACCESSOR' designator/,
             'Attribute'    => "Field( $decl )");
@@ -1494,18 +1608,26 @@ sub create_accessors : PRIVATE
         # Begin with subroutine declaration in the appropriate package
         $code .= "*${package}::$set = sub {\n";
 
-        # Lock the hash if sharing
+        # Lock the field if sharing
         if (is_sharing($package)) {
-            $code .= "    lock(\$hash);\n"
+            $code .= "    lock(\$field);\n"
         }
 
         # Add GET portion for combination accessor
         if (defined($get) && $get eq $set) {
-            $code .= <<"_COMBINATION_";
-    if (\@_ == 1) {
-        return (\$hash->\{\${\$_[0]}});
-    }
+            if (ref($field_ref) eq 'HASH') {
+                $code .= <<"_COMBINATION_";
+        if (\@_ == 1) {
+            return (\$field->\{\${\$_[0]}});
+        }
 _COMBINATION_
+            } else {
+                $code .= <<"_COMBINATION_";
+        if (\@_ == 1) {
+            return (\$field->\[\${\$_[0]}]);
+        }
+_COMBINATION_
+            }
             undef($get);  # That it for 'GET'
         }
 
@@ -1578,29 +1700,43 @@ _OTHER_TYPE_
         }
 
         # Add actual 'set' code
-        $code .= (is_sharing($package))
-                  ? "    \$hash->\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n};\n"
-                  : "    \$hash->\{\${\$_[0]}} = \$arg;\n};\n";
+        if (ref($field_ref) eq 'HASH') {
+            $code .= (is_sharing($package))
+                  ? "    \$field->\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n};\n"
+                  : "    \$field->\{\${\$_[0]}} = \$arg;\n};\n";
+        } else {
+            $code .= (is_sharing($package))
+                  ? "    \$field->\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n};\n"
+                  : "    \$field->\[\${\$_[0]}] = \$arg;\n};\n";
+        }
     }
 
     # Create 'get' accessor
     if (defined($get)) {
         # Set up locking code
-        my $lock = (is_sharing($package)) ? "    lock(\$hash);\n" : '';
+        my $lock = (is_sharing($package)) ? "    lock(\$field);\n" : '';
 
         # Build subroutine text
-        $code .= <<"_GET_";
+        if (ref($field_ref) eq 'HASH') {
+            $code .= <<"_GET_";
 *${package}::$get = sub {
-$lock    \$hash->{\${\$_[0]}};
+$lock    \$field->{\${\$_[0]}};
 };
 _GET_
+        } else {
+            $code .= <<"_GET_";
+*${package}::$get = sub {
+$lock    \$field->[\${\$_[0]}];
+};
+_GET_
+        }
     }
 
     # Compile the subroutine(s) in the smallest possible lexical scope
     my @errs;
     local $SIG{__WARN__} = sub { push(@errs, @_); };
     {
-        my $hash = $hash_ref;
+        my $field = $field_ref;
         eval $code;
     }
     if ($@ || @errs) {
@@ -1615,7 +1751,7 @@ _GET_
 }
 
 
-# Returns a closure back to INITIALIZE that is used to setup CUMULATIVE
+# Returns a closure back to initialize() that is used to setup CUMULATIVE
 # and CUMULATIVE(BOTTOM UP) methods for a particular method name.
 sub create_CUMULATIVE : PRIVATE
 {
@@ -1663,7 +1799,7 @@ sub create_CUMULATIVE : PRIVATE
 }
 
 
-# Returns a closure back to INITIALIZE that is used to setup CHAINED
+# Returns a closure back to initialize() that is used to setup CHAINED
 # and CHAINED(BOTTOM UP) methods for a particular method name.
 sub create_CHAINED : PRIVATE
 {
@@ -1701,7 +1837,7 @@ sub create_CHAINED : PRIVATE
 }
 
 
-# Returns a 'wrapper' closure back to INITIALIZE that restricts a method
+# Returns a 'wrapper' closure back to initialize() that restricts a method
 # to being only callable from within its class hierarchy
 sub create_RESTRICTED : PRIVATE
 {
@@ -1716,7 +1852,7 @@ sub create_RESTRICTED : PRIVATE
 }
 
 
-# Returns a 'wrapper' closure back to INITIALIZE that makes a method
+# Returns a 'wrapper' closure back to initialize() that makes a method
 # private (i.e., only callable from within its own class).
 sub create_PRIVATE : PRIVATE
 {
@@ -1771,7 +1907,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 0.07.00
+This document describes Object::InsideOut version 1.00.00
 
 =head1 SYNOPSIS
 
@@ -1779,7 +1915,7 @@ This document describes Object::InsideOut version 0.07.00
      use Object::InsideOut;
 
      # Numeric field with combined get+set accessor
-     my %data :Field('Accessor' => 'data', 'Type' => 'NUMERIC');
+     my @data :Field('Accessor' => 'data', 'Type' => 'NUMERIC');
 
      # Takes 'DATA' (or 'data', etc.) as a manatory parameter to ->new()
      my %init_args :InitArgs = (
@@ -1795,7 +1931,7 @@ This document describes Object::InsideOut version 0.07.00
      {
          my ($self, $args) = @_;
 
-         $data{$$self} = $args->{'DATA'};
+         $data[$$self] = $args->{'DATA'};
      }
  }
 
@@ -1803,15 +1939,15 @@ This document describes Object::InsideOut version 0.07.00
      use Object::InsideOut qw(My::Class);
 
      # List field with standard 'get_X' and 'set_X' accessors
-     my %info :Field('Standard' => 'info', 'Type' => 'LIST');
+     my @info :Field('Standard' => 'info', 'Type' => 'LIST');
 
      # Takes 'INFO' as an optional list parameter to ->new()
-     # Value automatically added to %info hash
+     # Value automatically added to @info array
      # Defaults to [ 'empty' ]
      my %init_args :InitArgs = (
          'INFO' => {
              'Type'    => 'LIST',
-             'Field'   => \%info,
+             'Field'   => \@info,
              'Default' => 'empty',
          },
      );
@@ -1837,10 +1973,10 @@ This module provides comprehensive support for implementing classes using the
 inside-out object model.
 
 This module implements inside-out objects as anonymous scalar references that
-have are into a class with the scalar containing the ID for the object
-(usually its L<refaddr|Scalar::Util/"refaddr EXPR">).  Object data (i.e.,
-fields) are stored in hashes within the class's package and are keyed to the
-object's ID.
+are blessed into a class with the scalar containing the ID for the object
+(usually a sequence number).  Object data (i.e., fields) are stored within the
+class's package in either arrays indexed by the object's ID, or hashes keyed
+to the object's ID.
 
 The virtues of the inside-out object model over the I<blessed hash> object
 model have been extolled in detail elsewhere.  See the informational links
@@ -1858,8 +1994,8 @@ the class-defined interface.
 
 Inheritance using I<blessed hash> classes can lead to conflicts if any classes
 use the same name for a field (i.e., hash key).  Inside-out objects are immune
-to this problem because object data is stored in hashes inside each class's
-package, and not in the object itself.
+to this problem because object data is stored inside each class's package, and
+not in the object itself.
 
 =item Compile-time Name Checking
 
@@ -1883,8 +2019,13 @@ additional key advantages:
 
 =item Speed
 
-Slightly faster than I<blessed hash> objects for fetching and setting data,
-and 2.5-4.5 times faster than Class::Std.
+When using arrays for storing object data, Object::InsideOut objects are as
+much as 30% faster than I<blessed hash> objects for fetching and setting data,
+and even with hashes they are still several percent faster than I<blessed
+hash> objects.
+
+For the same types of operations, Object::InsideOut objects are from 2 to 6
+times faster than Class::Std objects.
 
 =item Threads
 
@@ -1954,11 +2095,20 @@ following the name of the parent class:
 
 =head2 Field Declarations
 
-Object data fields consist of hashes within a class's package into which data
-are stored using the object's ID as the key.  A hash is declared as being an
-object field by following its declaration with the C<:Field> attribute:
+Object data fields consist of arrays within a class's package into which data
+are stored using the object's ID as the array index.  An array is declared as
+being an object field by following its declaration with the C<:Field>
+attribute:
 
-    my %info :Field;
+    my @info :Field;
+
+Object data fields may also be hashes:
+
+    my %data :Field;
+
+However, as array access is as much as 30% faster than hash access, you should
+stick to using arrays.  (See L</"Object ID"> concerning when hashes may be
+required.)
 
 (The case of the word I<Field> does not matter, but by convention should not
 be all lowercase.)
@@ -2036,17 +2186,17 @@ by Object::InsideOut to each class:
 
 =head2 Object Initialization
 
-Object initialization is accomplished through a combination of an
-C<:InitArgs> labelled hash (explained in detail in the L<next
-section|/"Object Initialization Argument Specifications">), and an C<:Init>
-labelled subroutine.
+Object initialization is accomplished through a combination of an C<:InitArgs>
+labelled hash (explained in detail in the L<next section|/"Object
+Initialization Argument Specifications">), and an C<:Init> labelled
+subroutine.
 
 The C<:InitArgs> labelled hash specifies the parameters to be extracted from
 the argument list supplied to the C<new> method.  These parameters are then
 sent to the C<:Init> labelled subroutine for processing:
 
     package My::Class; {
-        my %my_field :Field;
+        my @my_field :Field;
 
         my %init_args :InitArgs = (
             'MY_PARAM' => qr/MY_PARAM/i,
@@ -2057,7 +2207,7 @@ sent to the C<:Init> labelled subroutine for processing:
             my ($self, $args) = @_;
 
             if (exists($args->{'MY_PARAM'})) {
-                $my_field($$self) = $args->{'MY_PARAM'};
+                $my_field[$$self] = $args->{'MY_PARAM'};
             }
         }
     }
@@ -2072,8 +2222,8 @@ convention should not be all lowercase.)
 This C<:Init> labelled subroutine will receive two arguments:  The newly
 created object requiring further initialization (i.e., C<$self>), and a hash
 ref of supplied arguments that matched C<:InitArgs> specifications.  Data
-processed by the subroutine can be placed into the class's field hashes using
-the object's ID (i.e., C<$$self>).
+processed by the subroutine can be placed into the class's field arrays
+(hashes) using the object's ID (i.e., C<$$self>).
 
 =head2 Object Initialization Argument Specifications
 
@@ -2150,7 +2300,7 @@ exact case and spelling are required.
 You can specify automatic processing for a parameter's value such that it is
 placed directly info a field hash and not sent to the C<:Init> subroutine:
 
-    my %hosts :Field;
+    my @hosts :Field;
 
     my %init_args :InitArgs = (
         'HOSTS' => {
@@ -2160,13 +2310,13 @@ placed directly info a field hash and not sent to the C<:Init> subroutine:
             'Mandatory' => 1,
             # Allow single value or array ref
             'Type'      => 'List',
-            # Automatically put the parameter into %hosts
-            'Field'     => \%hosts,
+            # Automatically put the parameter into @hosts
+            'Field'     => \@hosts,
         },
     );
 
 In this case, when the host parameter is found, it is automatically put into
-the C<%hosts> hash, and a S<C<'HOSTS' =E<gt> value>> pair is B<not> sent to
+the C<@hosts> array, and a S<C<'HOSTS' =E<gt> value>> pair is B<not> sent to
 the C<:Init> subroutine.  In fact, if you specify fields for all your
 parameters, then you don't even need to have an C<:Init> subroutine!  All the
 work will be taken care of for you.
@@ -2182,7 +2332,7 @@ automatic generation of accessor methods.  You can specify the generation of a
 pair of I<standard-named> accessor methods (i.e., prefixed by I<get_> and
 I<set_>):
 
-    my %data :Field('Standard' => 'data');
+    my @data :Field('Standard' => 'data');
 
 The above results in Object::InsideOut automatically generating accessor
 methods named C<get_data> and C<set_data>.  (The keyword C<Standard> is
@@ -2190,11 +2340,11 @@ case-insensitive, and can be abbreviated to C<Std>.)
 
 You can also separately specify the I<get> and/or I<set> accessors:
 
-    my %name :Field('Get' => 'name', 'Set' => 'change_name');
+    my @name :Field('Get' => 'name', 'Set' => 'change_name');
         # or
-    my %name :Field('Get' => 'get_name');
+    my @name :Field('Get' => 'get_name');
         # or
-    my %name :Field('Set' => 'new_name');
+    my @name :Field('Set' => 'new_name');
 
 For the above, you specify the full name of the accessor(s) (i.e., no prefix
 is added to the given name(s)).  (The C<Get> and C<Set> keywords are
@@ -2203,7 +2353,7 @@ case-insensitive.)
 You can specify the automatic generation of a combined I<get/set> accessor
 method:
 
-    my %comment :Field('Accessor' => 'comment');
+    my @comment :Field('Accessor' => 'comment');
 
 (The keyword C<Accessor> is case-insensitive, and can be abbreviated to
 C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)  The
@@ -2225,7 +2375,7 @@ the method's return value is the value being set.
 
 Type-checking for the I<set> operation can be specified, as well:
 
-    my %level :Field('Accessor' => 'level', 'Type' => 'Numeric');
+    my @level :Field('Accessor' => 'level', 'Type' => 'Numeric');
 
 Available types are C<Numeric> (or C<Num> or C<Number> - case-insensitive),
 C<List> or C<Array> (case-insensitive), C<Hash> (case-insensitive), a class
@@ -2241,38 +2391,35 @@ Due to limitations in the Perl parser, you cannot use line wrapping with the
 C<:Field> attribute:
 
     # This doesn't work
-    # my %level :Field('Get'  => 'level',
+    # my @level :Field('Get'  => 'level',
     #                  'Set'  => 'set_level',
     #                  'Type' => 'Num');
 
     # Must be all on one line
-    my %level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
+    my @level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
 
 =head2 Object ID
 
-By default, the ID of an object is just its L<refaddr|Scalar::Util/"refaddr
-EXPR">.  This should suffice for nearly all cases of class development.  If
-there is a special need for the module code to control the object ID (see
-L<Math::Random::MT::Auto> as an example), then an C<:ID> labelled subroutine
-can be specified:
+By default, the ID of an object is derived from a sequence counter for the
+object's class hierarchy.  This should suffice for nearly all cases of class
+development.  If there is a special need for the module code to control the
+object ID (see L<Math::Random::MT::Auto> as an example), then an C<:ID>
+labelled subroutine can be specified:
 
     sub _id :ID
     {
+        my $class = $_[0];
+
         # Determine a unique object ID
         ...
 
         return ($id);
     }
 
-For example, a simple sequential numbering scheme (not recommended for real
-code):
-
-    my $id_seq = 1;
-
-    sub _id :ID
-    {
-        return ($id++);
-    }
+The ID returned by your subroutine can be any kind of I<regular> scalar (e.g.,
+a string or a number).  However, if the ID is something other than a
+low-valued integer, then you will have to architect all your classes using
+hashes for the object fields.
 
 Within any class hierachy only one class may specify an C<:ID> subroutine.
 
@@ -2303,10 +2450,10 @@ processing:  Object::InsideOut will handle all the other details.
 =head2 Object Destruction
 
 Object::InsideOut exports a C<DESTROY> method to each class that deletes an
-object's data from the object field hashes.  If a class requires additional
-destruction processing (e.g., closing filehandles), then it must provide a
-subroutine labelled with the C<:Destroy> attribute.  This subroutine will be
-sent the object that is being destroyed:
+object's data from the object field arrays (hashes).  If a class requires
+additional destruction processing (e.g., closing filehandles), then it must
+provide a subroutine labelled with the C<:Destroy> attribute.  This subroutine
+will be sent the object that is being destroyed:
 
     sub _destroy : Destroy
     {
@@ -2576,7 +2723,7 @@ the object's hierarchy.  The values for those keys are hash refs containing
 S<C<key =E<gt> value>> pairs for the object's fields.  The name for a field
 will be either the tag from the C<:InitArgs> array that is associated with the
 field, its I<get> method name, its I<set> method name, or, failing all that, a
-string of the form C<HASH(0x....)>.
+string of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
 
 When called with a I<true> argument, C<_DUMP> returns a string version of the
 hash representation using L<Data::Dumper>.
@@ -2661,7 +2808,7 @@ Here is a complete example with thread object sharing enabled:
         use Object::InsideOut ':SHARED';
 
         # One list-type field
-        my %data : Field('Accessor' => 'data', 'Type' => 'List');
+        my @data : Field('Accessor' => 'data', 'Type' => 'List');
     }
 
     package main;
@@ -2696,27 +2843,14 @@ Here is a complete example with thread object sharing enabled:
 
 =head1 USAGE WITH C<require> and C<mod_perl>
 
-Object::InsideOut performs most of its I<magic> during Perl's C<CHECK> phase.
-This causes problems when trying to load packages/classes at runtime using
-C<require>, or when using C<mod_perl>.  To overcome this issue,
-Object::InsideOut's C<CHECK> phase processing has been packaged into a
-subroutine that can be called by the application in these instances.
+Prior to version 1.00.00, Object::InsideOut contained a subroutine
+(C<Object::InsideOut::INITIALIZE()>) to handle package initialization for use
+when loading packages/classes at runtime using C<require>, or when using
+L<mod_perl>.
 
-For an application that loads packages/classes at runtime,
-C<Object::InsideOut::INITIALIZE> should be run immediately after the
-C<require> statement:
-
-    eval {
-        require My::Class;
-        Object::InsideOut::INITIALIZE();
-    };
-
-For CGIs running under C<mod_perl>, C<Object::InsideOut::INITIALIZE()> should
-be run prior to any objects being created - preferrably right after all C<use>
-statements that load inside-out object classes:
-
-    use My::Class;
-    Object::InsideOut::INITIALIZE();
+Initialization under L<mod_perl> and with runtime loaded classes is now
+performed automatically.  Therefore, this subroutine is no longer required
+(i.e., deprecated), and is currently just a I<no-op>.
 
 =head1 DIAGNOSTICS
 
@@ -2732,7 +2866,7 @@ class for this module is C<OIO>.
 
 =over
 
-=item *Invalid HASH attribute
+=item *Invalid ARRAY/HASH attribute
 
 Forgot to 'use Object::InsideOut qw(Parent::Class ...);'
 
@@ -2835,7 +2969,7 @@ C<:Chained> methods.
 
 =head1 AUTHOR
 
-Jerry D. Hedden, S<E<lt>jdhedden AT 1979 DOT usna DOT comE<gt>>
+ Jerry D. Hedden, S<E<lt>jdhedden AT 1979 DOT usna DOT comE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 

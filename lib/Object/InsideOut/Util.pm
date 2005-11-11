@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '0.07.00';
+our $VERSION = '1.00.00';
 
 
 ### Module Initialization ###
@@ -49,7 +49,6 @@ sub import
 
 # Returns a blessed (optional), readonly (Perl 5.8) anonymous scalar reference
 # containing either:
-#   the address of the reference;
 #   the value returned by a user-specified subroutine; or
 #   a user-supplied scalar
 sub create_object
@@ -60,15 +59,11 @@ sub create_object
     my $obj = \(my $scalar);
 
     # Set the scalar equal to ...
-    if (! defined($id)) {
-        # ... the address of the reference
-        $$obj = Scalar::Util::refaddr($obj);
-
-    } elsif (my $ref_type = ref($id)) {
+    if (my $ref_type = ref($id)) {
         if ($ref_type eq 'CODE') {
             # ... the value returned by the user-specified subroutine
             local $SIG{__DIE__} = 'OIO::trap';
-            $$obj = &$id;
+            $$obj = $id->($class);
         } else {
             # Complain if something other than code ref
             OIO::Args->die(
@@ -225,9 +220,17 @@ sub process_args
                 threads::shared::_id($field))
             {
                 lock($field);
-                $field->{$$self} = make_shared(delete($found{$key}));
+                if (ref($field) eq 'HASH') {
+                    $field->{$$self} = make_shared(delete($found{$key}));
+                } else {
+                    $field->[$$self] = make_shared(delete($found{$key}));
+                }
             } else {
-                $field->{$$self} = delete($found{$key});
+                if (ref($field) eq 'HASH') {
+                    $field->{$$self} = delete($found{$key});
+                } else {
+                    $field->[$$self] = delete($found{$key});
+                }
             }
         }
     }

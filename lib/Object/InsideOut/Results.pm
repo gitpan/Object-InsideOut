@@ -3,43 +3,43 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = '0.07.00';
+our $VERSION = '1.00.00';
 
 use Object::InsideOut;
 
-my %VALUES  : Field;
-my %CLASSES : Field;
+my @VALUES  : Field;
+my @CLASSES : Field;
 
 my %init_args : InitArgs = (
-    'VALUES'  => { 'FIELD' => \%VALUES  },
-    'CLASSES' => { 'FIELD' => \%CLASSES }
+    'VALUES'  => { 'FIELD' => \@VALUES  },
+    'CLASSES' => { 'FIELD' => \@CLASSES }
 );
 
 sub as_string : STRINGIFY
 {
-    return (join('', grep { defined $_ } @{$VALUES{${$_[0]}}}));
+    return (join('', grep { defined $_ } @{$VALUES[${$_[0]}]}));
 }
 
 sub count : NUMERIFY
 {
-    return (scalar(@{$VALUES{${$_[0]}}}));
+    return (scalar(@{$VALUES[${$_[0]}]}));
 }
 
 sub have_any : BOOLIFY
 {
-    return (@{$VALUES{${$_[0]}}} > 0);
+    return (@{$VALUES[${$_[0]}]} > 0);
 }
 
 sub values : ARRAYIFY
 {
-    return ($VALUES{${$_[0]}});
+    return ($VALUES[${$_[0]}]);
 }
 
 sub as_hash : HASHIFY
 {
     my $id = ${$_[0]};
     my %hash;
-    @hash{@{$CLASSES{$id}}} = @{$VALUES{$id}};
+    @hash{@{$CLASSES[$id]}} = @{$VALUES[$id]};
     return (\%hash);
 }
 

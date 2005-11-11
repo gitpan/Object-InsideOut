@@ -1,6 +1,10 @@
 Revision history for Perl extension Object::InsideOut.
 
-0.07.00 Wed Nov 09 00:00:00 2005
+1.00.00 Fri Nov 11 00:00:00 2005
+	- Can now use array-based object fields - >20% faster
+	- Deprecated INITIALIZE() - no longer needed
+
+0.07.00 Thu Nov 10 08:50:00 2005
 	- Verify ${} is not overloaded
 	- Require Scalar::Util 1.10 or later, and Test::More 0.50 or later
 	- Verified on Perl 5.6.0 through 5.9.2

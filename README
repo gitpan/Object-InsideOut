@@ -1,32 +1,83 @@
-Object-InsideOut version 0.07.00
+Object-InsideOut version 1.00.00
 ================================
 
 This module provides comprehensive support for implementing classes using the
 inside-out object model.
 
 This module implements inside-out objects as anonymous scalar references that
-have been blessed into a class with the scalar containing the ID for the
-object (usually its 'refaddr').  Object data (i.e., fields) are stored in
-hashes within the class's package and are keyed to the object's ID.
+are blessed into a class with the scalar containing the ID for the object
+(usually a sequence number).  Object data (i.e., fields) are stored within the
+class's package in either arrays indexed by the object's ID, or hashes keyed
+to the object's ID.
+
+The virtues of the inside-out object model over the 'blessed hash' object
+model have been extolled in detail elsewhere.  Briefly, inside-out objects
+offer the following advantages over 'blessed hash' objects:
+
+= Encapsulation
+
+Object data is enclosed within the class's code and is accessible only through
+the class-defined interface.
+
+= Field Name Collision Avoidance
+
+Inheritance using 'blessed hash' classes can lead to conflicts if any classes
+use the same name for a field (i.e., hash key).  Inside-out objects are immune
+to this problem because object data is stored inside each class's package, and
+not in the object itself.
+
+= Compile-time Name Checking
+
+A common error with 'blessed hash' classes is the misspelling of field names:
+
+    $obj->{'coment'} = 'No comment';   # Should be 'comment' not 'coment'
+
+As there is no compile-time checking on hash keys, such errors do not usually
+manifest themselves until runtime.
+
+With inside-out objects, data is accessed using methods, the names of which
+are checked by the Perl compiler such that any typos are easily caught using
+"perl -c".
+
 
 This module offers all the capabilities of Class::Std with the following
 additional key advantages:
 
 = Speed
-As fast as 'blessed hash' objects for fetching and setting data, and 2.5-4.5
-times faster than Class::Std.
+
+When using arrays for storing object data, Object::InsideOut objects are as
+much as 30% faster than 'blessed hash' objects for fetching and setting data,
+and even with hashes they are still several percent faster than 'blessed hash'
+objects.
+
+For the same types of operations, Object::InsideOut objects are from 2 to 6
+times faster than Class::Std objects.
 
 = Threads
-Class::Std is not thread safe.  Object::InsideOUt is thread safe, and
-thoroughly supports sharing objects between threads using 'threads::shared'.
+
+Object::InsideOut is thread safe, and thoroughly supports sharing objects
+between threads using threads::shared.  Class::Std is not usable in threaded
+applications (or applications that use 'fork' under ActiverPerl).
 
 = Flexibility
+
 Allows control over object ID specification, accessor naming, parameter name
 matching, and more.
 
-= Usable with mod_perl
+= mod_perl and Runtime Loading
 
-= Usable with Perl 5.6.0 and later
+Usable from within mod_perl, and supports classes that may be loaded at
+runtime (i.e., using "eval { require ...; };").
+
+= Perl 5.6
+
+Usable with Perl 5.6.0 and later.  Class::Std is only usable with Perl 5.8.1
+and later.
+
+= Exception Objects
+
+As recommended in "Perl Best Practices", Object::InsideOut uses
+Exception::Class for handling errors in an OO-compatible manner.
 
 INSTALLATION
 
