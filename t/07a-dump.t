@@ -60,7 +60,7 @@ MAIN:
                   'misc' => 'other',
               });
 
-    my $hash = $obj->_DUMP();
+    my $hash = $obj->dump();
 
     ok($hash                                  => 'Representation is valid');
     is(ref($hash), 'HASH'                     => 'Representation is valid');
@@ -73,7 +73,7 @@ MAIN:
     is(Object::InsideOut::Util::hash_re($hash->{MyDer}, qr/^ARRAY/), 'other'
                                               => 'Hidden derived attribute');
 
-    my $str = $obj->_DUMP(1);
+    my $str = $obj->dump(1);
     #print(STDERR $str, "\n");
 
     my $hash2 = eval $str;

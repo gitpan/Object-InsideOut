@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.00.00';
+our $VERSION = '1.01.00';
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -50,7 +50,7 @@ use Exception::Class (
         'isa' => 'OIO::Method',
         'description' =>
             'Object::InsideOut exception that indicates an argument error',
-        'fields' => ['Usage'],
+        'fields' => ['Usage', 'Arg'],
     },
 );
 
@@ -252,10 +252,10 @@ sub import
 # 'Field'.
 my %FIELDS;
 
-# Field information for the _DUMP() method
+# Field information for the dump() method
 my %DUMP_FIELDS;
 
-# Packages with :InitArgs that need to be processed for _DUMP() field info
+# Packages with :InitArgs that need to be processed for dump() field info
 my @DUMP_INITARGS;
 
 # Allow a single object ID specifier subroutine per class tree.  The
@@ -310,6 +310,9 @@ my %CHAINED;
 # Methods that support 'chaining' from the bottom of the class tree upwards.
 # These chained methods are marked with an attributed 'Chained(bottom up)'.
 my %ANTICHAINED;
+
+my %DUMPERS;
+my %PUMPERS;
 
 # Restricted methods are only callable from within the class hierarchy, and
 # are marked with an attributed called 'Restricted'.
@@ -481,6 +484,16 @@ sub MODIFY_CODE_ATTRIBUTES
             }
             $DO_INIT = 1;   # Flag that initialization is required
 
+        } elsif ($attr =~ /^DUMP(?:ER)?$/) {
+            $DUMPERS{$pkg} = $code;
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr =~ /^PUMP(?:ER)?$/) {
+            $PUMPERS{$pkg} = $code;
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
+
         } elsif ($attr =~ /^RESTRICT(?:ED)?$/) {
             push(@{$RESTRICTED{$pkg}}, $info);
             $DO_INIT = 1;   # Flag that initialization is required
@@ -533,6 +546,7 @@ if ($threads::shared::threads_shared) {
 }
 
 # Supplies an ID for an object being created in a class tree
+# and reclaims IDs from destroyed objects
 sub _ID
 {
     my $class = shift;                # The object's class
@@ -593,6 +607,7 @@ sub sub_name : PRIVATE
 sub INITIALIZE { return; }
 
 
+# Perform much of the 'magic' for this module
 sub initialize : Private
 {
     # Bring in support class if needed
@@ -658,9 +673,9 @@ sub initialize : Private
                     for my $class (@$tree) {
                         if (exists($IS_SHARING{$class})) {
                             # Check for sharing conflicts
-                            if ($IS_SHARING{$class}->[0] != $IS_SHARING{$flag_class}->[0]) {
+                            if ($IS_SHARING{$class}[0] != $IS_SHARING{$flag_class}[0]) {
                                 my ($pkg1, @loc, $pkg2, $file, $line);
-                                if ($IS_SHARING{$flag_class}->[0]) {
+                                if ($IS_SHARING{$flag_class}[0]) {
                                     $pkg1 = $flag_class;
                                     @loc  = ($flag_class, (@{$IS_SHARING{$flag_class}})[1..2]);
                                     $pkg2 = $class;
@@ -718,10 +733,6 @@ sub initialize : Private
     }
 
 
-    # Methods exported to all classes
-    my @EXPORT = qw(new clone DESTROY _DUMP);
-
-
     # Only install AUTOLOAD if we have Automethods
     if (%AUTOMETHODS) {
         if (! Object::InsideOut->can('AUTOLOAD')) {
@@ -733,21 +744,6 @@ sub initialize : Private
             *UNIVERSAL::can = create_UNIVERSAL_can(\&UNIVERSAL::can,
                                                    \%AUTOMETHODS,
                                                    \%TREE_BOTTOM_UP);
-        }
-
-        # Add AUTOLOAD to export list
-        push(@EXPORT, 'AUTOLOAD');
-    }
-
-
-    # Export certain methods to all classes
-    for my $pkg (keys(%TREE_TOP_DOWN)) {
-        for my $sym (@EXPORT) {
-            my $full_sym = $pkg.'::'.$sym;
-            # Only export if method doesn't already exist
-            if (! *{$full_sym}{CODE}) {
-                *{$full_sym} = \&{$sym};
-            }
         }
     }
 
@@ -910,7 +906,7 @@ _CODE_
         # Bless an object into every class
         # This works around an obscure 'overload' bug reported against
         # Class::Std (http://rt.cpan.org/NoAuth/Bug.html?id=14048)
-        bless(\(my $scalar), $package);
+        bless(\do{ my $scalar; }, $package);
 
         # Verify that scalar dereferencing is not overloaded in any class
         if (exists(${$package.'::'}{'(${}'})) {
@@ -954,6 +950,23 @@ _CODE_
         }
     }
     undef(%HIDDEN);   # No longer needed
+
+
+    # Export certain methods to all classes
+    my @EXPORT = qw(new clone DESTROY dump);
+    if (%AUTOMETHODS) {
+        push(@EXPORT, 'AUTOLOAD');
+    }
+    for my $pkg (keys(%TREE_TOP_DOWN)) {
+        for my $sym (@EXPORT) {
+            my $full_sym = $pkg.'::'.$sym;
+            # Only export if method doesn't already exist
+            if (! *{$full_sym}{CODE}) {
+                *{$full_sym} = \&{$sym};
+            }
+        }
+    }
+
 
     $DO_INIT = 0;   # Clear initialization flag
 }
@@ -1011,7 +1024,7 @@ sub is_sharing : PRIVATE
         return;
     }
 
-    return ($IS_SHARING{$class}->[0]);
+    return ($IS_SHARING{$class}[0]);
 }
 
 
@@ -1102,7 +1115,7 @@ sub CLONE
 
             # Dispatch any special replication handling
             if (%REPLICATORS) {
-                my $pseudo_object = \(my $scalar = $old_id);
+                my $pseudo_object = \do{ my $scalar = $old_id; };
                 for my $pkg (@tree) {
                     if (my $replicate = $REPLICATORS{$pkg}) {
                         local $SIG{__DIE__} = 'OIO::trap';
@@ -1344,57 +1357,81 @@ sub DESTROY
 }
 
 
-# String version of the object that contains public data
+# The old _DUMP method is deprecated
 sub _DUMP
 {
     my $self = shift;
+    return ($self->dump(@_));
+}
 
-    # Extract field info for '_DUMP' from any :InitArgs hashes
+
+# Object dumper
+sub dump
+{
+    my $self = shift;
+
+    # Extract field info from any :InitArgs hashes
     while (my $pkg = shift(@DUMP_INITARGS)) {
+        INIT_ARGS:
         while (my ($name, $val) = each(%{$INIT_ARGS{$pkg}})) {
             if (ref($val) eq 'HASH') {
                 if (my $field = Object::InsideOut::Util::hash_re($val, qr/^FIELD$/i)) {
-                    # Remove any field info set during accessors creation
-                    while (my ($name2, $field2) = each(%{$DUMP_FIELDS{$pkg}})) {
-                        if ($field == $field2) {
+                    # Override get/set names, but not 'Name'
+                    while (my ($name2, $fld_spec) = each(%{$DUMP_FIELDS{$pkg}})) {
+                        if ($field == $fld_spec->[0]) {
+                            if ($fld_spec->[1] eq 'Name') {
+                                next INIT_ARGS;
+                            }
                             delete($DUMP_FIELDS{$pkg}{$name2});
                             last;
                         }
                     }
-                    $DUMP_FIELDS{$pkg}{$name} = $field;
+                    $DUMP_FIELDS{$pkg}{$name} = [ $field, 'InitArgs' ];
                 }
             }
         }
     }
 
-    # Gather the data from all the fields in the object's class tree
+    # Class of the object
     my %dump;
+    $dump{'CLASS'} = ref($self);
+
+    # Gather data from the object's class tree
     for my $pkg (@{$TREE_TOP_DOWN{ref($self)}}) {
-        my @fields = @{$FIELDS{$pkg}};
+        # Try to use a class-supplied dumper
+        if (my $dumper = $DUMPERS{$pkg}) {
+            local $SIG{__DIE__} = 'OIO::trap';
+            $dump{$pkg} = $dumper->($self);
 
-        # Fields for which we have names
-        while (my ($name, $field) = each(%{$DUMP_FIELDS{$pkg}})) {
-            if (ref($field) eq 'HASH') {
-                if (exists($field->{$$self})) {
-                    $dump{$pkg}{$name} = $field->{$$self};
+        } else {
+            # Dump the data ourselves from all known class fields
+            my @fields = @{$FIELDS{$pkg}};
+
+            # Fields for which we have names
+            while (my ($name, $fld_spec) = each(%{$DUMP_FIELDS{$pkg}})) {
+                my $field = $fld_spec->[0];
+                if (ref($field) eq 'HASH') {
+                    if (exists($field->{$$self})) {
+                        $dump{$pkg}{$name} = $field->{$$self};
+                    }
+                } else {
+                    if (exists($field->[$$self])) {
+                        $dump{$pkg}{$name} = $field->[$$self];
+                    }
                 }
-            } else {
-                if (exists($field->[$$self])) {
-                    $dump{$pkg}{$name} = $field->[$$self];
-                }
+                @fields = grep { $_ != $field } @fields;
             }
-            @fields = grep { $_ != $field } @fields;
-        }
 
-        # Fields for which names are not known
-        for my $field (@fields) {
-            if (ref($field) eq 'HASH') {
-                if (exists($field->{$$self})) {
-                    $dump{$pkg}{$field} = $field->{$$self};
-                }
-            } else {
-                if (exists($field->[$$self])) {
-                    $dump{$pkg}{$field} = $field->[$$self];
+            # Fields for which names are not known
+            for my $field (@fields) {
+                if (ref($field) eq 'HASH') {
+                    if (exists($field->{$$self})) {
+                        $dump{$pkg}{$field} = $field->{$$self};
+                    }
+                } else {
+                    if (exists($field->[$$self])) {
+                        $dump{$pkg}{$field} = $field->[$$self];
+                    }
                 }
             }
         }
@@ -1412,6 +1449,117 @@ sub _DUMP
 
     # Send back a hash ref to the dumped data
     return (\%dump);
+}
+
+
+# Object loader
+sub Object::InsideOut::pump
+{
+    my $input = $_[0];
+    my $dump;
+
+    # Must have an arg
+    if (! $input) {
+        OIO::Args->die('message' => 'Missing argument to pump()');
+    }
+
+    if (ref($input)) {
+        # Input is a ref - use it
+        $dump = $input;
+        if (ref($dump) ne 'HASH') {
+            OIO::Args->die('message'  => 'Argument to pump() is not a hash ref');
+        }
+
+    } else {
+        # Input is not a ref - convert it
+        my @errs;
+        local $SIG{__WARN__} = sub { push(@errs, @_); };
+
+        eval "\$dump = $input";
+
+        if ($@ || @errs) {
+            my ($err) = split(/ at /, $@ || join(" | ", @errs));
+            OIO::Args->die(
+                'message'  => 'Failure converting dump string back to hash ref',
+                'Error'    => $err,
+                'Arg'      => $input);
+        }
+
+        # Check that we got a hash ref
+        if (ref($dump) ne 'HASH') {
+            OIO::Args->die(
+                'message'  => 'Argument to pump() did not convert to a hash ref',
+                'Arg'      => $input);
+        }
+    }
+
+    # The class for the object
+    my $class = $dump->{'CLASS'};
+    if (! $class) {
+        OIO::Args->die('message'  => q/'CLASS' key missing in argument to pump()/);
+    }
+
+    # Get thread-sharing flag
+    my $am_sharing = is_sharing($class);
+
+    # Create a new 'bare' object
+    my $self = Object::InsideOut::Util::create_object($class,
+                                                      $ID_SUBS{$class}[0]);
+    if ($am_sharing) {
+        threads::shared::share($self);
+    }
+
+    # Store object data
+    while (my ($pkg, $data) = each(%{$dump})) {
+        next if ($pkg eq 'CLASS');
+
+        # Try to use a class-supplied pumper
+        if (my $pumper = $PUMPERS{$pkg}) {
+            local $SIG{__DIE__} = 'OIO::trap';
+            $pumper->($self, $data);
+
+        } else {
+            # Pump in the data ourselves
+            while (my ($fld_name, $value) = each(%{$data})) {
+                if (my $field = $DUMP_FIELDS{$pkg}{$fld_name}[0]) {
+                    if (is_sharing($pkg)) {
+                        $value = Object::InsideOut::Util::make_shared($value);
+                    }
+                    if (ref($field) eq 'HASH') {
+                        $field->{$$self} = $value;
+                    } else {
+                        $field->[$$self] = $value;
+                    }
+                } else {
+                    if ($fld_name =~ /^(HASH|ARRAY)/) {
+                        OIO::Args->die(
+                            'message' => "Unnamed field encounted in class '$pkg'",
+                            'Arg'     => "$fld_name => $value");
+                    } else {
+                        OIO::Args->die('message' => "Unknown field name for class '$pkg': $fld_name");
+                    }
+                }
+            }
+        }
+    }
+
+    # Thread support
+    if ($am_sharing) {
+        # Add thread tracking list for this thread-shared object
+        lock(%SHARED);
+        if (! exists($SHARED{$class})) {
+            $SHARED{$class} = &threads::shared::share({});
+        }
+        $SHARED{$class}{$$self} = &threads::shared::share([]);
+        push(@{$SHARED{$class}{$$self}}, $THREAD_ID);
+
+    } elsif ($threads::threads) {
+        # Add non-thread-shared object to thread cloning list
+        Scalar::Util::weaken($OBJECTS{$class}{$$self} = $self);
+    }
+
+    # Done - return the object
+    return ($self);
 }
 
 
@@ -1531,20 +1679,22 @@ sub create_accessors : PRIVATE
     }
 
     # Get info for accessors
-    my ($get, $set, $type);
-    while (my ($key, $name) = each(%{$acc_spec})) {
+    my ($get, $set, $type, $name);
+    while (my ($key, $val) = each(%{$acc_spec})) {
         if ($key =~ /^st.*d/i) {
-            $get = 'get_' . $name;
-            $set = 'set_' . $name;
+            $get = 'get_' . $val;
+            $set = 'set_' . $val;
         } elsif ($key =~ /^acc|^com|[gs]et/i) {
             if ($key =~ /acc|com|get/i) {
-                $get = $name;
+                $get = $val;
             }
             if ($key =~ /acc|com|set/i) {
-                $set = $name;
+                $set = $val;
             }
         } elsif ($key =~ /^type$/i) {
-            $type = $name;
+            $type = $val;
+        } elsif ($key =~ /^name$/i) {
+            $name = $val;
         } else {
             OIO::Attribute->die(
                 'caller_level' => 3,
@@ -1553,21 +1703,31 @@ sub create_accessors : PRIVATE
         }
     }
 
-    # Add field info for '_DUMP'
-    $DUMP_FIELDS{$package}{($get) ? $get : $set} = $field_ref;
+    # Add field info for dump()
+    if ($name) {
+        $DUMP_FIELDS{$package}{$name} = [ $field_ref, 'Name' ];
+        # Done if only 'Name' present
+        if (! $get && ! $set) {
+            return;
+        }
+    } elsif ($get) {
+        $DUMP_FIELDS{$package}{$get} = [ $field_ref, 'Get' ];
+    } elsif ($set) {
+        $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
+    }
 
     # Check on accessor names
     my $have_one = 0;
-    for my $name ($get, $set) {
-        if (defined($name)) {
-            if ($name) {
+    for my $method ($get, $set) {
+        if (defined($method)) {
+            if ($method) {
                 no strict 'refs';
                 # Do not overwrite existing methods
-                if (*{$package.'::'.$name}{CODE}) {
+                if (*{$package.'::'.$method}{CODE}) {
                     OIO::Attribute->die(
                         'caller_level' => 3,
                         'message'      => q/Can't create accessor method/,
-                        'Info'         => "Method '$name' already exists in class '$package'");
+                        'Info'         => "Method '$method' already exists in class '$package'");
                 }
             } else {
                 OIO::Attribute->die(
@@ -1907,7 +2067,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.00.00
+This document describes Object::InsideOut version 1.01.00
 
 =head1 SYNOPSIS
 
@@ -2019,8 +2179,8 @@ additional key advantages:
 
 =item Speed
 
-When using arrays for storing object data, Object::InsideOut objects are as
-much as 30% faster than I<blessed hash> objects for fetching and setting data,
+When using arrays to store object data, Object::InsideOut objects are as
+much as 40% faster than I<blessed hash> objects for fetching and setting data,
 and even with hashes they are still several percent faster than I<blessed
 hash> objects.
 
@@ -2031,7 +2191,7 @@ times faster than Class::Std objects.
 
 Object::InsideOut is thread safe, and thoroughly supports sharing objects
 between threads using L<threads::shared>.  Class::Std is not usable in
-threaded applications (or applications that use C<fork> under ActiverPerl).
+threaded applications (or applications that use C<fork> under ActivePerl).
 
 =item Flexibility
 
@@ -2052,6 +2212,12 @@ and later.
 
 As recommended in I<Perl Best Practices>, Object::InsideOut uses
 L<Exception::Class> for handling errors in an OO-compatible manner.
+
+=item Object Serialization
+
+Object dumping and reloading can be accomplished in either an automated
+fashion or through the use of class-supplied subroutines.  Class::Std provides
+a global C<_DUMP> method, but no reloading capability.
 
 =back
 
@@ -2106,7 +2272,7 @@ Object data fields may also be hashes:
 
     my %data :Field;
 
-However, as array access is as much as 30% faster than hash access, you should
+However, as array access is as much as 40% faster than hash access, you should
 stick to using arrays.  (See L</"Object ID"> concerning when hashes may be
 required.)
 
@@ -2433,7 +2599,7 @@ In rare cases, a class may require special handling for object replication.
 It must then provide a subroutine labelled with the C<:Replicate> attribute.
 This subroutine will be sent two objects:  The parent and the clone:
 
-    sub _replicate : Replicate
+    sub _replicate :Replicate
     {
         my ($parent, $clone) = @_;
 
@@ -2455,7 +2621,7 @@ additional destruction processing (e.g., closing filehandles), then it must
 provide a subroutine labelled with the C<:Destroy> attribute.  This subroutine
 will be sent the object that is being destroyed:
 
-    sub _destroy : Destroy
+    sub _destroy :Destroy
     {
         my $obj = $_[0];
 
@@ -2635,6 +2801,93 @@ chained methods are called starting with the object's class and working
 upwards through the class hierarchy, similar to how S<C<:Cumulative(bottom
 up)>> works.
 
+=head2 Object Serialization
+
+=over
+
+=item my $hash_ref = $obj->dump();
+
+=item my $string = $obj->dump(1);
+
+Object::InsideOut exports a method called C<dump> to each class that returns
+either a hash or string representation of the object that invokes the method.
+
+The hash representation is returned when C<dump> is called without arguments.
+The hash ref that is returned has a key named C<CLASS> whose value is the name
+of the object's class.  Next, it contains keys for each of the classes that
+make up the object's hierarchy The values for those keys are hash refs
+containing S<C<key =E<gt> value>> pairs for the object's fields.  The name for
+a field can be specified as part of the L<field declaration|/"Field
+Declarations"> using the C<NAME> keyword:
+
+    my @data :Field('Name' => 'data');
+
+If the C<NAME> keyword is not present, then the name for a field will be
+either the tag from the C<:InitArgs> array that is associated with the field,
+its I<get> method name, its I<set> method name, or, failing all that, a string
+of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
+
+When called with a I<true> argument, C<dump> returns a string version of the
+hash representation using L<Data::Dumper>.
+
+=item my $obj = Object::InsideOut::pump($data);
+
+C<Object::InsideOut::pump> takes the output from the C<dump> method, and
+returns an object that is created using that data.  If C<$data> is the hash
+ref returned by using C<$obj-E<gt>dump()>, then the data is inserted directly
+into the corresponding fields for each class in the object's class hierarchy.
+If If C<$data> is the string returned by using C<$obj-E<gt>dump(1)>, then it
+is C<eval>ed to turn it into a hash ref, and then processed as above.
+
+If any of an object's fields are dumped to field name keys of the form
+C<ARRAY(0x...)> or C<HASH(0x...)> (see above), then the data will not be
+reloadable using C<Object::InsideOut::pump>.  To overcome this problem, the
+class developer must either add C<Name> keywords to the C<:Field> declarations
+(see above), or provide a C<:Dumper>/C<:Pumper> pair of subroutines as
+described below.
+
+=item C<:Dumper> Subroutine Attribute
+
+If a class requires special processing to dump its data, then it can provide a
+subroutine labelled with the C<:Dumper> attribute.  This subroutine will be
+sent the object that is being dumped.  It may then return any type of scalar
+the developer deems appropriate.  Most likely this would be a hash ref
+containing S<C<key =E<gt> value>> pairs for the object's fields.  For example,
+
+    my @data :Field;
+
+    sub _dump :Dumper
+    {
+        my $obj = $_[0];
+
+        my %field_data;
+        $field_data{'data'} = $data[$$obj];
+
+        return (\%field_data);
+    }
+
+Just be sure not to call your C<:Dumper> subroutine C<dump> as that is the
+name of the dump method exported by Object::InsideOut as explained above.
+
+=item C<:Pumper> Subroutine Attribute
+
+If a class supplies a C<:Dumper> subroutine, it will most likely need to
+provide a complementary C<:Pumper> labelled subroutine that will be used as
+part of creating an object from dumped data using
+C<Object::InsideOut::pump()>.  The subroutine will be supplied the new object
+that is being created, and whatever scalar was returned by the C<:Dumper>
+subroutine.  The corresponding C<:Pumper> for the example C<:Dumper> above
+would be:
+
+    sub _pump :Pumper
+    {
+        my ($obj, $field_data) = @_;
+
+        $data[$$obj] = $field_data->{'data'};
+    }
+
+=back
+
 =head2 Restricted and Private Methods
 
 Access to certain methods can be narrowed by use of the C<:Restricted> and
@@ -2660,6 +2913,10 @@ For subroutines marked with the following attributes:
 =item :Destroy
 
 =item :Automethod
+
+=item :Dumper
+
+=item :Pumper
 
 =back
 
@@ -2712,22 +2969,6 @@ supported:
 Coercing an object to a scalar (C<:Scalarify>) is not supported as C<$$obj> is
 the ID of the object and cannot be overridden.
 
-=head2 The C<_DUMP()> Method
-
-Object::InsideOut exports a method called C<_DUMP> to each class that returns
-either a hash or string representation of the object that invokes the method.
-
-The hash representation is returned when C<_DUMP> is called without arguments.
-The hash ref that is returned has keys for each of the classes that make up
-the object's hierarchy.  The values for those keys are hash refs containing
-S<C<key =E<gt> value>> pairs for the object's fields.  The name for a field
-will be either the tag from the C<:InitArgs> array that is associated with the
-field, its I<get> method name, its I<set> method name, or, failing all that, a
-string of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
-
-When called with a I<true> argument, C<_DUMP> returns a string version of the
-hash representation using L<Data::Dumper>.
-
 =head1 THREAD SUPPORT
 
 For Perl 5.8.0 and later, this module fully supports threads (i.e., is thread
@@ -2778,7 +3019,7 @@ should specifically declare this fact:
         ...
     }
 
-However, you cannot mixed thread object sharing classes with non-sharing
+However, you cannot mix thread object sharing classes with non-sharing
 classes in the same class hierarchy:
 
     use threads;
@@ -2955,6 +3196,12 @@ L<http://www.perlmonks.org/index.pl?node_id=219378>,
 L<http://www.perlmonks.org/index.pl?node_id=483162>,
 Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
 
+The Rationale for Object::InsideOut:
+L<http://www.perlmonks.org/index.pl?node_id=504425>
+
+Object::InsideOut Discussion Forum on CPAN:
+L<http://www.cpanforum.com/dist/Object-InsideOut>
+
 =head1 ACKNOWLEDGEMENTS
 
 Abigail S<E<lt>perl AT abigail DOT nlE<gt>> for inside-out objects in general.
@@ -2969,7 +3216,7 @@ C<:Chained> methods.
 
 =head1 AUTHOR
 
- Jerry D. Hedden, S<E<lt>jdhedden AT 1979 DOT usna DOT comE<gt>>
+Jerry D. Hedden, S<E<lt>jdhedden AT 1979 DOT usna DOT comE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 

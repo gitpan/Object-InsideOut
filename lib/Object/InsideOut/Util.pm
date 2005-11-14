@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.00.00';
+our $VERSION = '1.01.00';
 
 
 ### Module Initialization ###
@@ -56,7 +56,7 @@ sub create_object
     my ($class, $id) = @_;
 
     # Create the object from an anonymous scalar reference
-    my $obj = \(my $scalar);
+    my $obj = \do{ my $scalar; };
 
     # Set the scalar equal to ...
     if (my $ref_type = ref($id)) {
@@ -298,7 +298,7 @@ sub shared_copy
                 return (threads::shared::share($in));
             }
             # If not sharing, then make a copy of the scalar ref
-            my $out = \(my $scalar);
+            my $out = \do{ my $scalar; };
             $$out = $$in;
             return ($out);
         }

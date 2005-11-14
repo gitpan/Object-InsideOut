@@ -1,4 +1,4 @@
-Object-InsideOut version 1.00.00
+Object-InsideOut version 1.01.00
 ================================
 
 This module provides comprehensive support for implementing classes using the
@@ -46,7 +46,7 @@ additional key advantages:
 = Speed
 
 When using arrays for storing object data, Object::InsideOut objects are as
-much as 30% faster than 'blessed hash' objects for fetching and setting data,
+much as 40% faster than 'blessed hash' objects for fetching and setting data,
 and even with hashes they are still several percent faster than 'blessed hash'
 objects.
 
@@ -78,6 +78,12 @@ and later.
 
 As recommended in "Perl Best Practices", Object::InsideOut uses
 Exception::Class for handling errors in an OO-compatible manner.
+
+= Object Serialization
+
+Object dumping and reloading can be accomplished in either an automated
+fashion or through the use of class-supplied subroutines.  Class::Std provides
+a global _DUMP method, but no reloading capability.
 
 INSTALLATION
 

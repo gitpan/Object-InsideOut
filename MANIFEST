@@ -26,4 +26,5 @@ t/09-chained.t
 t/10-cumulative.t
 t/11-coercion.t
 t/12-super.t
+t/13-pump.t
 META.yml                                 Module meta-data (added by MakeMaker)

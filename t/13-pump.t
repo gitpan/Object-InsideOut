@@ -25,17 +25,16 @@ package MyBase; {
 package MyDer; {
     use Object::InsideOut qw(MyBase);
 
-    my %public  :Field;
-    my %private :Field;
-    my %misc    :Field('Name' => 'misc');
-    my %hidden  :Field;
+    my @public  :Field;
+    my @private :Field;
+    my @misc    :Field('Name' => 'misc');
 
     my %init_args :InitArgs = (
         'pub' => {
-            'field' => \%public,
+            'field' => \@public,
         },
         'priv' => {
-            'field' => \%private,
+            'field' => \@private,
             'def'   => 'der priv',
         },
         'misc'   => '',
@@ -47,19 +46,35 @@ package MyDer; {
         my ($self, $args) = @_;
 
         if (exists($args->{'misc'})) {
-            $misc{$$self} = $args->{'misc'};
-        }
-        if (exists($args->{'hidden'})) {
-            $hidden{$$self} = $args->{'hidden'};
+            $misc[$$self] = $args->{'misc'};
         }
     }
+}
+
+
+package MyDas; {
+    use Object::InsideOut qw(MyDer);
+
+    sub _dump :Dump
+    {
+        my $self = shift;
+        return ({ 'key' => 'value' });
+    }
+
+    sub _pump :Pump
+    {
+        my ($self, $data) = @_;
+
+        Test::More::is($data->{'key'}, 'value' => 'Pumper got data');
+    }
+
 }
 
 package main;
 
 MAIN:
 {
-    my $obj = MyDer->new({
+    my $obj = MyDas->new({
                   MyBase   => { pub => 'base pub' },
                   MyDer    => { pub => 'der pub'  },
                   'misc'   => 'other',
@@ -71,7 +86,7 @@ MAIN:
     ok($hash                                  => 'Representation is valid');
     is(ref($hash), 'HASH'                     => 'Representation is valid');
 
-    is($hash->{CLASS}, 'MyDer'                => 'Class');
+    is($hash->{CLASS}, 'MyDas'                => 'Class');
 
     is($hash->{MyBase}{'pub'}, 'base pub'     => 'Public base attribute');
     is($hash->{MyBase}{'priv'}, 'base priv'   => 'Private base attribute');
@@ -79,8 +94,8 @@ MAIN:
     is($hash->{MyDer}{'pub'}, 'der pub'       => 'Public derived attribute');
     is($hash->{MyDer}{'priv'}, 'der priv'     => 'Private derived attribute');
     is($hash->{MyDer}{'misc'}, 'other'        => 'Hidden derived attribute');
-    is(Object::InsideOut::Util::hash_re($hash->{MyDer}, qr/^HASH/), 'invisible'
-                                              => 'Hidden derived attribute');
+
+    is($hash->{MyDas}{'key'}, 'value'         => 'Dumper gave value');
 
     my $str = $obj->dump(1);
     #print(STDERR $str, "\n");
@@ -92,9 +107,17 @@ MAIN:
     is(ref($hash2), 'HASH'                    => 'eval is valid');
     is_deeply($hash, $hash2                   => 'Dumps are equal');
 
-    eval { my $obj2 = Object::InsideOut::pump($hash); };
-    is($@->message(), q/Unnamed field encounted in class 'MyDer'/
-                                              => 'Unnamed field')
+    my $obj2;
+    eval { $obj2 = Object::InsideOut::pump($hash); };
+    ok(! $@,                                  => 'Pump in hash');
+    $hash2 = $obj2->dump();
+    is_deeply($hash, $hash2                   => 'Redump equals dump');
+
+    my $obj3;
+    eval { $obj3 = Object::InsideOut::pump($str); };
+    ok(! $@,                                  => 'Pump in string');
+    $hash2 = $obj3->dump();
+    is_deeply($hash, $hash2                   => 'Redump equals dump');
 }
 
 exit(0);
