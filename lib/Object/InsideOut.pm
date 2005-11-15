@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.02.00';
+our $VERSION = '1.03.00';
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -1439,11 +1439,8 @@ sub dump
         }
     }
 
-    # Class of the object
-    my %dump;
-    $dump{'CLASS'} = ref($self);
-
     # Gather data from the object's class tree
+    my %dump;
     for my $pkg (@{$TREE_TOP_DOWN{ref($self)}}) {
         # Try to use a class-supplied dumper
         if (my $dumper = $DUMPERS{$pkg}) {
@@ -1484,18 +1481,20 @@ sub dump
         }
     }
 
+    # Package up the object's class and its data
+    my $output = [ ref($self), \%dump ];
+
     # Create a string version of dumped data if arg is true
     if ($_[0]) {
         require Data::Dumper;
-        my $dump = Data::Dumper::Dumper(\%dump);
-        chomp($dump);
-        $dump =~ s/^.{8}//gm;   # Remove initial 8 chars from each line
-        $dump =~ s/;$//s;       # Remove trailing semi-colon
-        return $dump;
+        $output = Data::Dumper::Dumper($output);
+        chomp($output);
+        $output =~ s/^.{8}//gm;   # Remove initial 8 chars from each line
+        $output =~ s/;$//s;       # Remove trailing semi-colon
     }
 
-    # Send back a hash ref to the dumped data
-    return (\%dump);
+    # Done - send back the dumped data
+    return ($output);
 }
 
 
@@ -1513,27 +1512,19 @@ sub pump
         shift;    # Called as a class method
     }
 
-    my $input = $_[0];
-    my $dump;
-
     # Must have an arg
+    my $input = $_[0];
     if (! $input) {
         OIO::Args->die('message' => 'Missing argument to pump()');
     }
 
-    if (ref($input)) {
-        # Input is a ref - use it
-        $dump = $input;
-        if (ref($dump) ne 'HASH') {
-            OIO::Args->die('message'  => 'Argument to pump() is not a hash ref');
-        }
-
-    } else {
-        # Input is not a ref - convert it
+    # Convert string input to array ref, if needed
+    if (! ref($input)) {
         my @errs;
         local $SIG{__WARN__} = sub { push(@errs, @_); };
 
-        eval "\$dump = $input";
+        my $array_ref;
+        eval "\$array_ref = $input";
 
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
@@ -1543,18 +1534,18 @@ sub pump
                 'Arg'      => $input);
         }
 
-        # Check that we got a hash ref
-        if (ref($dump) ne 'HASH') {
-            OIO::Args->die(
-                'message'  => 'Argument to pump() did not convert to a hash ref',
-                'Arg'      => $input);
-        }
+        $input = $array_ref;
     }
 
-    # The class for the object
-    my $class = $dump->{'CLASS'};
-    if (! $class) {
-        OIO::Args->die('message'  => q/'CLASS' key missing in argument to pump()/);
+    # Check input
+    if (ref($input) ne 'ARRAY') {
+        OIO::Args->die('message'  => 'Argument to pump() is not an array ref');
+    }
+
+    # Extract class name and object data
+    my ($class, $dump) = @{$input};
+    if (! defined($class) || ref($dump) ne 'HASH') {
+        OIO::Args->die('message'  => 'Argument to pump() is invalid');
     }
 
     # Get thread-sharing flag
@@ -2118,7 +2109,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.02.00
+This document describes Object::InsideOut version 1.03.00
 
 =head1 SYNOPSIS
 
@@ -2902,38 +2893,49 @@ up)>> works.
 =item my $string = $obj->dump(1);
 
 Object::InsideOut exports a method called C<dump> to each class that returns
-either a hash or string representation of the object that invokes the method.
+either a I<Perl> or a string representation of the object that invokes the
+method.
 
-The hash representation is returned when C<dump> is called without arguments.
-The hash ref that is returned has a key named C<CLASS> whose value is the name
-of the object's class.  Next, it contains keys for each of the classes that
-make up the object's hierarchy The values for those keys are hash refs
-containing S<C<key =E<gt> value>> pairs for the object's fields.  The name for
-a field can be specified as part of the L<field declaration|/"Field
-Declarations"> using the C<NAME> keyword:
+The I<Perl> representation is returned when C<-E<gt>dump()> is called without
+arguments.  It consists of an array ref whose first element is the name of the
+object's class, and whose second element is a hash ref containing the object's
+data.  The object data hash ref contains keys for each of the classes that make
+up the object's hierarchy. The values for those keys are hash refs containing
+S<C<key =E<gt> value>> pairs for the object's fields.  For example:
 
-    my @data :Field('Name' => 'data');
+    [ 'My::Class::Sub', {
+                          'My::Class'      => { 'data' => 'value' },
+                          'My::Class::Sub' => { 'life' => 42 }
+                        }
+    ]
+
+The name for an object field (I<data> and I<life> in the example above) can be
+specified as part of the L<field declaration|/"Field Declarations"> using the
+C<NAME> keyword:
+
+    my @life :Field('Name' => 'life');
 
 If the C<NAME> keyword is not present, then the name for a field will be
 either the tag from the C<:InitArgs> array that is associated with the field,
 its I<get> method name, its I<set> method name, or, failing all that, a string
 of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
 
-When called with a I<true> argument, C<dump> returns a string version of the
-hash representation using L<Data::Dumper>.
+When called with a I<true> argument, C<-E<gt>dump()> returns a string version
+of the I<Perl> representation using L<Data::Dumper>.
 
 =item my $obj = Object::InsideOut->pump($data);
 
 C<Object::InsideOut->pump()> takes the output from the C<-E<gt>dump()> method,
-and returns an object that is created using that data.  If C<$data> is the hash
-ref returned by using C<$obj-E<gt>dump()>, then the data is inserted directly
-into the corresponding fields for each class in the object's class hierarchy.
-If If C<$data> is the string returned by using C<$obj-E<gt>dump(1)>, then it is
-C<eval>ed to turn it into a hash ref, and then processed as above.
+and returns an object that is created using that data.  If C<$data> is the
+array ref returned by using C<$obj-E<gt>dump()>, then the data is inserted
+directly into the corresponding fields for each class in the object's class
+hierarchy.  If If C<$data> is the string returned by using
+C<$obj-E<gt>dump(1)>, then it is C<eval>ed to turn it into an array ref, and
+then processed as above.
 
 If any of an object's fields are dumped to field name keys of the form
 C<ARRAY(0x...)> or C<HASH(0x...)> (see above), then the data will not be
-reloadable using C<Object::InsideOut::pump>.  To overcome this problem, the
+reloadable using C<Object::InsideOut->pump()>.  To overcome this problem, the
 class developer must either add C<Name> keywords to the C<:Field> declarations
 (see above), or provide a C<:Dumper>/C<:Pumper> pair of subroutines as
 described below.

@@ -66,12 +66,13 @@ MAIN:
                   'hidden' => 'invisible',
               });
 
-    my $hash = $obj->dump();
+    my $dump = $obj->dump();
 
-    ok($hash                                  => 'Representation is valid');
-    is(ref($hash), 'HASH'                     => 'Representation is valid');
+    ok($dump                                  => 'Representation is valid');
+    is(ref($dump), 'ARRAY'                    => 'Representation is valid');
+    my ($class, $hash) = @{$dump};
 
-    is($hash->{CLASS}, 'MyDer'                => 'Class');
+    is($class, 'MyDer'                        => 'Class');
 
     is($hash->{MyBase}{'pub'}, 'base pub'     => 'Public base attribute');
     is($hash->{MyBase}{'priv'}, 'base priv'   => 'Private base attribute');
@@ -85,14 +86,14 @@ MAIN:
     my $str = $obj->dump(1);
     #print(STDERR $str, "\n");
 
-    my $hash2 = eval $str;
+    my $dump2 = eval $str;
 
     ok($str && ! ref($str)                    => 'String dump');
-    ok($hash2                                 => 'eval is valid');
-    is(ref($hash2), 'HASH'                    => 'eval is valid');
-    is_deeply($hash, $hash2                   => 'Dumps are equal');
+    ok($dump2                                 => 'eval is valid');
+    is(ref($dump2), 'ARRAY'                   => 'eval is valid');
+    is_deeply($dump, $dump2                   => 'Dumps are equal');
 
-    eval { my $obj2 = Object::InsideOut::pump($hash); };
+    eval { my $obj2 = Object::InsideOut::pump($dump); };
     is($@->error(), q/Unnamed field encounted in class 'MyDer'/
                                               => 'Unnamed field')
 }

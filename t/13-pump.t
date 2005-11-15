@@ -81,12 +81,13 @@ MAIN:
                   'hidden' => 'invisible',
               });
 
-    my $hash = $obj->dump();
+    my $dump = $obj->dump();
 
-    ok($hash                                  => 'Representation is valid');
-    is(ref($hash), 'HASH'                     => 'Representation is valid');
+    ok($dump                                  => 'Representation is valid');
+    is(ref($dump), 'ARRAY'                    => 'Representation is valid');
+    my ($class, $hash) = @{$dump};
 
-    is($hash->{CLASS}, 'MyDas'                => 'Class');
+    is($class, 'MyDas'                        => 'Class');
 
     is($hash->{MyBase}{'pub'}, 'base pub'     => 'Public base attribute');
     is($hash->{MyBase}{'priv'}, 'base priv'   => 'Private base attribute');
@@ -100,24 +101,24 @@ MAIN:
     my $str = $obj->dump(1);
     #print(STDERR $str, "\n");
 
-    my $hash2 = eval $str;
+    my $dump2 = eval $str;
 
     ok($str && ! ref($str)                    => 'String dump');
-    ok($hash2                                 => 'eval is valid');
-    is(ref($hash2), 'HASH'                    => 'eval is valid');
-    is_deeply($hash, $hash2                   => 'Dumps are equal');
+    ok($dump2                                 => 'eval is valid');
+    is(ref($dump2), 'ARRAY'                   => 'eval is valid');
+    is_deeply($dump, $dump2                   => 'Dumps are equal');
 
     my $obj2;
-    eval { $obj2 = Object::InsideOut::pump($hash); };
+    eval { $obj2 = Object::InsideOut::pump($dump); };
     ok(! $@,                                  => 'Pump in hash');
-    $hash2 = $obj2->dump();
-    is_deeply($hash, $hash2                   => 'Redump equals dump');
+    $dump2 = $obj2->dump();
+    is_deeply($dump, $dump2                   => 'Redump equals dump');
 
     my $obj3;
     eval { $obj3 = Object::InsideOut::pump($str); };
     ok(! $@,                                  => 'Pump in string');
-    $hash2 = $obj3->dump();
-    is_deeply($hash, $hash2                   => 'Redump equals dump');
+    $dump2 = $obj3->dump();
+    is_deeply($dump, $dump2                   => 'Redump equals dump');
 }
 
 exit(0);
