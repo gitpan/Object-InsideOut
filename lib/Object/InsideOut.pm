@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.01.00';
+our $VERSION = '1.02.00';
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -169,8 +169,7 @@ sub import
 
     # Import packages and handle :SHARED flag
     my @packages;
-    while (@_) {
-        my $pkg = shift;
+    while (my $pkg = shift) {
         next if (! $pkg);    # Ignore empty strings and such
 
         # Handle thread object sharing flag
@@ -953,7 +952,7 @@ _CODE_
 
 
     # Export certain methods to all classes
-    my @EXPORT = qw(new clone DESTROY dump);
+    my @EXPORT = qw(new clone set DESTROY dump);
     if (%AUTOMETHODS) {
         push(@EXPORT, 'AUTOLOAD');
     }
@@ -1286,6 +1285,54 @@ sub clone
 }
 
 
+# Put data in a field, making sure that sharing is supported
+sub set
+{
+    my ($self, $field, $data) = @_;
+
+    # Check usage
+    if (! defined($field)) {
+        OIO::Args->die(
+            'message' => 'Missing field argument',
+            'Usage'   => '$obj->set($field_ref, $data)');
+    }
+
+    # Handle data according to field type
+    my $ref_type = ref($field);
+    if ($ref_type eq 'ARRAY') {
+        # Handle sharing
+        if ($threads::shared::threads_shared &&
+            threads::shared::_id($field))
+        {
+            lock($field);
+            $field->[$$self] = Object::InsideOut::Util::make_shared($data);
+
+        } else {
+            # No sharing - just store the data
+            $field->[$$self] = $data;
+        }
+
+    } elsif ($ref_type eq 'HASH') {
+        # Handle sharing
+        if ($threads::shared::threads_shared &&
+            threads::shared::_id($field))
+        {
+            lock($field);
+            $field->{$$self} = Object::InsideOut::Util::make_shared($data);
+
+        } else {
+            # No sharing - just store the data
+            $field->{$$self} = $data;
+        }
+
+    } else {
+        OIO::Args->die(
+            'message' => 'Invalid field argument',
+            'Usage'   => '$obj->set($field_ref, $data)');
+    }
+}
+
+
 # Object Destructor
 sub DESTROY
 {
@@ -1453,8 +1500,19 @@ sub dump
 
 
 # Object loader
-sub Object::InsideOut::pump
+sub pump
 {
+    # Check usage
+    if (Scalar::Util::blessed($_[0])) {
+        OIO::Code->die(
+            'message' => '->pump() invoked as an object method',
+            'Info'    => '->pump() is a class method');
+    }
+
+    if ($_[0] eq 'Object::InsideOut') {
+        shift;    # Called as a class method
+    }
+
     my $input = $_[0];
     my $dump;
 
@@ -1522,14 +1580,7 @@ sub Object::InsideOut::pump
             # Pump in the data ourselves
             while (my ($fld_name, $value) = each(%{$data})) {
                 if (my $field = $DUMP_FIELDS{$pkg}{$fld_name}[0]) {
-                    if (is_sharing($pkg)) {
-                        $value = Object::InsideOut::Util::make_shared($value);
-                    }
-                    if (ref($field) eq 'HASH') {
-                        $field->{$$self} = $value;
-                    } else {
-                        $field->[$$self] = $value;
-                    }
+                    $self->set($field, $value);
                 } else {
                     if ($fld_name =~ /^(HASH|ARRAY)/) {
                         OIO::Args->die(
@@ -2067,7 +2118,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.01.00
+This document describes Object::InsideOut version 1.02.00
 
 =head1 SYNOPSIS
 
@@ -2091,7 +2142,7 @@ This document describes Object::InsideOut version 1.01.00
      {
          my ($self, $args) = @_;
 
-         $data[$$self] = $args->{'DATA'};
+         $self->set(\@data, $args->{'DATA'});
      }
  }
 
@@ -2215,9 +2266,11 @@ L<Exception::Class> for handling errors in an OO-compatible manner.
 
 =item Object Serialization
 
-Object dumping and reloading can be accomplished in either an automated
-fashion or through the use of class-supplied subroutines.  Class::Std provides
-a global C<_DUMP> method, but no reloading capability.
+= Object Serialization
+
+Object::InsideOut has built-in support for object dumping and reloading that
+can be accomplished in either an automated fashion or through the use of
+class-supplied subroutines.
 
 =back
 
@@ -2281,13 +2334,13 @@ be all lowercase.)
 
 =head2 Object Creation
 
-Objects are created using the C<new> method which is exported by
+Objects are created using the C<-E<gt>new()> method which is exported by
 Object::InsideOut to each class:
 
     my $obj = My::Class->new();
 
-Classes do not implement their own C<new> method.  Class-specific object
-initialization actions may be handled by C<:Init> labelled methods (see
+Classes do not implement their own C<-E<gt>new()> method.  Class-specific
+object initialization actions may be handled by C<:Init> labelled methods (see
 L</"Object Initialization">).
 
 Parameters are passed in as combinations of S<C<key =E<gt> value>> pairs
@@ -2345,8 +2398,8 @@ a pragma.
 
 =head2 Object Cloning
 
-Copies of objects can be created using the C<clone> method which is exported
-by Object::InsideOut to each class:
+Copies of objects can be created using the C<-E<gt>clone()> method which is
+exported by Object::InsideOut to each class:
 
     my $obj2 = $obj->clone();
 
@@ -2358,8 +2411,8 @@ Initialization Argument Specifications">), and an C<:Init> labelled
 subroutine.
 
 The C<:InitArgs> labelled hash specifies the parameters to be extracted from
-the argument list supplied to the C<new> method.  These parameters are then
-sent to the C<:Init> labelled subroutine for processing:
+the argument list supplied to the C<-E<gt>new()> method.  These parameters are
+then sent to the C<:Init> labelled subroutine for processing:
 
     package My::Class; {
         my @my_field :Field;
@@ -2373,7 +2426,7 @@ sent to the C<:Init> labelled subroutine for processing:
             my ($self, $args) = @_;
 
             if (exists($args->{'MY_PARAM'})) {
-                $my_field[$$self] = $args->{'MY_PARAM'};
+                $self->set(\@my_field, $args->{'MY_PARAM'});
             }
         }
     }
@@ -2387,14 +2440,25 @@ convention should not be all lowercase.)
 
 This C<:Init> labelled subroutine will receive two arguments:  The newly
 created object requiring further initialization (i.e., C<$self>), and a hash
-ref of supplied arguments that matched C<:InitArgs> specifications.  Data
-processed by the subroutine can be placed into the class's field arrays
-(hashes) using the object's ID (i.e., C<$$self>).
+ref of supplied arguments that matched C<:InitArgs> specifications.
+
+Data processed by the subroutine may be placed directly into the class's field
+arrays (hashes) using the object's ID (i.e., C<$$self>):
+
+    $my_field[$$self] = $args->{'MY_PARAM'};
+
+However, it is strongly recommended that you use the L<-E<gt>set()|/"Setting
+Data"> method:
+
+    $self->set(\@my_field, $args->{'MY_PARAM'});
+
+which handles converting the data to a shared format when needed for
+applications using L<threads::shared>.
 
 =head2 Object Initialization Argument Specifications
 
-The parameters to be handled by the C<new> method are specified in a hash that
-is labelled with the C<:InitArgs> attribute.
+The parameters to be handled by the C<-E<gt>new()> method are specified in a
+hash that is labelled with the C<:InitArgs> attribute.
 
 The simplest parameter specification is just a tag:
 
@@ -2403,7 +2467,7 @@ The simplest parameter specification is just a tag:
     );
 
 In this case, if a S<C<key =E<gt> value>> pair with an exact match of C<DATA>
-for the key is found in the arguments sent to the C<new> method, then
+for the key is found in the arguments sent to the C<-E<gt>new()> method, then
 S<C<'DATA' =E<gt> value>> will be included in the argument hash ref sent to
 the C<:Init> labelled subroutine.
 
@@ -2491,6 +2555,36 @@ work will be taken care of for you.
 I<Defaults> or I<Def>.  They and the other specifier keys are
 case-insensitive, as well.)
 
+=head2 Setting Data
+
+Object::InsideOut automatically exports a method called C<set> to each class.
+This method should be used in class code to put data into object field
+arrays/hashes whenever there is the possibility that the class code may be
+used in an application that uses L<threads::shared>.
+
+As mentioned above, data can be put directly into an object's field array
+(hash) using the object's ID:
+
+    $field[$$self] = $data;
+        # or
+    $field{$$self} = $data;
+
+However, in a threaded application that uses data sharing (i.e., uses
+C<threads::shared>), C<$data> must be converted into shared data so that it
+can be put into the field array (hash).  The C<-E<gt>set()> method handles
+all those details for you.
+
+The C<-E<gt>set()> method, requires two arguments:  A reference to the object
+field array/hash, and the data (as a scalar) to be put in it:
+
+    $self->set(\@field, $data);
+        # or
+    $self->set(\%field, $data);
+
+To be clear, the C<-E<gt>set()> method is used inside class code; not
+application code.  Use it inside any object methods that set data in object
+field arrays/hashes.
+
 =head2 Automatic Accessor Generation
 
 As part of the L</"Field Declarations">, you can optionally specify the
@@ -2521,20 +2615,17 @@ method:
 
     my @comment :Field('Accessor' => 'comment');
 
+which would be used as follows:
+
+    # Set a new comment
+    $obj->comment("I have no comment, today.");
+
+    # Get the current comment
+    my $cmt = $obj->comment();
+
+
 (The keyword C<Accessor> is case-insensitive, and can be abbreviated to
-C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)  The
-above generates a method called C<comment> that is equivalent to:
-
-    sub comment
-    {
-        my ($self, $cmt) = @_;
-
-        if (defined($cmt)) {
-            return ($comment{$$self} = $cmt);
-        }
-
-        return ($comment{$$self});
-    }
+C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)
 
 For any of the automatically generated methods that perform I<set> operations,
 the method's return value is the value being set.
@@ -2591,9 +2682,10 @@ Within any class hierachy only one class may specify an C<:ID> subroutine.
 
 =head2 Object Replication
 
-Object replication occurs explicitly when the C<clone> method is called on an
-object, and implicitly when threads are created in a threaded application.  In
-nearly all cases, Object::InsideOut will take care of all the details for you.
+Object replication occurs explicitly when the C<-E<gt>clone()> method is called
+on an object, and implicitly when threads are created in a threaded
+application.  In nearly all cases, Object::InsideOut will take care of all the
+details for you.
 
 In rare cases, a class may require special handling for object replication.
 It must then provide a subroutine labelled with the C<:Replicate> attribute.
@@ -2830,14 +2922,14 @@ of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
 When called with a I<true> argument, C<dump> returns a string version of the
 hash representation using L<Data::Dumper>.
 
-=item my $obj = Object::InsideOut::pump($data);
+=item my $obj = Object::InsideOut->pump($data);
 
-C<Object::InsideOut::pump> takes the output from the C<dump> method, and
-returns an object that is created using that data.  If C<$data> is the hash
+C<Object::InsideOut->pump()> takes the output from the C<-E<gt>dump()> method,
+and returns an object that is created using that data.  If C<$data> is the hash
 ref returned by using C<$obj-E<gt>dump()>, then the data is inserted directly
 into the corresponding fields for each class in the object's class hierarchy.
-If If C<$data> is the string returned by using C<$obj-E<gt>dump(1)>, then it
-is C<eval>ed to turn it into a hash ref, and then processed as above.
+If If C<$data> is the string returned by using C<$obj-E<gt>dump(1)>, then it is
+C<eval>ed to turn it into a hash ref, and then processed as above.
 
 If any of an object's fields are dumped to field name keys of the form
 C<ARRAY(0x...)> or C<HASH(0x...)> (see above), then the data will not be

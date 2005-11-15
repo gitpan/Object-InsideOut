@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.02.00 Tue Nov 15 10:13:05 2005
+	- Added ->set() method for object sharing support
+
 1.01.00 Mon Nov 14 14:49:40 2005
 	- Added object serialization support - deprecated _DUMP
 

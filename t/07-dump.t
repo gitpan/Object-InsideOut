@@ -47,10 +47,10 @@ package MyDer; {
         my ($self, $args) = @_;
 
         if (exists($args->{'misc'})) {
-            $misc{$$self} = $args->{'misc'};
+            $self->set(\%misc, $args->{'misc'});
         }
         if (exists($args->{'hidden'})) {
-            $hidden{$$self} = $args->{'hidden'};
+            $self->set(\%hidden, $args->{'hidden'});
         }
     }
 }
@@ -93,7 +93,7 @@ MAIN:
     is_deeply($hash, $hash2                   => 'Dumps are equal');
 
     eval { my $obj2 = Object::InsideOut::pump($hash); };
-    is($@->message(), q/Unnamed field encounted in class 'MyDer'/
+    is($@->error(), q/Unnamed field encounted in class 'MyDer'/
                                               => 'Unnamed field')
 }
 

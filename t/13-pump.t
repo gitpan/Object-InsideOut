@@ -46,7 +46,7 @@ package MyDer; {
         my ($self, $args) = @_;
 
         if (exists($args->{'misc'})) {
-            $misc[$$self] = $args->{'misc'};
+            $self->set(\@misc, $args->{'misc'});
         }
     }
 }

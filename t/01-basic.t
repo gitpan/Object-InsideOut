@@ -33,11 +33,11 @@ package MyBase; {
         Test::More::is(ref($args), 'HASH'
                             => 'Args passed to MyBase::init in hash-ref');
 
-        $priv{$$self} = $args->{'PRIV'};
+        $self->set(\%priv, $args->{'PRIV'});
         Test::More::is($priv{$$self}, 'MyBase::priv'
                             => 'MyBase priv arg unpacked correctly');
 
-        $snum{$$self} = $args->{'SNUM'} . '!';
+        $self->set(\%snum, $args->{'SNUM'} . '!');
         Test::More::is($snum{$$self}, 'MyBase::snum!'  => 'MyBase snum arg unpacked correctly');
     }
 

@@ -1,4 +1,4 @@
-Object-InsideOut version 1.01.00
+Object-InsideOut version 1.02.00
 ================================
 
 This module provides comprehensive support for implementing classes using the
@@ -81,9 +81,9 @@ Exception::Class for handling errors in an OO-compatible manner.
 
 = Object Serialization
 
-Object dumping and reloading can be accomplished in either an automated
-fashion or through the use of class-supplied subroutines.  Class::Std provides
-a global _DUMP method, but no reloading capability.
+Object::InsideOut has built-in support for object dumping and reloading that
+can be accomplished in either an automated fashion or through the use of
+class-supplied subroutines.
 
 INSTALLATION
 

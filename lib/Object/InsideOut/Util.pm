@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.01.00';
+our $VERSION = '1.02.00';
 
 
 ### Module Initialization ###
@@ -26,7 +26,7 @@ sub import
     # Exportable subroutines
     my %EXPORT_OK;
     @EXPORT_OK{qw(create_object process_args
-                  shared_copy make_shared
+                  set_data make_shared shared_copy
                   hash_re is_it)} = undef;
 
     # Handle entries in the import list
@@ -216,22 +216,7 @@ sub process_args
         # from the found args hash.  If thread-sharing, then make sure the
         # value is thread-shared.
         if (defined(my $field = hash_re($spec, qr/^FIELD$/i))) {
-            if ($threads::shared::threads_shared &&
-                threads::shared::_id($field))
-            {
-                lock($field);
-                if (ref($field) eq 'HASH') {
-                    $field->{$$self} = make_shared(delete($found{$key}));
-                } else {
-                    $field->[$$self] = make_shared(delete($found{$key}));
-                }
-            } else {
-                if (ref($field) eq 'HASH') {
-                    $field->{$$self} = delete($found{$key});
-                } else {
-                    $field->[$$self] = delete($found{$key});
-                }
-            }
+            $self->set($field, delete($found{$key}));
         }
     }
 
@@ -249,6 +234,7 @@ sub make_shared
     # If not sharing, or if already thread-shared, then just return
     # the input
     if (! $threads::shared::threads_shared ||
+        ! defined($in) ||
         threads::shared::_id($in))
     {
         return ($in);
