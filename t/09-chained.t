@@ -58,30 +58,14 @@ MAIN:
 {
     my $obj = Reder1->new();
 
-    my $top_down = $obj->base_first();
-    my $bot_up   = $obj->der_first();
+    my @top_down = $obj->base_first();
+    my @bot_up   = $obj->der_first();
 
-    my @top_down = qw(Base1 Base2 Base3 Der1 Der2 Reder1);
-    my @bot_up   = qw(Reder1 Der2 Der1 Base3 Base2 Base1);
+    my @my_top_down = qw(Base1 Base2 Base3 Der1 Der2 Reder1);
+    my @my_bot_up   = qw(Reder1 Der2 Der1 Base3 Base2 Base1);
 
-    is_deeply(\@$top_down, \@top_down      => 'List chained down');
-    is_deeply(\@$bot_up,   \@bot_up        => 'List chained up');
-
-    is(int $bot_up,   int @bot_up          => 'Numeric chained up');
-    is(int $top_down, int @top_down        => 'Numeric chained down');
-
-    is("$bot_up",   join(q{}, @bot_up)     => 'String chained up');
-    is("$top_down", join(q{}, @top_down)   => 'String chained down');
-
-    for my $pkg (keys %$bot_up) {
-        ok(grep($pkg, @bot_up)   => "Valid up hash key ($pkg)");
-        is($pkg, $bot_up->{$pkg} => "Valid up hash value ($pkg)");
-    }
-
-    for my $pkg (keys %$top_down) {
-        ok(grep($pkg, @top_down) => "Valid down hash key ($pkg)");
-        is($pkg, $bot_up->{$pkg} => "Valid down hash value ($pkg)");
-    }
+    is_deeply(\@top_down, \@my_top_down      => 'List chained down');
+    is_deeply(\@bot_up,   \@my_bot_up        => 'List chained up');
 }
 
 exit(0);

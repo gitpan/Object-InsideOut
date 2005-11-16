@@ -144,7 +144,7 @@ MAIN:
     is($derobj->get_rank(), 'new rank'      => 'Der rank write accessor');
 
     eval { $derobj->set_name('new name') };
-    ok($@ =~ m/\ACan't locate object method "set_name" via package "Der"/
+    ok($@->error() =~ m/^Can't locate object method "set_name" via package "Der"/
                                             => 'Read only name attribute');
 
     my $der2 = Der->new({

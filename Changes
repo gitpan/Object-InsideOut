@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.04.00 Wed Nov 16 12:00:00 2005
+	- Added chaining and accumulation for :Automethods
+	- Chained methods don't return a results object in scalar context
+
 1.03.00 Tue Nov 15 11:03:40 2005
 	- Changed structure for object serialization output
 

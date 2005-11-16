@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.03.00';
+our $VERSION = '1.04.00';
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -609,8 +609,7 @@ sub INITIALIZE { return; }
 # Perform much of the 'magic' for this module
 sub initialize : Private
 {
-    # Bring in support class if needed
-    if (%CUMULATIVE || %ANTICUMULATIVE || %CHAINED || %ANTICHAINED) {
+    if (%AUTOMETHODS || %CUMULATIVE || %ANTICUMULATIVE) {
         require Object::InsideOut::Results;
     }
 
@@ -732,18 +731,18 @@ sub initialize : Private
     }
 
 
-    # Only install AUTOLOAD if we have Automethods
-    if (%AUTOMETHODS) {
-        if (! Object::InsideOut->can('AUTOLOAD')) {
-            # Create AUTOLOAD under Object::InsideOut
-            *Object::InsideOut::AUTOLOAD = create_AUTOLOAD(\%AUTOMETHODS,
-                                                           \%TREE_BOTTOM_UP);
+    # Create AUTOLOAD under Object::InsideOut
+    if (! Object::InsideOut->can('AUTOLOAD')) {
+        *Object::InsideOut::AUTOLOAD = create_AUTOLOAD(\%AUTOMETHODS,
+                                                       \%TREE_TOP_DOWN,
+                                                       \%TREE_BOTTOM_UP,
+                                                       \&create_CUMULATIVE,
+                                                       \&create_CHAINED);
 
-            # Install our version of UNIVERSAL::can that understands :Automethod
-            *UNIVERSAL::can = create_UNIVERSAL_can(\&UNIVERSAL::can,
-                                                   \%AUTOMETHODS,
-                                                   \%TREE_BOTTOM_UP);
-        }
+        # Install our version of UNIVERSAL::can that understands :Automethod
+        *UNIVERSAL::can = create_UNIVERSAL_can(\&UNIVERSAL::can,
+                                               \%AUTOMETHODS,
+                                               \%TREE_BOTTOM_UP);
     }
 
 
@@ -792,17 +791,17 @@ sub initialize : Private
 
         # Implement :CUMULATIVE methods
         for my $name (keys(%cum)) {
+            my $code = create_CUMULATIVE(\%TREE_TOP_DOWN, $cum{$name});
             for my $package (keys(%{$cum{$name}})) {
-                *{$package.'::'.$name} = create_CUMULATIVE(\%TREE_TOP_DOWN,
-                                                           $cum{$name});
+                *{$package.'::'.$name} = $code;
             }
         }
 
         # Implement :CUMULATIVE(BOTTOM UP) methods
         for my $name (keys(%anticum)) {
+            my $code = create_CUMULATIVE(\%TREE_BOTTOM_UP, $anticum{$name});
             for my $package (keys(%{$anticum{$name}})) {
-                *{$package.'::'.$name} = create_CUMULATIVE(\%TREE_BOTTOM_UP,
-                                                           $anticum{$name});
+                *{$package.'::'.$name} = $code;
             }
         }
     }
@@ -853,17 +852,17 @@ sub initialize : Private
 
         # Implement :CHAINED methods
         for my $name (keys(%chain)) {
+            my $code = create_CHAINED(\%TREE_TOP_DOWN, $chain{$name});
             for my $package (keys(%{$chain{$name}})) {
-                *{$package.'::'.$name} = create_CHAINED(\%TREE_TOP_DOWN,
-                                                        $chain{$name});
+                *{$package.'::'.$name} = $code;
             }
         }
 
         # Implement :CHAINED(BOTTOM UP) methods
         for my $name (keys(%antichain)) {
+            my $code = create_CHAINED(\%TREE_BOTTOM_UP, $antichain{$name});
             for my $package (keys(%{$antichain{$name}})) {
-                *{$package.'::'.$name} = create_CHAINED(\%TREE_BOTTOM_UP,
-                                                        $antichain{$name});
+                *{$package.'::'.$name} = $code;
             }
         }
     }
@@ -1608,12 +1607,13 @@ sub pump
 ### Code Generators ###
 
 # Dynamically creates an AUTOLOAD subroutine
-# Called from initialize() only if some Automethods are defined
 sub create_AUTOLOAD : PRIVATE
 {
-    # $AUTOMETHODS    - ref to %AUTOMETHODS
-    # $TREE_BOTTOM_UP - ref to %TREE_BOTTOM_UP
-    my ($AUTOMETHODS, $TREE_BOTTOM_UP) = @_;
+    my ($AUTOMETHODS,
+        $TREE_TOP_DOWN,
+        $TREE_BOTTOM_UP,
+        $create_CUMULATIVE,
+        $create_CHAINED) = @_;
 
     return sub {
         my $thing = $_[0];
@@ -1623,22 +1623,92 @@ sub create_AUTOLOAD : PRIVATE
         my ($method) = our $AUTOLOAD =~ /.*::(.*)/;
 
         # Find an Automethod
-        for my $package (@{$TREE_BOTTOM_UP->{$class}}) {
-            if (my $automethod = $AUTOMETHODS->{$package}) {
+        my ($code_type, $code_dir, %code_refs);
+        for my $pkg (@{$TREE_BOTTOM_UP->{$class}}) {
+            if (my $automethod = $AUTOMETHODS->{$pkg}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
                 local $SIG{__DIE__} = 'OIO::trap';
-                if (my $code = $automethod->(@_)) {
-                    # Go to the code ref returned by the Automethod
+                if (my ($code, $ctype) = $automethod->(@_)) {
+                    if (ref($code) ne 'CODE') {
+                        # Not a code ref
+                        OIO::Code->die(
+                            'message' => ':Automethod did not return a code ref',
+                            'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
+                    }
+
+                    if (defined($ctype)) {
+                        my ($type, $dir) = $ctype =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
+                        if ($type && $type =~ /CUM/i) {
+                            if ($code_type) {
+                                $type = ':Cumulative';
+                                $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                                if ($code_type ne $type || $code_dir ne $dir) {
+                                    # Mixed types
+                                    my ($pkg2) = keys(%code_refs);
+                                    OIO::Code->die(
+                                        'message' => 'Inconsistent code types returned by :Automethods',
+                                        'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
+                                }
+                            } else {
+                                $code_type = ':Cumulative';
+                                $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                            }
+                            $code_refs{$pkg} = $code;
+                            next;
+                        }
+                        if ($type && $type =~ /CHA/i) {
+                            if ($code_type) {
+                                $type = ':Chained';
+                                $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                                if ($code_type ne $type || $code_dir ne $dir) {
+                                    # Mixed types
+                                    my ($pkg2) = keys(%code_refs);
+                                    OIO::Code->die(
+                                        'message' => 'Inconsistent code types returned by :Automethods',
+                                        'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
+                                }
+                            } else {
+                                $code_type = ':Chained';
+                                $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                            }
+                            $code_refs{$pkg} = $code;
+                            next;
+                        }
+
+                        # Unknown automethod code type
+                        OIO::Code->die(
+                            'message' => "Unknown :Automethod code type: $ctype",
+                            'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
+                    }
+
+                    if ($code_type) {
+                        # Mixed types
+                        my ($pkg2) = keys(%code_refs);
+                        OIO::Code->die(
+                            'message' => 'Inconsistent code types returned by :Automethods',
+                            'Info'    => "Class '$pkg' returned an 'execute immediately' type, and class '$pkg2' returned type $code_type($code_dir)");
+                    }
+
+                    # Just a one-shot - execute it
                     goto &{$code};
                 }
             }
         }
 
+        if ($code_type) {
+            my $tree = ($code_dir eq 'bottom up') ? $TREE_BOTTOM_UP : $TREE_TOP_DOWN;
+            my $code = ($code_type eq ':Cumulative')
+                            ? $create_CUMULATIVE->($tree, \%code_refs)
+                            : $create_CHAINED->($tree, \%code_refs);
+
+            goto &{$code};
+        }
+
         # Failed to AUTOLOAD
         my $type = ref($thing) ? 'object' : 'class';
-        OIO::Method->die('message' => "Can't locate $type method '$method' for package '$class'");
+        OIO::Method->die('message' => qq/Can't locate $type method "$method" via package "$class"/);
     };
 }
 
@@ -2026,15 +2096,7 @@ sub create_CHAINED : PRIVATE
         }
 
         # Return results
-        if (defined($list_context)) {
-            if ($list_context) {
-                # List context
-                return (@args);
-            }
-            # Scalar context - returns object
-            return (Object::InsideOut::Results->new('VALUES'  => \@args,
-                                                    'CLASSES' => \@classes));
-        }
+        return (@args);
     };
 }
 
@@ -2109,7 +2171,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.03.00
+This document describes Object::InsideOut version 1.04.00
 
 =head1 SYNOPSIS
 
@@ -2256,8 +2318,6 @@ As recommended in I<Perl Best Practices>, Object::InsideOut uses
 L<Exception::Class> for handling errors in an OO-compatible manner.
 
 =item Object Serialization
-
-= Object Serialization
 
 Object::InsideOut has built-in support for object dumping and reloading that
 can be accomplished in either an automated fashion or through the use of
@@ -2715,45 +2775,9 @@ The C<:Destroy> subroutine only needs to deal with the special destruction
 processing:  The C<DESTROY> method will handle all the other details of object
 destruction.
 
-=head2 Automethods
-
-There are significant issues related to Perl's C<AUTOLOAD> mechanism.  Read
-Damian Conway's description in L<Class::Std/"C<AUTOMETHOD()>"> for more
-details.  Object::InsideOut handles these issues in the same manner.
-
-Classes requiring C<AUTOLOAD> capabilities must provided a subroutine labelled
-with the C<:Automethod> attribute.  The C<:Automethod> subroutine will be
-called with the object and the arguments in the original method call (the same
-as for C<AUTOLOAD>).  The C<:Automethod> subroutine should return either a
-subroutine reference that implements the requested method's functionality, or
-else C<undef> to indicate that it doesn't know how to handle the request.
-
-The name of the method being called is passed as C<$_> instead of
-C<$AUTOLOAD>, and does I<not> have the class name prepended to it.  If the
-C<:Automethod> subroutine also needs to access the C<$_> from the caller's
-scope, it is available as C<$CALLER::_>.
-
-    sub _automethod :Automethod
-    {
-        my $self = shift;
-        my @args = @_;
-
-        my $method_name = $_;
-
-        # If method can be handled by this class
-        if (...) {
-            my $handler = sub { .... };
-
-            return ($handler);
-        }
-
-        # This class cannot handle the method request
-        return;
-    }
-
 =head2 Cumulative Methods
 
-As with C<Class::Std>, Object::InsideOut provides a mechanism for creating
+As with Class::Std, Object::InsideOut provides a mechanism for creating
 methods whose effects accumulate through the class hierarchy.  See
 L<Class::Std/"C<:CUMULATIVE()>"> for details.  Such methods are tagged with
 the C<:Cumulative> attribute (or S<C<:Cumulative(top down)>>), and propogate
@@ -2774,6 +2798,7 @@ hierarchy.)
 In addition to C<:Cumulative>, Object::InsideOut provides a way of creating
 methods that are chained together so that their return values are passed as
 input arguments to other similarly named methods in the same class hierarchy.
+In this way, the chained methods act as though they were I<piped> together.
 
 For example, imagine you had a method called C<format_name> that formats some
 text for display:
@@ -2884,6 +2909,71 @@ chained methods are called starting with the object's class and working
 upwards through the class hierarchy, similar to how S<C<:Cumulative(bottom
 up)>> works.
 
+=head2 Automethods
+
+There are significant issues related to Perl's C<AUTOLOAD> mechanism.  Read
+Damian Conway's description in L<Class::Std/"C<AUTOMETHOD()>"> for more
+details.  Object::InsideOut handles these issues in the same manner.
+
+Classes requiring C<AUTOLOAD> capabilities must provided a subroutine labelled
+with the C<:Automethod> attribute.  The C<:Automethod> subroutine will be
+called with the object and the arguments in the original method call (the same
+as for C<AUTOLOAD>).  The C<:Automethod> subroutine should return either a
+subroutine reference that implements the requested method's functionality, or
+else C<undef> to indicate that it doesn't know how to handle the request.
+
+The name of the method being called is passed as C<$_> instead of
+C<$AUTOLOAD>, and does I<not> have the class name prepended to it.  If the
+C<:Automethod> subroutine also needs to access the C<$_> from the caller's
+scope, it is available as C<$CALLER::_>.
+
+Automethods can also be made to act as L</"Cumulative Methods"> or L</"Chained
+Methods">.  In these cases, the C<:Automethod> subroutine should return two
+values: The subroutine ref to handle the method call, and a string designating
+the type of method.  The designator has the same form as the attributes used
+to designate C<:Cumulative> and C<:Chained> methods:
+
+    ':Cumulative'  or  ':Cumulative(top down)'
+    ':Cumulative(bottom up)'
+    ':Chained'     or  ':Chained(top down)'
+    ':Chained(bottom up)'
+
+The following skeletal code illustrates how an C<:Automethod> subroutine could
+be structured:
+
+    sub _automethod :Automethod
+    {
+        my $self = shift;
+        my @args = @_;
+
+        my $method_name = $_;
+
+        # This class can handle the method directly
+        if (...) {
+            my $handler = sub {
+                my $self = shift;
+                ...
+                return ...;
+            };
+
+            return ($handler);
+        }
+
+        # This class can handle the method as part of a chain
+        if (...) {
+            my $chained_handler = sub {
+                my $self = shift;
+                ...
+                return ...;
+            };
+
+            return ($chained_handler, ':Chained');
+        }
+
+        # This class cannot handle the method request
+        return;
+    }
+
 =head2 Object Serialization
 
 =over
@@ -2903,10 +2993,16 @@ data.  The object data hash ref contains keys for each of the classes that make
 up the object's hierarchy. The values for those keys are hash refs containing
 S<C<key =E<gt> value>> pairs for the object's fields.  For example:
 
-    [ 'My::Class::Sub', {
-                          'My::Class'      => { 'data' => 'value' },
-                          'My::Class::Sub' => { 'life' => 42 }
-                        }
+    [
+      'My::Class::Sub',
+      {
+        'My::Class' => {
+                         'data' => 'value'
+                       },
+        'My::Class::Sub' => {
+                              'life' => 42
+                            }
+      }
     ]
 
 The name for an object field (I<data> and I<life> in the example above) can be
@@ -3037,7 +3133,7 @@ For example:
 
 =head2 Object Coercion
 
-As with C<Class::Std>, Object::InsideOut provides support for various forms of
+As with Class::Std, Object::InsideOut provides support for various forms of
 object coercion through the C<overload> mechanism.  See
 L<Class::Std/"C<:STRINGIFY>"> for details.  The following attributes are
 supported:
@@ -3065,8 +3161,8 @@ the ID of the object and cannot be overridden.
 
 =head1 THREAD SUPPORT
 
-For Perl 5.8.0 and later, this module fully supports threads (i.e., is thread
-safe).  For Perl 5.8.1 and later, this module supports the sharing of
+For Perl 5.8.0 and later, this module fully supports L<threads> (i.e., is
+thread safe).  For Perl 5.8.1 and later, this module supports the sharing of
 Object::InsideOut objects between threads using L<threads::shared>.
 
 To use Object::InsideOut in a threaded application, you must put S<C<use
@@ -3277,12 +3373,6 @@ L<Test::More> v0.50 or later (for installation)
 
 L<Data::Dumper>
 
-=head1 TO DO
-
-Improve these docs.
-
-Improve test suite.
-
 =head1 SEE ALSO
 
 Inside-out Object Model:
@@ -3291,16 +3381,22 @@ L<http://www.perlmonks.org/index.pl?node_id=483162>,
 Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
 
 The Rationale for Object::InsideOut:
-L<http://www.perlmonks.org/index.pl?node_id=504425>
+L<http://www.cpanforum.com/posts/1316>
+
+Comparison with Class::Std:
+L<http://www.cpanforum.com/posts/1326>
 
 Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
+
+Annotated POD for Object::InsideOut:
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.04.00/lib/Object/InsideOut.pm>
 
 =head1 ACKNOWLEDGEMENTS
 
 Abigail S<E<lt>perl AT abigail DOT nlE<gt>> for inside-out objects in general.
 
-Damian Conway for Class::Std.
+Damian Conway S<E<lt>DCONWAY AT cpan DOT orgE<gt>> for L<Class::Std>.
 
 David A. Golden S<E<lt>david AT dagolden DOT comE<gt>> for thread handling for
 inside-out objects.
