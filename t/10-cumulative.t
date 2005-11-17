@@ -87,7 +87,7 @@ MAIN:
             is($pkg, $bot_up->{$pkg} => "Valid up hash value ($pkg)");
         }
 
-        for my $pkg (keys %$top_down) {
+        while(my $pkg = each(%{$top_down})) {
             ok(grep($pkg, @top_down) => "Valid down hash key ($pkg)");
             is($pkg, $bot_up->{$pkg} => "Valid down hash value ($pkg)");
         }

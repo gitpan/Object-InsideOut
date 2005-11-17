@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.04.00';
+our $VERSION = '1.05.00';
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -270,59 +270,49 @@ my %INIT_ARGS;
 
 # Allow a single initialization subroutine per class that is called as part of
 # initializing newly created objects.  The initialization subroutine is marked
-# with an attributed called 'Init', and is :HIDDEN during initialization by
+# with an attribute called 'Init', and is :HIDDEN during initialization by
 # default.
 my %INITORS;
 
 # Allow a single data replication subroutine per class that is called when
 # objects are cloned.  The data replication subroutine is marked with an
-# attributed called 'Replicate', and is :HIDDEN during initialization by
+# attribute called 'Replicate', and is :HIDDEN during initialization by
 # default.
 my %REPLICATORS;
 
 # Allow a single data destruction subroutine per class that is called when
 # objects are destroyed.  The data destruction subroutine is marked with an
-# attributed called 'Destroy', and is :HIDDEN during initialization by
+# attribute called 'Destroy', and is :HIDDEN during initialization by
 # default.
 my %DESTROYERS;
 
 # Allow a single 'autoload' subroutine per class that is called when an object
 # method is not found.  The automethods subroutine is marked with an
-# attributed called 'Automethod', and is :HIDDEN during initialization by
+# attribute called 'Automethod', and is :HIDDEN during initialization by
 # default.
 my %AUTOMETHODS;
 
 # Methods that support 'cumulativity' from the top of the class tree
-# downwards.  These cumulative methods are marked with an attributed called
-# 'Cumulative'.
-my %CUMULATIVE;
+# downwards, and from the bottom up.  These cumulative methods are marked with
+# the attributes 'Cumulative' and 'Cumulative(bottom up)', respectively.
+my (%CUMULATIVE, %ANTICUMULATIVE);
 
-# Methods that support 'cumulativity' from the bottom of the class tree
-# upwards.  These cumulative methods are marked with an attributed
-# 'Cumulative(bottom up)'.
-my %ANTICUMULATIVE;
+# Methods that support 'chaining' from the top of the class tree downwards,
+# and the bottom up. These chained methods are marked with an attribute called
+# 'Chained' and 'Chained(bottom up)', respectively.
+my (%CHAINED, %ANTICHAINED);
 
-# Methods that support 'chaining' from the top of the class tree downwards.
-# These chained methods are marked with an attributed called 'Chained'.
-my %CHAINED;
-
-# Methods that support 'chaining' from the bottom of the class tree upwards.
-# These chained methods are marked with an attributed 'Chained(bottom up)'.
-my %ANTICHAINED;
-
-my %DUMPERS;
-my %PUMPERS;
+# Methods that support object serialization.  These are marked with the
+# attribute 'Dumper' and 'Pumper', respectively.
+my (%DUMPERS, %PUMPERS);
 
 # Restricted methods are only callable from within the class hierarchy, and
-# are marked with an attributed called 'Restricted'.
-my %RESTRICTED;
-
-# Restricted methods are only callable from within the class itself, and are
-# marked with an attributed called 'Private'.
-my %PRIVATE;
+# private methods are only callable from within the class itself.  They are
+# are marked with an attribute called 'Restricted' and 'Private', respectively.
+my (%RESTRICTED, %PRIVATE);
 
 # Methods that are made uncallable after initialization.  They are marked with
-# an attributed called 'HIDDEN'.
+# an attribute called 'HIDDEN'.
 my %HIDDEN;
 
 # Methods that are support overloading capabilities for objects.
@@ -2171,7 +2161,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.04.00
+This document describes Object::InsideOut version 1.05.00
 
 =head1 SYNOPSIS
 
@@ -2777,21 +2767,111 @@ destruction.
 
 =head2 Cumulative Methods
 
-As with Class::Std, Object::InsideOut provides a mechanism for creating
-methods whose effects accumulate through the class hierarchy.  See
-L<Class::Std/"C<:CUMULATIVE()>"> for details.  Such methods are tagged with
-the C<:Cumulative> attribute (or S<C<:Cumulative(top down)>>), and propogate
-from the I<top down> through the class hierarchy (i.e., from the base classes
-down through the child classes).  If tagged with S<C<:Cumulative(bottom up)>>,
-they will propogated from the object's class upwards through the parent
-classes.
+Normally, methods with the same name in a class hierarchy are masked (i.e.,
+overridden) by inheritance - only the method in the most-derived class is
+called.  With cumulative methods, this masking is removed, and the same named
+method is called in each of the classes within the hierarchy.  The return
+results from each call (if any) are then gathered together into the return
+value for the original method call.  For example,
+
+    package My::Class; {
+        use Object::InsideOut;
+
+        sub what_am_i :Cumulative
+        {
+            my $self = shift;
+
+            my $ima = (ref($self) eq __PACKAGE__)
+                        ? q/I was created as a /
+                        : q/My top class is /;
+
+            return ($ima . __PACKAGE__);
+        }
+    }
+
+    package My::Foo; {
+        use Object::InsideOut 'My::Class';
+
+         sub what_am_i :Cumulative
+        {
+            my $self = shift;
+
+            my $ima = (ref($self) eq __PACKAGE__)
+                        ? q/I was created as a /
+                        : q/I'm also a /;
+
+            return ($ima . __PACKAGE__);
+        }
+    }
+
+    package My::Child; {
+        use Object::InsideOut 'My::Foo';
+
+         sub what_am_i :Cumulative
+        {
+            my $self = shift;
+
+            my $ima = (ref($self) eq __PACKAGE__)
+                        ? q/I was created as a /
+                        : q/I'm in class /;
+
+            return ($ima . __PACKAGE__);
+        }
+    }
+
+    package main;
+
+    my $obj = My::Child->new();
+    my @desc = $obj->what_am_i();
+    print(join("\n", @desc), "\n");
+
+produces:
+
+    My top class is My::Class
+    I'm also a My::Foo
+    I was created as a My::Child
+
+When called in a list context (as in the above), the return results of
+cumulative methods are accumulated, and returned as a list.
+
+In a scalar context, a results object is returned that segregates the results
+from the cumulative method calls by class.  Through overloading, this object
+can then be dereferenced as an array, hash, string, number, or boolean.  For
+example, the above could be rewritten as:
+
+    my $obj = My::Child->new();
+    my $desc = $obj->what_am_i();        # Results object
+    print(join("\n", @{$desc}), "\n");   # Dereference as an array
+
+The following uses hash dereferencing:
+
+    my $obj = My::Child->new();
+    my $desc = $obj->what_am_i();
+    while (my ($class, $value) = each(%{$desc})) {
+        print("Class $class reports:\n\t$value\n");
+    }
+
+and produces:
+
+    Class My::Class reports:
+            My top class is My::Class
+    Class My::Child reports:
+            I was created as a My::Child
+    Class My::Foo reports:
+            I'm also a My::Foo
+
+As illustrated above, Cumulative methods are tagged with the C<:Cumulative>
+attribute (or S<C<:Cumulative(top down)>>), and propogate from the I<top down>
+through the class hierarchy (i.e., from the base classes down through the
+child classes).  If tagged with S<C<:Cumulative(bottom up)>>, they will
+propogated from the object's class upwards through the parent classes.
 
 Note that this directionality is the reverse of Class::Std which defaults to
 bottom up, and uses S<I<BASE FIRST>> to mean from the base classes downward
-through the children.  (I eschewed the use of the term S<I<BASE FIRST>> because I
-felt it was ambiguous:  I<base> could refer to the base classes at the top of
-the hierarchy, or the child classes at the base (i.e., bottom) of the
-hierarchy.)
+through the children.  (I eschewed the use of the term S<I<BASE FIRST>>
+because I felt it was ambiguous:  I<base> could refer to the base classes at
+the top of the hierarchy, or the child classes at the base (i.e., bottom) of
+the hierarchy.)
 
 =head2 Chained Methods
 
@@ -2909,18 +2989,27 @@ chained methods are called starting with the object's class and working
 upwards through the class hierarchy, similar to how S<C<:Cumulative(bottom
 up)>> works.
 
+Unlike C<:Cumulative> methods, C<:Chained> methods return a scalar when used
+in a scalar context; not a results object.
+
 =head2 Automethods
 
-There are significant issues related to Perl's C<AUTOLOAD> mechanism.  Read
-Damian Conway's description in L<Class::Std/"C<AUTOMETHOD()>"> for more
-details.  Object::InsideOut handles these issues in the same manner.
+There are significant issues related to Perl's C<AUTOLOAD> mechanism that
+cause it to be ill-suited for use in a class hierarchy. Therefore,
+Object::InsideOut implements its own C<:Automethod> mechanism to overcome
+these problems
 
-Classes requiring C<AUTOLOAD> capabilities must provided a subroutine labelled
-with the C<:Automethod> attribute.  The C<:Automethod> subroutine will be
-called with the object and the arguments in the original method call (the same
-as for C<AUTOLOAD>).  The C<:Automethod> subroutine should return either a
-subroutine reference that implements the requested method's functionality, or
-else C<undef> to indicate that it doesn't know how to handle the request.
+Classes requiring C<AUTOLOAD>-type capabilities must provided a subroutine
+labelled with the C<:Automethod> attribute.  The C<:Automethod> subroutine
+will be called with the object and the arguments in the original method call
+(the same as for C<AUTOLOAD>).  The C<:Automethod> subroutine should return
+either a subroutine reference that implements the requested method's
+functionality, or else C<undef> to indicate that it doesn't know how to handle
+the request.
+
+Using its own C<AUTOLOAD> subroutine (which is exported to every class),
+Object::InsideOut walks through the class tree, calling each C<:Automethod>
+subroutine, as needed, to fulfill an unimplemented method call.
 
 The name of the method being called is passed as C<$_> instead of
 C<$AUTOLOAD>, and does I<not> have the class name prepended to it.  If the
@@ -3133,10 +3222,43 @@ For example:
 
 =head2 Object Coercion
 
-As with Class::Std, Object::InsideOut provides support for various forms of
-object coercion through the C<overload> mechanism.  See
-L<Class::Std/"C<:STRINGIFY>"> for details.  The following attributes are
-supported:
+Object::InsideOut provides support for various forms of object coercion
+through the L<overload> mechanism.  For instance, if you want an object to be
+usable directly in a string, you would supply a subroutine in your class
+labelled with the C<:Stringify> attribute:
+
+    sub as_string :Stringify
+    {
+        my $self = $_[0];
+        my $string = ...;
+        return ($string);
+    }
+
+Then you could do things like:
+
+    print("The object says, '$obj'\n");
+
+For a boolean context, you would supply:
+
+    sub as_string :Boolify
+    {
+        my $self = $_[0];
+        my $true_or_false = ...;
+        return ($true_or_false);
+    }
+
+and use it in this manner:
+
+    if (! defined($obj)) {
+        # The object is undefined
+        ....
+
+    } elsif (! $obj) {
+        # The object returned a false value
+        ...
+    }
+
+The following coercion attributes are supported:
 
 =over
 
@@ -3355,8 +3477,8 @@ The best solution is to upgrade your version of ActivePerl.  Barring that, you
 can tell CPAN to I<force> the installation of Object::InsideOut, and use it in
 non-threaded applications.
 
-Please submit any bugs, problems, suggestions, patches, etc. to:
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
+View existing bug reports at, and submit any new bugs, problems, patches, etc.
+to: L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
 
 =head1 REQUIREMENTS
 
@@ -3375,10 +3497,11 @@ L<Data::Dumper>
 
 =head1 SEE ALSO
 
-Inside-out Object Model:
-L<http://www.perlmonks.org/index.pl?node_id=219378>,
-L<http://www.perlmonks.org/index.pl?node_id=483162>,
-Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
+Object::InsideOut Discussion Forum on CPAN:
+L<http://www.cpanforum.com/dist/Object-InsideOut>
+
+Annotated POD for Object::InsideOut:
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.05.00/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
@@ -3386,11 +3509,10 @@ L<http://www.cpanforum.com/posts/1316>
 Comparison with Class::Std:
 L<http://www.cpanforum.com/posts/1326>
 
-Object::InsideOut Discussion Forum on CPAN:
-L<http://www.cpanforum.com/dist/Object-InsideOut>
-
-Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.04.00/lib/Object/InsideOut.pm>
+Inside-out Object Model:
+L<http://www.perlmonks.org/index.pl?node_id=219378>,
+L<http://www.perlmonks.org/index.pl?node_id=483162>,
+Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
 
 =head1 ACKNOWLEDGEMENTS
 

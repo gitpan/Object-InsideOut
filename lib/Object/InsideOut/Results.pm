@@ -3,12 +3,13 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = '1.04.00';
+our $VERSION = '1.05.00';
 
 use Object::InsideOut;
 
 my @VALUES  : Field;
 my @CLASSES : Field;
+my @HASHES  : Field;
 
 my %init_args : InitArgs = (
     'VALUES'  => { 'FIELD' => \@VALUES  },
@@ -37,10 +38,15 @@ sub values : ARRAYIFY
 
 sub as_hash : HASHIFY
 {
-    my $id = ${$_[0]};
-    my %hash;
-    @hash{@{$CLASSES[$id]}} = @{$VALUES[$id]};
-    return (\%hash);
+    my $self = $_[0];
+
+    if (! exists($HASHES[$$self])) {
+        my %hash;
+        @hash{@{$CLASSES[$$self]}} = @{$VALUES[$$self]};
+        $self->set(\@HASHES, \%hash);
+    }
+
+    return ($HASHES[$$self]);
 }
 
 }  # End of package's lexical scope
