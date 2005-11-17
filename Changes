@@ -1,8 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
-1.05.00 Thu Nov 17 13:14:30 2005
+1.1 Thu Nov 17 13:53:20 2005
 	- Fixed bug with each(%{$obj}) on results object
 	- Filled in 'holes' in POD
+	- Workable version numbering
 
 1.04.00 Wed Nov 16 16:24:00 2005
 	- Added chaining and accumulation for :Automethods

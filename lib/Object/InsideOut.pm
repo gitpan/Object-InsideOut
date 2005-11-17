@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '1.05.00';
+our $VERSION = 1.1;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2161,7 +2161,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.05.00
+This document describes Object::InsideOut version 1.1
 
 =head1 SYNOPSIS
 
@@ -3487,9 +3487,10 @@ Perl 5.6.0 or later
 L<Exception::Class> v1.22 or later
 
 L<Scalar::Util> v1.10 or later.  It is possible to install a I<pure perl>
-version of Scalar::Util, however, the version of C<refaddr> that is thus
-available is unusable.  You'll need to upgrade your version of Scalar::Util to
-one that supports its C<XS> code.
+version of Scalar::Util, however, it will be missing the
+C<weaken()|Scalar::Util/"weaken REF"> function which is needed by
+Object::InsideOut.  You'll need to upgrade your version of Scalar::Util to one
+that supports its C<XS> code.
 
 L<Test::More> v0.50 or later (for installation)
 
@@ -3501,7 +3502,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.05.00/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.1/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
