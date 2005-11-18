@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.11 Fri Nov 18 08:41:00 2005
+	- Eliminated internal use of each()
+
 1.1 Thu Nov 17 13:53:20 2005
 	- Fixed bug with each(%{$obj}) on results object
 	- Filled in 'holes' in POD

@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.1;
+our $VERSION = 1.11;
 
 
 ### Module Initialization ###
@@ -107,7 +107,8 @@ sub process_args
 
     # Extract/build arg-matching regexs from the specifiers
     my %regex;
-    while (my ($key, $regex) = each(%{$spec})) {
+    foreach my $key (keys(%{$spec})) {
+        my $regex = $spec->{$key};
         # If the value for the key is a hash ref, then the regex may be
         # inside it
         if (ref($regex) eq 'HASH') {
@@ -125,7 +126,8 @@ sub process_args
     my %found = ();
     EXTRACT: {
         # Find arguments using regex's
-        while (my ($key, $regex) = each(%regex)) {
+        foreach my $key (keys(%regex)) {
+            my $regex = $regex{$key};
             my $value = ($regex) ? hash_re($args, $regex) : $args->{$key};
             if (defined($found{$key})) {
                 if (defined($value)) {
@@ -152,7 +154,8 @@ sub process_args
 
     # Check on what we've found
     CHECK:
-    while (my ($key, $spec) = each(%{$spec})) {
+    foreach my $key (keys(%{$spec})) {
+        my $spec = $spec->{$key};
         # No specs to check
         if (ref($spec) ne 'HASH') {
             # The specifier entry was just 'key => regex'.  If 'key' is not in
@@ -272,8 +275,8 @@ sub shared_copy
                             ? &threads::shared::share({})
                             : {};
             # Recursively copy and add contents
-            while (my ($key, $val) = each(%$in)) {
-                $out->{$key} = shared_copy($val);
+            foreach my $key (keys(%{$in})) {
+                $out->{$key} = shared_copy($in->{$key});
             }
             return ($out);
         }

@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.1;
+our $VERSION = 1.11;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -1409,11 +1409,13 @@ sub dump
     # Extract field info from any :InitArgs hashes
     while (my $pkg = shift(@DUMP_INITARGS)) {
         INIT_ARGS:
-        while (my ($name, $val) = each(%{$INIT_ARGS{$pkg}})) {
+        foreach my $name (keys(%{$INIT_ARGS{$pkg}})) {
+            my $val = $INIT_ARGS{$pkg}{$name};
             if (ref($val) eq 'HASH') {
                 if (my $field = Object::InsideOut::Util::hash_re($val, qr/^FIELD$/i)) {
                     # Override get/set names, but not 'Name'
-                    while (my ($name2, $fld_spec) = each(%{$DUMP_FIELDS{$pkg}})) {
+                    foreach my $name2 (keys(%{$DUMP_FIELDS{$pkg}})) {
+                        my $fld_spec = $DUMP_FIELDS{$pkg}{$name2};
                         if ($field == $fld_spec->[0]) {
                             if ($fld_spec->[1] eq 'Name') {
                                 next INIT_ARGS;
@@ -1441,8 +1443,8 @@ sub dump
             my @fields = @{$FIELDS{$pkg}};
 
             # Fields for which we have names
-            while (my ($name, $fld_spec) = each(%{$DUMP_FIELDS{$pkg}})) {
-                my $field = $fld_spec->[0];
+            foreach my $name (keys(%{$DUMP_FIELDS{$pkg}})) {
+                my $field = $DUMP_FIELDS{$pkg}{$name}[0];
                 if (ref($field) eq 'HASH') {
                     if (exists($field->{$$self})) {
                         $dump{$pkg}{$name} = $field->{$$self};
@@ -1548,8 +1550,9 @@ sub pump
     }
 
     # Store object data
-    while (my ($pkg, $data) = each(%{$dump})) {
+    foreach my $pkg (keys(%{$dump})) {
         next if ($pkg eq 'CLASS');
+        my $data = $dump->{$pkg};
 
         # Try to use a class-supplied pumper
         if (my $pumper = $PUMPERS{$pkg}) {
@@ -1558,7 +1561,8 @@ sub pump
 
         } else {
             # Pump in the data ourselves
-            while (my ($fld_name, $value) = each(%{$data})) {
+            foreach my $fld_name (keys(%{$data})) {
+                my $value = $data->{$fld_name};
                 if (my $field = $DUMP_FIELDS{$pkg}{$fld_name}[0]) {
                     $self->set($field, $value);
                 } else {
@@ -1782,7 +1786,8 @@ sub create_accessors : PRIVATE
 
     # Get info for accessors
     my ($get, $set, $type, $name);
-    while (my ($key, $val) = each(%{$acc_spec})) {
+    foreach my $key (keys(%{$acc_spec})) {
+        my $val = $acc_spec->{$key};
         if ($key =~ /^st.*d/i) {
             $get = 'get_' . $val;
             $set = 'set_' . $val;
@@ -2161,7 +2166,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.1
+This document describes Object::InsideOut version 1.11
 
 =head1 SYNOPSIS
 
@@ -3502,7 +3507,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.1/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.11/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
