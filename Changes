@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.13 Mon Nov 21 11:10:00 2005
+	- POD fixup
+
 1.12 Mon Nov 21 11:03:00 2005
 	- Support custom type checking for initializers and accessors
 

@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.12;
+our $VERSION = 1.13;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2197,7 +2197,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.12
+This document describes Object::InsideOut version 1.13
 
 =head1 SYNOPSIS
 
@@ -2632,32 +2632,32 @@ type checking.  The code ref can either be in the form of an anonymous
 subroutine, or it can be derived from a (publicly accessible) subroutine.  The
 result of executing the code ref on the initializer should be a boolean value.
 
-package My::Class; {
-    use Object::InsideOut;
+ package My::Class; {
+     use Object::InsideOut;
 
-    # For initializer type checking, the subroutine can NOT be made 'Private'
-    sub is_int {
-        my $arg = $_[0];
-        return (Scalar::Util::looks_like_number($arg) &&
-                (int($arg) == $arg));
-    }
+     # For initializer type checking, the subroutine can NOT be made 'Private'
+     sub is_int {
+         my $arg = $_[0];
+         return (Scalar::Util::looks_like_number($arg) &&
+                 (int($arg) == $arg));
+     }
 
-    my @level   :Field;
-    my @comment :Field;
+     my @level   :Field;
+     my @comment :Field;
 
-    my %init_args :InitArgs = (
-        'LEVEL' => {
-            'Field' => \@level,
-            # Type checking using a named subroutine
-            'Type'  => \&is_int,
-        },
-        'COMMENT' => {
-            'Field' => \@comment,
-            # Type checking using an anonymous subroutine
-            'Type'  => sub { $_[0] ne '' }
-        },
-    );
-}
+     my %init_args :InitArgs = (
+         'LEVEL' => {
+             'Field' => \@level,
+             # Type checking using a named subroutine
+             'Type'  => \&is_int,
+         },
+         'COMMENT' => {
+             'Field' => \@comment,
+             # Type checking using an anonymous subroutine
+             'Type'  => sub { $_[0] ne '' }
+         },
+     );
+ }
 
 You can specify automatic processing for a parameter's value such that it is
 placed directly info a field hash and not sent to the C<:Init> subroutine:
@@ -3650,7 +3650,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.12/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.13/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
