@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.11;
+our $VERSION = 1.12;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -1808,13 +1808,19 @@ sub create_accessors : PRIVATE
                 'message'      => "Can't create accessor method for package '$package'",
                 'Info'         => "Unknown accessor specifier: $key");
         }
+        if (! defined($val) || $val eq '') {
+            OIO::Attribute->die(
+                'caller_level' => 3,
+                'message'      => "Invalid '$key' entry in :Field attribute",
+                'Attribute'    => "Field( $decl )");
+        }
     }
 
     # Add field info for dump()
     if ($name) {
         $DUMP_FIELDS{$package}{$name} = [ $field_ref, 'Name' ];
         # Done if only 'Name' present
-        if (! $get && ! $set) {
+        if (! $get && ! $set && ! $type) {
             return;
         }
     } elsif ($get) {
@@ -1823,52 +1829,43 @@ sub create_accessors : PRIVATE
         $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
     }
 
-    # Check on accessor names
-    my $have_one = 0;
-    for my $method ($get, $set) {
-        if (defined($method)) {
-            if ($method) {
-                no strict 'refs';
-                # Do not overwrite existing methods
-                if (*{$package.'::'.$method}{CODE}) {
-                    OIO::Attribute->die(
-                        'caller_level' => 3,
-                        'message'      => q/Can't create accessor method/,
-                        'Info'         => "Method '$method' already exists in class '$package'");
-                }
-            } else {
-                OIO::Attribute->die(
-                    'caller_level' => 3,
-                    'message'      => "Can't create accessor method for package '$package'",
-                    'Info'         => q/Accessor name missing in :Field attribute/,
-                    'Attribute'    => "Field( $decl )");
-            }
-            $have_one++;
-        }
-    }
-    if (! $have_one) {
+    # If 'TYPE', need 'SET' too
+    if ($type && ! $set) {
         OIO::Attribute->die(
             'caller_level' => 3,
-            'message'      => "Accessor name missing in :Field attribute in package '$package'",
-            'Info'         => q/Need 'GET', 'SET' or 'ACCESSOR' designator/,
+            'message'      => "Can't create accessor method for package '$package'",
+            'Info'         => q/No set accessor specified to go with 'TYPE' keyword/,
             'Attribute'    => "Field( $decl )");
     }
 
-    # Check type and set default
-    if ($type) {
-        if ($type =~ /^num(ber|eric)?/i) {
-            $type = 'NUMERIC';
-        } elsif (uc($type) eq 'LIST' || uc($type) eq 'ARRAY') {
-            $type = 'ARRAY';
-        } elsif (uc($type) eq 'HASH') {
-            $type = 'HASH';
+    # Check for name conflict
+    for my $method ($get, $set) {
+        if ($method) {
+            no strict 'refs';
+            # Do not overwrite existing methods
+            if (*{$package.'::'.$method}{CODE}) {
+                OIO::Attribute->die(
+                    'caller_level' => 3,
+                    'message'      => q/Can't create accessor method/,
+                    'Info'         => "Method '$method' already exists in class '$package'",
+                    'Attribute'    => "Field( $decl )");
+            }
         }
-    } else {
+    }
+
+    # Check type and set default
+    if (! defined($type) || !$type) {
         $type = 'NONE';
+    } elsif ($type =~ /^num(ber|eric)?/i) {
+        $type = 'NUMERIC';
+    } elsif (uc($type) eq 'LIST' || uc($type) eq 'ARRAY') {
+        $type = 'ARRAY';
+    } elsif (uc($type) eq 'HASH') {
+        $type = 'HASH';
     }
 
     # Code to be eval'ed into subroutines
-    my $code = '';
+    my $code = "package $package;\n";
 
     # Create 'set' or combination accessor
     if (defined($set)) {
@@ -1884,15 +1881,15 @@ sub create_accessors : PRIVATE
         if (defined($get) && $get eq $set) {
             if (ref($field_ref) eq 'HASH') {
                 $code .= <<"_COMBINATION_";
-        if (\@_ == 1) {
-            return (\$field->\{\${\$_[0]}});
-        }
+    if (\@_ == 1) {
+        return (\$field->\{\${\$_[0]}});
+    }
 _COMBINATION_
             } else {
                 $code .= <<"_COMBINATION_";
-        if (\@_ == 1) {
-            return (\$field->\[\${\$_[0]}]);
-        }
+    if (\@_ == 1) {
+        return (\$field->\[\${\$_[0]}]);
+    }
 _COMBINATION_
             }
             undef($get);  # That it for 'GET'
@@ -1908,7 +1905,34 @@ _CHECK_ARGS_
         }
 
         # Add data type checking
-        if ($type eq 'NONE') {
+        if (ref($type)) {
+            if (ref($type) ne 'CODE') {
+                OIO::Attribute->die(
+                    'caller_level' => 3,
+                    'message'      => q/Can't create accessor method/,
+                    'Info'         => q/'Type' is not a code ref or string/,
+                    'Attribute'    => "Field( $decl )");
+            }
+
+            $code .= <<'_CODE_';
+    my ($arg, $ok, @errs);
+    local $SIG{__WARN__} = sub { push(@errs, @_); };
+    eval { $ok = $type->($arg = $_[1]) };
+    if ($@ || @errs) {
+        my ($err) = split(/ at /, $@ || join(" | ", @errs));
+        OIO::Code->die(
+            'message' => q/Problem with type check routine for '$package->$set'/,
+            'Error'   => $err);
+    }
+_CODE_
+            $code .= <<"_CODE2_";
+    if (! \$ok) {
+        OIO::Args->die(
+            'message' => "Argument to '$package->$set' failed type check: \$arg");
+    }
+_CODE2_
+
+        } elsif ($type eq 'NONE') {
             # No data type check required
             $code .= "    my \$arg = \$_[1];\n";
 
@@ -1955,13 +1979,20 @@ _ARRAY_
 _HASH_
 
         } else {
+            # Support explicit specification of array refs and hash refs
+            if (uc($type) eq 'ARRAY_REF') {
+                $type = 'ARRAY';
+            } elsif (uc($type) eq 'HASH_REF') {
+                $type = 'HASH';
+            }
+
             # One object or ref arg - exact spelling and case required
             $code .= <<"_OTHER_TYPE_";
     my \$arg;
     if (! Object::InsideOut::Util::is_it(\$arg = \$_[1], '$type')) {
         OIO::Args->die(
             'message' => q/Bad argument: Wrong type/,
-            'Usage'   => q/Argument to '$package->$set' must be an object or ref of type '$type'/);
+            'Usage'   => q/Argument to '$package->$set' must be of type '$type'/);
     }
 _OTHER_TYPE_
         }
@@ -2166,7 +2197,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.11
+This document describes Object::InsideOut version 1.12
 
 =head1 SYNOPSIS
 
@@ -2215,16 +2246,16 @@ This document describes Object::InsideOut version 1.11
  package main;
 
  my $obj = My::Class::Sub->new('Data' => 69);
- my $info = $obj->get_info();                    # [ 'empty' ]
- my $data = $obj->data();                        # 69
+ my $info = $obj->get_info();               # [ 'empty' ]
+ my $data = $obj->data();                   # 69
  $obj->data(42);
- $data = $obj->data();                           # 42
+ $data = $obj->data();                      # 42
 
  $obj = My::Class::Sub->new('INFO' => 'help', 'DATA' => 86);
- $data = $obj->data();                           # 86
- $info = $obj->get_info();                       # [ 'help' ]
+ $data = $obj->data();                      # 86
+ $info = $obj->get_info();                  # [ 'help' ]
  $obj->set_info(qw(foo bar baz));
- $info = $obj->get_info();                       # [ 'foo', 'bar', 'baz' ]
+ $info = $obj->get_info();                  # [ 'foo', 'bar', 'baz' ]
 
 =head1 DESCRIPTION
 
@@ -2260,7 +2291,7 @@ not in the object itself.
 
 A common error with I<blessed hash> classes is the misspelling of field names:
 
-    $obj->{'coment'} = 'No comment';   # Should be 'comment' not 'coment'
+ $obj->{'coment'} = 'Say what?';   # Should be 'comment' not 'coment'
 
 As there is no compile-time checking on hash keys, such errors do not usually
 manifest themselves until runtime.
@@ -2324,25 +2355,25 @@ class-supplied subroutines.
 
 To use this module, your classes will start with S<C<use Object::InsideOut;>>:
 
-    package My::Class: {
-        use Object::InsideOut;
-        ...
-    }
+ package My::Class: {
+     use Object::InsideOut;
+     ...
+ }
 
 Sub-classes inherit from base classes by telling Object::InsideOut what the
 parent class is:
 
-    package My::Sub {
-        use Object::InsideOut qw(My::Parent);
-        ...
-    }
+ package My::Sub {
+     use Object::InsideOut qw(My::Parent);
+     ...
+ }
 
 Multiple inheritance is also supported:
 
-    package My::Project {
-        use Object::InsideOut qw(My::Class Another::Class);
-        ...
-    }
+ package My::Project {
+     use Object::InsideOut qw(My::Class Another::Class);
+     ...
+ }
 
 There is no need for S<C<use base ...>>, or to set up C<@ISA> arrays.  (In
 fact, you shouldn't do either:  Object::InsideOut acts as a replacement for
@@ -2352,11 +2383,11 @@ their C<import> functions, and sets up the sub-class's @ISA array.
 If a parent class takes parameters, enclose them in an array ref (mandatory)
 following the name of the parent class:
 
-    package My::Project {
-        use Object::InsideOut 'My::Class'      => [ 'param1', 'param2' ],
-                              'Another::Class' => [ 'param' ];
-        ...
-    }
+ package My::Project {
+     use Object::InsideOut 'My::Class'      => [ 'param1', 'param2' ],
+                           'Another::Class' => [ 'param' ];
+     ...
+ }
 
 =head2 Field Declarations
 
@@ -2365,11 +2396,11 @@ are stored using the object's ID as the array index.  An array is declared as
 being an object field by following its declaration with the C<:Field>
 attribute:
 
-    my @info :Field;
+ my @info :Field;
 
 Object data fields may also be hashes:
 
-    my %data :Field;
+ my %data :Field;
 
 However, as array access is as much as 40% faster than hash access, you should
 stick to using arrays.  (See L</"Object ID"> concerning when hashes may be
@@ -2383,7 +2414,7 @@ be all lowercase.)
 Objects are created using the C<-E<gt>new()> method which is exported by
 Object::InsideOut to each class:
 
-    my $obj = My::Class->new();
+ my $obj = My::Class->new();
 
 Classes do not implement their own C<-E<gt>new()> method.  Class-specific
 object initialization actions may be handled by C<:Init> labelled methods (see
@@ -2392,29 +2423,29 @@ L</"Object Initialization">).
 Parameters are passed in as combinations of S<C<key =E<gt> value>> pairs
 and/or hash refs:
 
-    my $obj = My::Class->new('param1' => 'value1');
-        # or
-    my $obj = My::Class->new({'param1' => 'value1'});
-        # or even
-    my $obj = My::Class->new(
-        'param_X' => 'value_X',
-        'param_Y' => 'value_Y',
-        {
-            'param_A' => 'value_A',
-            'param_B' => 'value_B',
-        },
-        {
-            'param_Q' => 'value_Q',
-        },
-    );
+ my $obj = My::Class->new('param1' => 'value1');
+     # or
+ my $obj = My::Class->new({'param1' => 'value1'});
+     # or even
+ my $obj = My::Class->new(
+     'param_X' => 'value_X',
+     'param_Y' => 'value_Y',
+     {
+         'param_A' => 'value_A',
+         'param_B' => 'value_B',
+     },
+     {
+         'param_Q' => 'value_Q',
+     },
+ );
 
 Additionally, parameters can be segregated in hash refs for specific classes:
 
-    my $obj = My::Class->new(
-        'foo' => 'bar',
-        'My::Class'      => { 'param' => 'value' },
-        'Parent::Class'  => { 'data'  => 'info'  },
-    );
+ my $obj = My::Class->new(
+     'foo' => 'bar',
+     'My::Class'      => { 'param' => 'value' },
+     'Parent::Class'  => { 'data'  => 'info'  },
+ );
 
 The initialization methods for both classes in the above will get S<C<'foo'
 =E<gt> 'bar'>>, C<My::Class> will also get S<C<'param' =E<gt> 'value'>>, and
@@ -2422,10 +2453,10 @@ C<Parent::Class> will also get S<C<'data' =E<gt> 'info'>>.  In this scheme,
 class-specific parameters will override general parameters specified at a
 higher level:
 
-    my $obj = My::Class->new(
-        'default' => 'bar',
-        'Parent::Class'  => { 'default' => 'baz' },
-    );
+ my $obj = My::Class->new(
+     'default' => 'bar',
+     'Parent::Class'  => { 'default' => 'baz' },
+ );
 
 C<My::Class> will get S<C<'default' =E<gt> 'bar'>>, and C<Parent::Class> will
 get S<C<'default' =E<gt> 'baz'>>.
@@ -2436,8 +2467,8 @@ C<ref($obj)-E<gt>new()>).
 
 NOTE: You cannot create objects from Object::InsideOut itself:
 
-    # This is an error
-    # my $obj = Object::InsideOut->new();
+ # This is an error
+ # my $obj = Object::InsideOut->new();
 
 In this way, Object::InsideOut is not an object class, but functions more like
 a pragma.
@@ -2447,7 +2478,7 @@ a pragma.
 Copies of objects can be created using the C<-E<gt>clone()> method which is
 exported by Object::InsideOut to each class:
 
-    my $obj2 = $obj->clone();
+ my $obj2 = $obj->clone();
 
 =head2 Object Initialization
 
@@ -2460,26 +2491,26 @@ The C<:InitArgs> labelled hash specifies the parameters to be extracted from
 the argument list supplied to the C<-E<gt>new()> method.  These parameters are
 then sent to the C<:Init> labelled subroutine for processing:
 
-    package My::Class; {
-        my @my_field :Field;
+ package My::Class; {
+     my @my_field :Field;
 
-        my %init_args :InitArgs = (
-            'MY_PARAM' => qr/MY_PARAM/i,
-        );
+     my %init_args :InitArgs = (
+         'MY_PARAM' => qr/MY_PARAM/i,
+     );
 
-        sub _init :Init
-        {
-            my ($self, $args) = @_;
+     sub _init :Init
+     {
+         my ($self, $args) = @_;
 
-            if (exists($args->{'MY_PARAM'})) {
-                $self->set(\@my_field, $args->{'MY_PARAM'});
-            }
-        }
-    }
+         if (exists($args->{'MY_PARAM'})) {
+             $self->set(\@my_field, $args->{'MY_PARAM'});
+         }
+     }
+ }
 
-    package main;
+ package main;
 
-    my $obj = My::Class->new('my_param' => 'data');
+ my $obj = My::Class->new('my_param' => 'data');
 
 (The case of the words I<InitArgs> and I<Init> does not matter, but by
 convention should not be all lowercase.)
@@ -2491,12 +2522,12 @@ ref of supplied arguments that matched C<:InitArgs> specifications.
 Data processed by the subroutine may be placed directly into the class's field
 arrays (hashes) using the object's ID (i.e., C<$$self>):
 
-    $my_field[$$self] = $args->{'MY_PARAM'};
+ $my_field[$$self] = $args->{'MY_PARAM'};
 
 However, it is strongly recommended that you use the L<-E<gt>set()|/"Setting
 Data"> method:
 
-    $self->set(\@my_field, $args->{'MY_PARAM'});
+ $self->set(\@my_field, $args->{'MY_PARAM'});
 
 which handles converting the data to a shared format when needed for
 applications using L<threads::shared>.
@@ -2508,9 +2539,9 @@ hash that is labelled with the C<:InitArgs> attribute.
 
 The simplest parameter specification is just a tag:
 
-    my %init_args :InitArgs = (
-        'DATA' => '',
-    );
+ my %init_args :InitArgs = (
+     'DATA' => '',
+ );
 
 In this case, if a S<C<key =E<gt> value>> pair with an exact match of C<DATA>
 for the key is found in the arguments sent to the C<-E<gt>new()> method, then
@@ -2520,9 +2551,9 @@ the C<:Init> labelled subroutine.
 Rather than counting on exact matches, regular expressions can be used to
 specify the parameter:
 
-    my %init_args :InitArgs = (
-        'Param' => qr/^PARA?M$/i,
-    );
+ my %init_args :InitArgs = (
+     'Param' => qr/^PARA?M$/i,
+ );
 
 In this case, the argument key could be any of the following: PARAM, PARM,
 Param, Parm, param, parm, and so on.  If a match is found, then S<C<'Param'
@@ -2533,63 +2564,118 @@ need for any parameter key pattern matching within the C<:Init> subroutine.
 With more complex parameter specifications, the syntax changes.  Mandatory
 parameters are declared as follows:
 
-    my %init_args :InitArgs = (
-        # Mandatory parameter requiring exact matching
-        'INFO' => {
-            'Mandatory' => 1,
-        },
-        # Mandatory parameter with pattern matching
-        'input' => {
-            'Regex'     => qr/^in(?:put)?$/i,
-            'Mandatory' => 1,
-        },
-    );
+ my %init_args :InitArgs = (
+     # Mandatory parameter requiring exact matching
+     'INFO' => {
+         'Mandatory' => 1,
+     },
+     # Mandatory parameter with pattern matching
+     'input' => {
+         'Regex'     => qr/^in(?:put)?$/i,
+         'Mandatory' => 1,
+     },
+ );
 
 If a mandatory parameter is missing from the argument list to C<new>, an error
 is generated.
 
 For optional parameters, defaults can be specified:
 
-    my %init_args :InitArgs = (
-        'LEVEL' => {
-            'Regex'   => qr/^lev(?:el)?|lvl$/i,
-            'Default' => 3,
-        },
-    );
+ my %init_args :InitArgs = (
+     'LEVEL' => {
+         'Regex'   => qr/^lev(?:el)?|lvl$/i,
+         'Default' => 3,
+     },
+ );
 
 The parameter's type can also be specified:
 
+ my %init_args :InitArgs = (
+     'LEVEL' => {
+         'Regex'   => qr/^lev(?:el)?|lvl$/i,
+         'Default' => 3,
+         'Type'    => 'Numeric',
+     },
+ );
+
+Available types are:
+
+=over
+
+=item Numeric
+
+Can also be specified as C<Num> or C<Number>.  This uses
+Scalar::Util::looks_like_number to test the input value.
+
+=item List
+
+This type permits a single value (that is then placed in an array ref) or an
+array ref.
+
+=item A class name
+
+The parameter's type must be of the specified class.  For example,
+C<My::Class>.
+
+=item Other reference type
+
+The parameter's type must be of the specified reference type
+(as returned by L<ref()|perlfunc/"ref EXPR">).  For example, C<CODE>.
+
+=back
+
+The first two types above are case-insensitive (e.g., 'NUMERIC', 'Numeric',
+'numeric', etc.); the last two are case-sensitive.
+
+The C<Type> keyword can also be paired with a code reference to provide custom
+type checking.  The code ref can either be in the form of an anonymous
+subroutine, or it can be derived from a (publicly accessible) subroutine.  The
+result of executing the code ref on the initializer should be a boolean value.
+
+package My::Class; {
+    use Object::InsideOut;
+
+    # For initializer type checking, the subroutine can NOT be made 'Private'
+    sub is_int {
+        my $arg = $_[0];
+        return (Scalar::Util::looks_like_number($arg) &&
+                (int($arg) == $arg));
+    }
+
+    my @level   :Field;
+    my @comment :Field;
+
     my %init_args :InitArgs = (
         'LEVEL' => {
-            'Regex'   => qr/^lev(?:el)?|lvl$/i,
-            'Default' => 3,
-            'Type'    => 'Numeric',
+            'Field' => \@level,
+            # Type checking using a named subroutine
+            'Type'  => \&is_int,
+        },
+        'COMMENT' => {
+            'Field' => \@comment,
+            # Type checking using an anonymous subroutine
+            'Type'  => sub { $_[0] ne '' }
         },
     );
-
-Available types are C<Numeric> (or C<Num> or C<Number> - case-insensitive),
-C<List> (case-insensitive), a class (e.g., C<My::Class>), or a reference type
-(e.g., 'HASH', 'ARRAY', etc.).  The C<List> type allows a single value (that
-is then placed in an array ref) or an array ref.  For class and ref types,
-exact case and spelling are required.
+}
 
 You can specify automatic processing for a parameter's value such that it is
 placed directly info a field hash and not sent to the C<:Init> subroutine:
 
-    my @hosts :Field;
+ my @hosts :Field;
 
-    my %init_args :InitArgs = (
-        'HOSTS' => {
-            # Allow 'host' or 'hosts' - case-insensitive
-            'Regex'     => qr/^hosts?$/i,
-            # Mandatory parameter
-            'Mandatory' => 1,
-            # Allow single value or array ref
-            'Type'      => 'List',
-            # Automatically put the parameter into @hosts
-            'Field'     => \@hosts,
-        },
-    );
+ my %init_args :InitArgs = (
+     'HOSTS' => {
+         # Allow 'host' or 'hosts' - case-insensitive
+         'Regex'     => qr/^hosts?$/i,
+         # Mandatory parameter
+         'Mandatory' => 1,
+         # Allow single value or array ref
+         'Type'      => 'List',
+         # Automatically put the parameter into @hosts
+         'Field'     => \@hosts,
+     },
+ );
 
 In this case, when the host parameter is found, it is automatically put into
 the C<@hosts> array, and a S<C<'HOSTS' =E<gt> value>> pair is B<not> sent to
@@ -2611,9 +2697,9 @@ used in an application that uses L<threads::shared>.
 As mentioned above, data can be put directly into an object's field array
 (hash) using the object's ID:
 
-    $field[$$self] = $data;
-        # or
-    $field{$$self} = $data;
+ $field[$$self] = $data;
+     # or
+ $field{$$self} = $data;
 
 However, in a threaded application that uses data sharing (i.e., uses
 C<threads::shared>), C<$data> must be converted into shared data so that it
@@ -2623,9 +2709,9 @@ all those details for you.
 The C<-E<gt>set()> method, requires two arguments:  A reference to the object
 field array/hash, and the data (as a scalar) to be put in it:
 
-    $self->set(\@field, $data);
-        # or
-    $self->set(\%field, $data);
+ $self->set(\@field, $data);
+     # or
+ $self->set(\%field, $data);
 
 To be clear, the C<-E<gt>set()> method is used inside class code; not
 application code.  Use it inside any object methods that set data in object
@@ -2638,7 +2724,7 @@ automatic generation of accessor methods.  You can specify the generation of a
 pair of I<standard-named> accessor methods (i.e., prefixed by I<get_> and
 I<set_>):
 
-    my @data :Field('Standard' => 'data');
+ my @data :Field('Standard' => 'data');
 
 The above results in Object::InsideOut automatically generating accessor
 methods named C<get_data> and C<set_data>.  (The keyword C<Standard> is
@@ -2646,11 +2732,11 @@ case-insensitive, and can be abbreviated to C<Std>.)
 
 You can also separately specify the I<get> and/or I<set> accessors:
 
-    my @name :Field('Get' => 'name', 'Set' => 'change_name');
-        # or
-    my @name :Field('Get' => 'get_name');
-        # or
-    my @name :Field('Set' => 'new_name');
+ my @name :Field('Get' => 'name', 'Set' => 'change_name');
+     # or
+ my @name :Field('Get' => 'get_name');
+     # or
+ my @name :Field('Set' => 'new_name');
 
 For the above, you specify the full name of the accessor(s) (i.e., no prefix
 is added to the given name(s)).  (The C<Get> and C<Set> keywords are
@@ -2659,16 +2745,15 @@ case-insensitive.)
 You can specify the automatic generation of a combined I<get/set> accessor
 method:
 
-    my @comment :Field('Accessor' => 'comment');
+ my @comment :Field('Accessor' => 'comment');
 
 which would be used as follows:
 
-    # Set a new comment
-    $obj->comment("I have no comment, today.");
+ # Set a new comment
+ $obj->comment("I have no comment, today.");
 
-    # Get the current comment
-    my $cmt = $obj->comment();
-
+ # Get the current comment
+ my $cmt = $obj->comment();
 
 (The keyword C<Accessor> is case-insensitive, and can be abbreviated to
 C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)
@@ -2676,30 +2761,87 @@ C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)
 For any of the automatically generated methods that perform I<set> operations,
 the method's return value is the value being set.
 
-Type-checking for the I<set> operation can be specified, as well:
+You may, optionally, direct Object::InsideOut to add type-checking code to the
+I<set/combined> accessor:
 
-    my @level :Field('Accessor' => 'level', 'Type' => 'Numeric');
+ my @level :Field('Accessor' => 'level', 'Type' => 'Numeric');
 
-Available types are C<Numeric> (or C<Num> or C<Number> - case-insensitive),
-C<List> or C<Array> (case-insensitive), C<Hash> (case-insensitive), a class
-(e.g., C<My::Class>), or a reference type (e.g., 'CODE').  For class and ref
-types, exact case and spelling are required.
+Available types are:
 
-The C<List/Array> type permits the accessor to accept multiple value (that are
-then placed in an array ref) or a single array ref.  The C<Hash> type allows
-multiple S<C<key =E<gt> value>> pairs (that are then placed in a hash ref) or
-a single hash ref.
+=over
+
+=item Numeric
+
+Can also be specified as C<Num> or C<Number>.  This uses
+Scalar::Util::looks_like_number to test the input value.
+
+=item List or Array
+
+This type permits the accessor to accept multiple value (that are
+then placed in an array ref) or a single array ref.
+
+=item Array_ref
+
+This specifies that the accessor can only accept a single array reference.
+
+=item Hash
+
+This type allows multiple S<C<key =E<gt> value>> pairs (that are then placed in
+a hash ref) or a single hash ref.
+
+=item Hash_ref
+
+This specifies that the accessor can only accept a single hash reference.
+
+=item A class name
+
+The accessor will only accept a value of the specified class.  For example,
+C<My::Class>.
+
+=item Other reference type
+
+The accessor will only accept a value of the specified reference type
+(as returned by L<ref()|perlfunc/"ref EXPR">).  For example, C<CODE>.
+
+=back
+
+The types above are case-insensitive (e.g., 'NUMERIC', 'Numeric', 'numeric',
+etc.), except for the last two.
+
+The C<Type> keyword can also be paired with a code reference to provide custom
+type checking.  The code ref can either be in the form of an anonymous
+subroutine, or a full-qualified subroutine name.  The result of executing the
+code ref on the input argument should be a boolean value.
+
+ package My::Class; {
+     use Object::InsideOut;
+
+     # For accessor type checking, the subroutine can be made 'Private'
+     sub positive : Private {
+         return (Scalar::Util::looks_like_number($_[0]) &&
+                 ($_[0] > 0));
+     }
+
+     # Code ref is an anonymous subroutine
+     my @data :Field('Acc' => 'data', 'type' => sub { !ref(shift) } );
+
+     # Code ref using a fully-qualified subroutine name
+     my @num  :Field('Acc' => 'num',  'type' => \&My::Class::positive);
+ }
+
+Note that it is an error to use the C<Type> keyword by itself, or in
+combination with only the C<Get> keyword.
 
 Due to limitations in the Perl parser, you cannot use line wrapping with the
 C<:Field> attribute:
 
-    # This doesn't work
-    # my @level :Field('Get'  => 'level',
-    #                  'Set'  => 'set_level',
-    #                  'Type' => 'Num');
+ # This doesn't work
+ # my @level :Field('Get'  => 'level',
+ #                  'Set'  => 'set_level',
+ #                  'Type' => 'Num');
 
-    # Must be all on one line
-    my @level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
+ # Must be all on one line
+ my @level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
 
 =head2 Object ID
 
@@ -2709,15 +2851,15 @@ development.  If there is a special need for the module code to control the
 object ID (see L<Math::Random::MT::Auto> as an example), then an C<:ID>
 labelled subroutine can be specified:
 
-    sub _id :ID
-    {
-        my $class = $_[0];
+ sub _id :ID
+ {
+     my $class = $_[0];
 
-        # Determine a unique object ID
-        ...
+     # Determine a unique object ID
+     ...
 
-        return ($id);
-    }
+     return ($id);
+ }
 
 The ID returned by your subroutine can be any kind of I<regular> scalar (e.g.,
 a string or a number).  However, if the ID is something other than a
@@ -2737,12 +2879,12 @@ In rare cases, a class may require special handling for object replication.
 It must then provide a subroutine labelled with the C<:Replicate> attribute.
 This subroutine will be sent two objects:  The parent and the clone:
 
-    sub _replicate :Replicate
-    {
-        my ($parent, $clone) = @_;
+ sub _replicate :Replicate
+ {
+     my ($parent, $clone) = @_;
 
-        # Special object replication processing
-    }
+     # Special object replication processing
+ }
 
 In the case of thread cloning, the C<$parent> object is just an un-blessed
 anonymous scalar reference that contains the ID for the object in the parent
@@ -2759,12 +2901,12 @@ additional destruction processing (e.g., closing filehandles), then it must
 provide a subroutine labelled with the C<:Destroy> attribute.  This subroutine
 will be sent the object that is being destroyed:
 
-    sub _destroy :Destroy
-    {
-        my $obj = $_[0];
+ sub _destroy :Destroy
+ {
+     my $obj = $_[0];
 
-        # Special object destruction processing
-    }
+     # Special object destruction processing
+ }
 
 The C<:Destroy> subroutine only needs to deal with the special destruction
 processing:  The C<DESTROY> method will handle all the other details of object
@@ -2779,62 +2921,62 @@ method is called in each of the classes within the hierarchy.  The return
 results from each call (if any) are then gathered together into the return
 value for the original method call.  For example,
 
-    package My::Class; {
-        use Object::InsideOut;
+ package My::Class; {
+     use Object::InsideOut;
 
-        sub what_am_i :Cumulative
-        {
-            my $self = shift;
+     sub what_am_i :Cumulative
+     {
+         my $self = shift;
 
-            my $ima = (ref($self) eq __PACKAGE__)
-                        ? q/I was created as a /
-                        : q/My top class is /;
+         my $ima = (ref($self) eq __PACKAGE__)
+                     ? q/I was created as a /
+                     : q/My top class is /;
 
-            return ($ima . __PACKAGE__);
-        }
-    }
+         return ($ima . __PACKAGE__);
+     }
+ }
 
-    package My::Foo; {
-        use Object::InsideOut 'My::Class';
+ package My::Foo; {
+     use Object::InsideOut 'My::Class';
 
-         sub what_am_i :Cumulative
-        {
-            my $self = shift;
+      sub what_am_i :Cumulative
+     {
+         my $self = shift;
 
-            my $ima = (ref($self) eq __PACKAGE__)
-                        ? q/I was created as a /
-                        : q/I'm also a /;
+         my $ima = (ref($self) eq __PACKAGE__)
+                     ? q/I was created as a /
+                     : q/I'm also a /;
 
-            return ($ima . __PACKAGE__);
-        }
-    }
+         return ($ima . __PACKAGE__);
+     }
+ }
 
-    package My::Child; {
-        use Object::InsideOut 'My::Foo';
+ package My::Child; {
+     use Object::InsideOut 'My::Foo';
 
-         sub what_am_i :Cumulative
-        {
-            my $self = shift;
+      sub what_am_i :Cumulative
+     {
+         my $self = shift;
 
-            my $ima = (ref($self) eq __PACKAGE__)
-                        ? q/I was created as a /
-                        : q/I'm in class /;
+         my $ima = (ref($self) eq __PACKAGE__)
+                     ? q/I was created as a /
+                     : q/I'm in class /;
 
-            return ($ima . __PACKAGE__);
-        }
-    }
+         return ($ima . __PACKAGE__);
+     }
+ }
 
-    package main;
+ package main;
 
-    my $obj = My::Child->new();
-    my @desc = $obj->what_am_i();
-    print(join("\n", @desc), "\n");
+ my $obj = My::Child->new();
+ my @desc = $obj->what_am_i();
+ print(join("\n", @desc), "\n");
 
 produces:
 
-    My top class is My::Class
-    I'm also a My::Foo
-    I was created as a My::Child
+ My top class is My::Class
+ I'm also a My::Foo
+ I was created as a My::Child
 
 When called in a list context (as in the above), the return results of
 cumulative methods are accumulated, and returned as a list.
@@ -2844,26 +2986,26 @@ from the cumulative method calls by class.  Through overloading, this object
 can then be dereferenced as an array, hash, string, number, or boolean.  For
 example, the above could be rewritten as:
 
-    my $obj = My::Child->new();
-    my $desc = $obj->what_am_i();        # Results object
-    print(join("\n", @{$desc}), "\n");   # Dereference as an array
+ my $obj = My::Child->new();
+ my $desc = $obj->what_am_i();        # Results object
+ print(join("\n", @{$desc}), "\n");   # Dereference as an array
 
 The following uses hash dereferencing:
 
-    my $obj = My::Child->new();
-    my $desc = $obj->what_am_i();
-    while (my ($class, $value) = each(%{$desc})) {
-        print("Class $class reports:\n\t$value\n");
-    }
+ my $obj = My::Child->new();
+ my $desc = $obj->what_am_i();
+ while (my ($class, $value) = each(%{$desc})) {
+     print("Class $class reports:\n\t$value\n");
+ }
 
 and produces:
 
-    Class My::Class reports:
-            My top class is My::Class
-    Class My::Child reports:
-            I was created as a My::Child
-    Class My::Foo reports:
-            I'm also a My::Foo
+ Class My::Class reports:
+         My top class is My::Class
+ Class My::Child reports:
+         I was created as a My::Child
+ Class My::Foo reports:
+         I'm also a My::Foo
 
 As illustrated above, Cumulative methods are tagged with the C<:Cumulative>
 attribute (or S<C<:Cumulative(top down)>>), and propogate from the I<top down>
@@ -2888,33 +3030,33 @@ In this way, the chained methods act as though they were I<piped> together.
 For example, imagine you had a method called C<format_name> that formats some
 text for display:
 
-    package Subscriber; {
-        use Object::InsideOut;
+ package Subscriber; {
+     use Object::InsideOut;
 
-        sub format_name {
-            my ($self, $name) = @_;
+     sub format_name {
+         my ($self, $name) = @_;
 
-            # Strip leading and trailing whitespace
-            $name =~ s/^\s+//;
-            $name =~ s/\s+$//;
+         # Strip leading and trailing whitespace
+         $name =~ s/^\s+//;
+         $name =~ s/\s+$//;
 
-            return ($name);
-        }
-    }
+         return ($name);
+     }
+ }
 
 And elsewhere you have a second class that formats the case of names:
 
-    package Person; {
-        use Lingua::EN::NameCase qw(nc);
-        use Object::InsideOut;
+ package Person; {
+     use Lingua::EN::NameCase qw(nc);
+     use Object::InsideOut;
 
-        sub format_name {
-            my ($self, $name) = @_;
+     sub format_name {
+         my ($self, $name) = @_;
 
-            # Attempt to properly case names
-            return (nc($name));
-        }
-    }
+         # Attempt to properly case names
+         return (nc($name));
+     }
+ }
 
 And you decide that you'd like to perform some formatting of your own, and
 then have all the parent methods apply their own formatting.  Normally, if you
@@ -2922,63 +3064,63 @@ have a single parent class, you'd just call the method directly with
 C<$self->SUPER::format_name($name)>, but if you have more than one parent
 class you'd have to explicitly call each method directly:
 
-    package Customer; {
-        use Object::InsideOut qw(Person Subscriber);
+ package Customer; {
+     use Object::InsideOut qw(Person Subscriber);
 
-        sub format_name {
-            my ($self, $name) = @_;
+     sub format_name {
+         my ($self, $name) = @_;
 
-            # Compress all whitespace into a single space
-            $name =~ s/\s+/ /g;
+         # Compress all whitespace into a single space
+         $name =~ s/\s+/ /g;
 
-            $name = $self->Subscriber::format_name($name);
-            $name = $self->Person::format_name($name);
+         $name = $self->Subscriber::format_name($name);
+         $name = $self->Person::format_name($name);
 
-            return $name;
-        }
-    }
+         return $name;
+     }
+ }
 
 With Object::InsideOut you'd add the C<:Chained> attribute to each class's
 C<format_name> method, and the methods will be chained together automatically:
 
-    package Subscriber; {
-        use Object::InsideOut;
+ package Subscriber; {
+     use Object::InsideOut;
 
-        sub format_name :Chained {
-            my ($self, $name) = @_;
+     sub format_name :Chained {
+         my ($self, $name) = @_;
 
-            # Strip leading and trailing whitespace
-            $name =~ s/^\s+//;
-            $name =~ s/\s+$//;
+         # Strip leading and trailing whitespace
+         $name =~ s/^\s+//;
+         $name =~ s/\s+$//;
 
-            return ($name);
-        }
-    }
+         return ($name);
+     }
+ }
 
-    package Person; {
-        use Lingua::EN::NameCase qw(nc);
-        use Object::InsideOut;
+ package Person; {
+     use Lingua::EN::NameCase qw(nc);
+     use Object::InsideOut;
 
-        sub format_name :Chained {
-            my ($self, $name) = @_;
+     sub format_name :Chained {
+         my ($self, $name) = @_;
 
-            # Attempt to properly case names
-            return (nc($name));
-        }
-    }
+         # Attempt to properly case names
+         return (nc($name));
+     }
+ }
 
-    package Customer; {
-        use Object::InsideOut qw(Person Subscriber);
+ package Customer; {
+     use Object::InsideOut qw(Person Subscriber);
 
-        sub format_name :Chained {
-            my ($self, $name) = @_;
+     sub format_name :Chained {
+         my ($self, $name) = @_;
 
-            # Compress all whitespace into a single space
-            $name =~ s/\s+/ /g;
+         # Compress all whitespace into a single space
+         $name =~ s/\s+/ /g;
 
-            return ($name);
-        }
-    }
+         return ($name);
+     }
+ }
 
 So passing in someone's name to C<format_name> in C<Customer> would cause
 leading and trailing whitespace to be removed, then the name to be properly
@@ -3027,46 +3169,55 @@ values: The subroutine ref to handle the method call, and a string designating
 the type of method.  The designator has the same form as the attributes used
 to designate C<:Cumulative> and C<:Chained> methods:
 
-    ':Cumulative'  or  ':Cumulative(top down)'
-    ':Cumulative(bottom up)'
-    ':Chained'     or  ':Chained(top down)'
-    ':Chained(bottom up)'
+ ':Cumulative'  or  ':Cumulative(top down)'
+ ':Cumulative(bottom up)'
+ ':Chained'     or  ':Chained(top down)'
+ ':Chained(bottom up)'
 
 The following skeletal code illustrates how an C<:Automethod> subroutine could
 be structured:
 
-    sub _automethod :Automethod
-    {
-        my $self = shift;
-        my @args = @_;
+ sub _automethod :Automethod
+ {
+     my $self = shift;
+     my @args = @_;
 
-        my $method_name = $_;
+     my $method_name = $_;
 
-        # This class can handle the method directly
-        if (...) {
-            my $handler = sub {
-                my $self = shift;
-                ...
-                return ...;
-            };
+     # This class can handle the method directly
+     if (...) {
+         my $handler = sub {
+             my $self = shift;
+             ...
+             return ...;
+         };
 
-            return ($handler);
-        }
+         ### OPTIONAL ###
+         # Install the handler so it gets called directly next time
+         # no strict refs;
+         # *{__PACKAGE__.'::'.$method_name} = $handler;
+         ################
 
-        # This class can handle the method as part of a chain
-        if (...) {
-            my $chained_handler = sub {
-                my $self = shift;
-                ...
-                return ...;
-            };
+         return ($handler);
+     }
 
-            return ($chained_handler, ':Chained');
-        }
+     # This class can handle the method as part of a chain
+     if (...) {
+         my $chained_handler = sub {
+             my $self = shift;
+             ...
+             return ...;
+         };
 
-        # This class cannot handle the method request
-        return;
-    }
+         return ($chained_handler, ':Chained');
+     }
+
+     # This class cannot handle the method request
+     return;
+ }
+
+Note: The I<OPTIONAL> code above for installing the generated handler as a
+method should not be used with C<:Cumulative> or C<:Chained> Automethods.
 
 =head2 Object Serialization
 
@@ -3087,23 +3238,23 @@ data.  The object data hash ref contains keys for each of the classes that make
 up the object's hierarchy. The values for those keys are hash refs containing
 S<C<key =E<gt> value>> pairs for the object's fields.  For example:
 
-    [
-      'My::Class::Sub',
-      {
-        'My::Class' => {
-                         'data' => 'value'
-                       },
-        'My::Class::Sub' => {
-                              'life' => 42
-                            }
-      }
-    ]
+ [
+   'My::Class::Sub',
+   {
+     'My::Class' => {
+                      'data' => 'value'
+                    },
+     'My::Class::Sub' => {
+                           'life' => 42
+                         }
+   }
+ ]
 
 The name for an object field (I<data> and I<life> in the example above) can be
 specified as part of the L<field declaration|/"Field Declarations"> using the
 C<NAME> keyword:
 
-    my @life :Field('Name' => 'life');
+ my @life :Field('Name' => 'life');
 
 If the C<NAME> keyword is not present, then the name for a field will be
 either the tag from the C<:InitArgs> array that is associated with the field,
@@ -3138,17 +3289,17 @@ sent the object that is being dumped.  It may then return any type of scalar
 the developer deems appropriate.  Most likely this would be a hash ref
 containing S<C<key =E<gt> value>> pairs for the object's fields.  For example,
 
-    my @data :Field;
+ my @data :Field;
 
-    sub _dump :Dumper
-    {
-        my $obj = $_[0];
+ sub _dump :Dumper
+ {
+     my $obj = $_[0];
 
-        my %field_data;
-        $field_data{'data'} = $data[$$obj];
+     my %field_data;
+     $field_data{'data'} = $data[$$obj];
 
-        return (\%field_data);
-    }
+     return (\%field_data);
+ }
 
 Just be sure not to call your C<:Dumper> subroutine C<dump> as that is the
 name of the dump method exported by Object::InsideOut as explained above.
@@ -3163,12 +3314,12 @@ that is being created, and whatever scalar was returned by the C<:Dumper>
 subroutine.  The corresponding C<:Pumper> for the example C<:Dumper> above
 would be:
 
-    sub _pump :Pumper
-    {
-        my ($obj, $field_data) = @_;
+ sub _pump :Pumper
+ {
+     my ($obj, $field_data) = @_;
 
-        $data[$$obj] = $field_data->{'data'};
-    }
+     $data[$$obj] = $field_data->{'data'};
+ }
 
 =back
 
@@ -3209,12 +3360,12 @@ application code (as they should normally only be needed by Object::InsideOut
 itself).  If needed, this behavior can be overridden by adding the C<PUBLIC>,
 C<RESTRICTED> or C<PRIVATE> keywords following the attribute:
 
-    sub _init :Init(private)    # Callable from within this class
-    {
-        my ($self, $args) = @_;
+ sub _init :Init(private)    # Callable from within this class
+ {
+     my ($self, $args) = @_;
 
-        ...
-    }
+     ...
+ }
 
 NOTE:  A bug in Perl 5.6.0 prevents using these access keywords.  As such,
 subroutines marked with the above attributes will be left with I<public>
@@ -3223,7 +3374,7 @@ access.
 NOTE:  The above cannot be accomplished by using the corresponding attributes.
 For example:
 
-    # sub _init :Init :Private    # Wrong syntax - doesn't work
+ # sub _init :Init :Private    # Wrong syntax - doesn't work
 
 =head2 Object Coercion
 
@@ -3232,36 +3383,36 @@ through the L<overload> mechanism.  For instance, if you want an object to be
 usable directly in a string, you would supply a subroutine in your class
 labelled with the C<:Stringify> attribute:
 
-    sub as_string :Stringify
-    {
-        my $self = $_[0];
-        my $string = ...;
-        return ($string);
-    }
+ sub as_string :Stringify
+ {
+     my $self = $_[0];
+     my $string = ...;
+     return ($string);
+ }
 
 Then you could do things like:
 
-    print("The object says, '$obj'\n");
+ print("The object says, '$obj'\n");
 
 For a boolean context, you would supply:
 
-    sub as_string :Boolify
-    {
-        my $self = $_[0];
-        my $true_or_false = ...;
-        return ($true_or_false);
-    }
+ sub as_string :Boolify
+ {
+     my $self = $_[0];
+     my $true_or_false = ...;
+     return ($true_or_false);
+ }
 
 and use it in this manner:
 
-    if (! defined($obj)) {
-        # The object is undefined
-        ....
+ if (! defined($obj)) {
+     # The object is undefined
+     ....
 
-    } elsif (! $obj) {
-        # The object returned a false value
-        ...
-    }
+ } elsif (! $obj) {
+     # The object returned a false value
+     ...
+ }
 
 The following coercion attributes are supported:
 
@@ -3310,19 +3461,19 @@ classes will be involved with thread object sharing.  There are two methods
 for doing this.  The first involves setting a C<::shared> variable for the
 class prior to its use:
 
-    use threads;
-    use threads::shared;
+ use threads;
+ use threads::shared;
 
-    $My::Class::shared = 1;
-    use My::Class;
+ $My::Class::shared = 1;
+ use My::Class;
 
 The other method is for a class to add a C<:SHARED> flag to its S<C<use
 Object::InsideOut ...>> declaration:
 
-    package My::Class; {
-        use Object::InsideOut ':SHARED';
-        ...
-    }
+ package My::Class; {
+     use Object::InsideOut ':SHARED';
+     ...
+ }
 
 When either sharing flag is set for one class in an object hierarchy, then all
 the classes in the hierarchy are affected.
@@ -3331,96 +3482,90 @@ If a class cannot support thread object sharing (e.g., one of the object
 fields contains code refs [which Perl cannot share between threads]), it
 should specifically declare this fact:
 
-    package My::Class; {
-        use Object::InsideOut ':NOT_SHARED';
-        ...
-    }
+ package My::Class; {
+     use Object::InsideOut ':NOT_SHARED';
+     ...
+ }
 
 However, you cannot mix thread object sharing classes with non-sharing
 classes in the same class hierarchy:
 
-    use threads;
-    use threads::shared;
+ use threads;
+ use threads::shared;
 
-    package My::Class; {
-        use Object::InsideOut ':SHARED';
-        ...
-    }
+ package My::Class; {
+     use Object::InsideOut ':SHARED';
+     ...
+ }
 
-    package Other::Class; {
-        use Object::InsideOut ':NOT_SHARED';
-        ...
-    }
+ package Other::Class; {
+     use Object::InsideOut ':NOT_SHARED';
+     ...
+ }
 
-    package My::Derived; {
-        use Object::InsideOut qw(My::Class Other::Class);   # ERROR!
-        ...
-    }
+ package My::Derived; {
+     use Object::InsideOut qw(My::Class Other::Class);   # ERROR!
+     ...
+ }
 
 Here is a complete example with thread object sharing enabled:
 
-    use threads;
-    use threads::shared;
+ use threads;
+ use threads::shared;
 
-    package My::Class; {
-        use Object::InsideOut ':SHARED';
+ package My::Class; {
+     use Object::InsideOut ':SHARED';
 
-        # One list-type field
-        my @data : Field('Accessor' => 'data', 'Type' => 'List');
-    }
+     # One list-type field
+     my @data : Field('Accessor' => 'data', 'Type' => 'List');
+ }
 
-    package main;
+ package main;
 
-    # New object
-    my $obj = My::Class->new();
+ # New object
+ my $obj = My::Class->new();
 
-    # Set the object's 'data' field
-    $obj->data(qw(foo bar baz));
+ # Set the object's 'data' field
+ $obj->data(qw(foo bar baz));
 
-    # Print out the object's data
-    print(join(', ', @{$obj->data()}), "\n");              # "foo, bar, baz"
+ # Print out the object's data
+ print(join(', ', @{$obj->data()}), "\n");       # "foo, bar, baz"
 
-    # Create a thread and manipulate the object's data
-    my $rc = threads->create(
-            sub {
-                # Read the object's data
-                my $data = $obj->data();
-                # Print out the object's data
-                print(join(', ', @{$data}), "\n");         # "foo, bar, baz"
-                # Change the object's data
-                $obj->data(@$data[1..2], 'zooks');
-                # Print out the object's modified data
-                print(join(', ', @{$obj->data()}), "\n");  # "bar, baz, zooks"
-                return (1);
-            }
-        )->join();
+ # Create a thread and manipulate the object's data
+ my $rc = threads->create(
+         sub {
+             # Read the object's data
+             my $data = $obj->data();
+             # Print out the object's data
+             print(join(', ', @{$data}), "\n");  # "foo, bar, baz"
+             # Change the object's data
+             $obj->data(@$data[1..2], 'zooks');
+             # Print out the object's modified data
+             print(join(', ', @{$obj->data()}), "\n");  # "bar, baz, zooks"
+             return (1);
+         }
+     )->join();
 
-    # Show that the changes in the object are visible in the parent thread
-    # I.e., this shows that the object was indeed shared between threads
-    print(join(', ', @{$obj->data()}), "\n");              # "bar, baz, zooks"
+ # Show that changes in the object are visible in the parent thread
+ # I.e., this shows that the object was indeed shared between threads
+ print(join(', ', @{$obj->data()}), "\n");       # "bar, baz, zooks"
 
-=head1 USAGE WITH C<require> and C<mod_perl>
+=head1 USAGE WITH C<require> AND C<mod_perl>
 
-Prior to version 1.00.00, Object::InsideOut contained a subroutine
-(C<Object::InsideOut::INITIALIZE()>) to handle package initialization for use
-when loading packages/classes at runtime using C<require>, or when using
-L<mod_perl>.
-
-Initialization under L<mod_perl> and with runtime loaded classes is now
-performed automatically.  Therefore, this subroutine is no longer required
-(i.e., deprecated), and is currently just a I<no-op>.
+Object::InsideOut usage under L<mod_perl> and with runtime-loaded classes is
+supported automatically; no special coding is required.
 
 =head1 DIAGNOSTICS
 
 This module uses C<Exception::Class> for reporting errors.  The base error
 class for this module is C<OIO>.
 
-    my $obj;
-    eval { $obj = My::Class->new(); };
-    if (my $e = OIO->caught()) {
-        print(STDERR "Failure creating object: $e\n");
-        exit(1);
-    }
+ my $obj;
+ eval { $obj = My::Class->new(); };
+ if (my $e = OIO->caught()) {
+     print(STDERR "Failure creating object: $e\n");
+     exit(1);
+ }
 
 =over
 
@@ -3440,14 +3585,14 @@ sharing in same application.
 Cannot use attributes on I<subroutine stubs> (i.e., forward declaration
 without later definition) with C:<:Automethod>:
 
-    package My::Class; {
-        sub method : Private;   # Will not work
+ package My::Class; {
+     sub method : Private;   # Will not work
 
-        sub _automethod : Automethod
-        {
-            # Code to handle call to 'method' stub
-        }
-    }
+     sub _automethod : Automethod
+     {
+         # Code to handle call to 'method' stub
+     }
+ }
 
 
 Due to limitations in the Perl parser, you cannot use line wrapping with the
@@ -3460,21 +3605,21 @@ type.
 If you save an object inside another object when thread-sharing, you must
 rebless it when you get it out:
 
-    my $bb = BB->new();
-    my $aa = AA->new();
-    $aa->save($bb);
-    my $cc = $aa->get();
-    bless($cc, 'BB');
+ my $bb = BB->new();
+ my $aa = AA->new();
+ $aa->save($bb);
+ my $cc = $aa->get();
+ bless($cc, 'BB');
 
 For Perl 5.8.1 through 5.8.4, a Perl bug produces spurious warning messages
 when threads are destroyed.  These messages are innocuous, and can be
 suppressed by adding the following to your application code:
 
-    $SIG{__WARN__} = sub {
-            if ($_[0] !~ /^Attempt to free unreferenced scalar/) {
-                print(STDERR @_);
-            }
-        };
+ $SIG{__WARN__} = sub {
+         if ($_[0] !~ /^Attempt to free unreferenced scalar/) {
+             print(STDERR @_);
+         }
+     };
 
 It is known that thread support is broken in ActiveState Perl 5.8.4 on
 Windows.  (It is not know which other version of ActivePerl may be affected.)
@@ -3493,13 +3638,11 @@ L<Exception::Class> v1.22 or later
 
 L<Scalar::Util> v1.10 or later.  It is possible to install a I<pure perl>
 version of Scalar::Util, however, it will be missing the
-C<weaken()|Scalar::Util/"weaken REF"> function which is needed by
+L<weaken()|Scalar::Util/"weaken REF"> function which is needed by
 Object::InsideOut.  You'll need to upgrade your version of Scalar::Util to one
 that supports its C<XS> code.
 
 L<Test::More> v0.50 or later (for installation)
-
-L<Data::Dumper>
 
 =head1 SEE ALSO
 
@@ -3507,7 +3650,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.11/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.12/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

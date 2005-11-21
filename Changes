@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.12 Mon Nov 21 11:03:00 2005
+	- Support custom type checking for initializers and accessors
+
 1.11 Fri Nov 18 08:41:00 2005
 	- Eliminated internal use of each()
 

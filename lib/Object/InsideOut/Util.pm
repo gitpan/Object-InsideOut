@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.11;
+our $VERSION = 1.12;
 
 
 ### Module Initialization ###
@@ -188,8 +188,34 @@ sub process_args
 
         # Check for correct type
         if (defined(my $type = hash_re($spec, qr/^TYPE$/i))) {
+            # Custom type checking
+            if (ref($type)) {
+                if (ref($type) ne 'CODE') {
+                    OIO::Code->die(
+                        'caller_level' => 1,
+                        'message'      => q/Can't validate argument/,
+                        'Info'         => "'Type' is not a code ref or string for initializer '$key' for class '$class'");
+                }
+
+                my ($ok, @errs);
+                local $SIG{__WARN__} = sub { push(@errs, @_); };
+                eval { $ok = $type->($found{$key}) };
+                if ($@ || @errs) {
+                    my ($err) = split(/ at /, $@ || join(" | ", @errs));
+                    OIO::Code->die(
+                        'caller_level' => 1,
+                        'message'      => "Problem with type check routine for initializer '$key' for class '$class",
+                        'Error'        => $err);
+                }
+                if (! $ok) {
+                    OIO::Args->die(
+                        'caller_level' => 1,
+                        'message'      => "Initializer '$key' for class '$class' failed type check: $found{$key}");
+                }
+            }
+
             # Is it supposed to be a number
-            if ($type =~ /^num/i) {
+            elsif ($type =~ /^num/i) {
                 if (! Scalar::Util::looks_like_number($found{$key})) {
                 OIO::Args->die(
                     'caller_level' => 1,
