@@ -29,4 +29,5 @@ t/12-super.t
 t/13-pump.t
 t/14-auto_cc.t
 t/15-type.t
+t/16-return.t
 META.yml                                 Module meta-data (added by MakeMaker)

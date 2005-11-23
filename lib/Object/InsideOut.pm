@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.13;
+our $VERSION = 1.14;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -147,6 +147,7 @@ BEGIN {
             'Info'    => q/Upgrade your version of Scalar::Util/);
     }
 }
+
 
 ### Class Tree Building (via 'import()') ###
 
@@ -522,7 +523,7 @@ sub MODIFY_CODE_ATTRIBUTES
 }
 
 
-### Array Field Object Support ###
+### Array-based Object Support ###
 
 # Object ID counters - one for each class tree
 my %ID_COUNTERS;
@@ -590,10 +591,6 @@ sub sub_name : PRIVATE
         'message'  => q/Subroutine name not found/,
         'Info'     => "Can't use anonymous subroutine for $attr attribute");
 }
-
-
-# The old INITIALIZE subroutine is deprecated
-sub INITIALIZE { return; }
 
 
 # Perform much of the 'magic' for this module
@@ -1393,14 +1390,6 @@ sub DESTROY
 }
 
 
-# The old _DUMP method is deprecated
-sub _DUMP
-{
-    my $self = shift;
-    return ($self->dump(@_));
-}
-
-
 # Object dumper
 sub dump
 {
@@ -1785,7 +1774,7 @@ sub create_accessors : PRIVATE
     }
 
     # Get info for accessors
-    my ($get, $set, $type, $name);
+    my ($get, $set, $type, $name, $return);
     foreach my $key (keys(%{$acc_spec})) {
         my $val = $acc_spec->{$key};
         if ($key =~ /^st.*d/i) {
@@ -1802,6 +1791,8 @@ sub create_accessors : PRIVATE
             $type = $val;
         } elsif ($key =~ /^name$/i) {
             $name = $val;
+        } elsif ($key =~ /^ret(?:urn)?$/i) {
+            $return = uc($val);
         } else {
             OIO::Attribute->die(
                 'caller_level' => 3,
@@ -1820,7 +1811,7 @@ sub create_accessors : PRIVATE
     if ($name) {
         $DUMP_FIELDS{$package}{$name} = [ $field_ref, 'Name' ];
         # Done if only 'Name' present
-        if (! $get && ! $set && ! $type) {
+        if (! $get && ! $set && ! $type && ! $return) {
             return;
         }
     } elsif ($get) {
@@ -1830,11 +1821,11 @@ sub create_accessors : PRIVATE
     }
 
     # If 'TYPE', need 'SET' too
-    if ($type && ! $set) {
+    if (($type || $return) && ! $set) {
         OIO::Attribute->die(
             'caller_level' => 3,
             'message'      => "Can't create accessor method for package '$package'",
-            'Info'         => q/No set accessor specified to go with 'TYPE' keyword/,
+            'Info'         => "No set accessor specified to go with 'TYPE'/'RETURN' keyword",
             'Attribute'    => "Field( $decl )");
     }
 
@@ -1853,15 +1844,36 @@ sub create_accessors : PRIVATE
         }
     }
 
-    # Check type and set default
-    if (! defined($type) || !$type) {
+    # Check type-checking setting and set default
+    if (! defined($type)) {
         $type = 'NONE';
+    } elsif (!$type) {
+        OIO::Attribute->die(
+            'caller_level' => 3,
+            'message'      => q/Can't create accessor method/,
+            'Info'         => q/Invalid setting for 'TYPE'/,
+            'Attribute'    => "Field( $decl )");
     } elsif ($type =~ /^num(ber|eric)?/i) {
         $type = 'NUMERIC';
     } elsif (uc($type) eq 'LIST' || uc($type) eq 'ARRAY') {
         $type = 'ARRAY';
     } elsif (uc($type) eq 'HASH') {
         $type = 'HASH';
+    }
+
+    # Check return type and set default
+    if (! defined($return) || $return eq 'NEW') {
+        $return = 'NEW';
+    } elsif ($return eq 'OLD' || $return =~ /^PREV(?:IOUS)?$/ || $return eq 'PRIOR') {
+        $return = 'OLD';
+    } elsif ($return eq 'SELF' || $return =~ /^OBJ(?:ECT)?$/) {
+        $return = 'SELF';
+    } else {
+        OIO::Attribute->die(
+            'caller_level' => 3,
+            'message'      => q/Can't create accessor method/,
+            'Info'         => "Invalid setting for 'RETURN': $return",
+            'Attribute'    => "Field( $decl )");
     }
 
     # Code to be eval'ed into subroutines
@@ -1997,16 +2009,35 @@ _HASH_
 _OTHER_TYPE_
         }
 
+        # Grab 'OLD' value
+        if ($return eq 'OLD') {
+            if (ref($field_ref) eq 'HASH') {
+                $code .= "    my \$ret = \$field->\{\${\$_[0]}};\n";
+            } else {
+                $code .= "    my \$ret = \$field->\[\${\$_[0]}];\n";
+            }
+        }
+
         # Add actual 'set' code
         if (ref($field_ref) eq 'HASH') {
             $code .= (is_sharing($package))
-                  ? "    \$field->\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n};\n"
-                  : "    \$field->\{\${\$_[0]}} = \$arg;\n};\n";
+                  ? "    \$field->\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n"
+                  : "    \$field->\{\${\$_[0]}} = \$arg;\n";
         } else {
             $code .= (is_sharing($package))
-                  ? "    \$field->\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n};\n"
-                  : "    \$field->\[\${\$_[0]}] = \$arg;\n};\n";
+                  ? "    \$field->\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n"
+                  : "    \$field->\[\${\$_[0]}] = \$arg;\n";
         }
+
+        # Add code for return value
+        if ($return eq 'SELF') {
+            $code .= "    return (\$_[0]);\n";
+        } elsif ($return eq 'OLD') {
+            $code .= "    return (\$ret);\n";
+        }
+
+        # Done
+        $code .= "};\n";
     }
 
     # Create 'get' accessor
@@ -2197,7 +2228,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.13
+This document describes Object::InsideOut version 1.14
 
 =head1 SYNOPSIS
 
@@ -2417,7 +2448,7 @@ Object::InsideOut to each class:
  my $obj = My::Class->new();
 
 Classes do not implement their own C<-E<gt>new()> method.  Class-specific
-object initialization actions may be handled by C<:Init> labelled methods (see
+object initialization actions may be handled by C<:Init> labeled methods (see
 L</"Object Initialization">).
 
 Parameters are passed in as combinations of S<C<key =E<gt> value>> pairs
@@ -2483,13 +2514,13 @@ exported by Object::InsideOut to each class:
 =head2 Object Initialization
 
 Object initialization is accomplished through a combination of an C<:InitArgs>
-labelled hash (explained in detail in the L<next section|/"Object
-Initialization Argument Specifications">), and an C<:Init> labelled
+labeled hash (explained in detail in the L<next section|/"Object
+Initialization Argument Specifications">), and an C<:Init> labeled
 subroutine.
 
-The C<:InitArgs> labelled hash specifies the parameters to be extracted from
+The C<:InitArgs> labeled hash specifies the parameters to be extracted from
 the argument list supplied to the C<-E<gt>new()> method.  These parameters are
-then sent to the C<:Init> labelled subroutine for processing:
+then sent to the C<:Init> labeled subroutine for processing:
 
  package My::Class; {
      my @my_field :Field;
@@ -2515,7 +2546,7 @@ then sent to the C<:Init> labelled subroutine for processing:
 (The case of the words I<InitArgs> and I<Init> does not matter, but by
 convention should not be all lowercase.)
 
-This C<:Init> labelled subroutine will receive two arguments:  The newly
+This C<:Init> labeled subroutine will receive two arguments:  The newly
 created object requiring further initialization (i.e., C<$self>), and a hash
 ref of supplied arguments that matched C<:InitArgs> specifications.
 
@@ -2535,7 +2566,7 @@ applications using L<threads::shared>.
 =head2 Object Initialization Argument Specifications
 
 The parameters to be handled by the C<-E<gt>new()> method are specified in a
-hash that is labelled with the C<:InitArgs> attribute.
+hash that is labeled with the C<:InitArgs> attribute.
 
 The simplest parameter specification is just a tag:
 
@@ -2546,7 +2577,7 @@ The simplest parameter specification is just a tag:
 In this case, if a S<C<key =E<gt> value>> pair with an exact match of C<DATA>
 for the key is found in the arguments sent to the C<-E<gt>new()> method, then
 S<C<'DATA' =E<gt> value>> will be included in the argument hash ref sent to
-the C<:Init> labelled subroutine.
+the C<:Init> labeled subroutine.
 
 Rather than counting on exact matches, regular expressions can be used to
 specify the parameter:
@@ -2720,9 +2751,14 @@ field arrays/hashes.
 =head2 Automatic Accessor Generation
 
 As part of the L</"Field Declarations">, you can optionally specify the
-automatic generation of accessor methods.  You can specify the generation of a
-pair of I<standard-named> accessor methods (i.e., prefixed by I<get_> and
-I<set_>):
+automatic generation of accessor methods.
+
+=over
+
+=item Accessor Naming
+
+You can specify the generation of a pair of I<standard-named> accessor methods
+(i.e., prefixed by I<get_> and I<set_>):
 
  my @data :Field('Standard' => 'data');
 
@@ -2758,8 +2794,37 @@ which would be used as follows:
 (The keyword C<Accessor> is case-insensitive, and can be abbreviated to
 C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)
 
+=item I<Set> Accessor Return Value
+
 For any of the automatically generated methods that perform I<set> operations,
-the method's return value is the value being set.
+the default for the method's return value is the value being set (i.e., the
+I<new> value).
+
+The C<Return> keyword allows you to modify the default behavior.  The other
+options are to have the I<set> accessor return the I<old> (previous) value (or
+C<undef> if unset):
+
+ my @data :Field('Set' => 'set_data', 'Return' => 'Old');
+
+or to return the object itself:
+
+ my @data :Field('Set' => 'set_data', 'Return' => 'Object');
+
+Returning the object from a I<set> method allows it to be chained to other
+methods:
+
+ $obj->set_data($data)->do_something();
+
+If desired, you can explicitly specify the default behavior of returning the
+I<new> value:
+
+ my @data :Field('Set' => 'set_data', 'Return' => 'New');
+
+(C<Return> may be abbreviated to C<Ret>; C<Previous>, C<Prev> and C<Prior> are
+synonymous with C<Old>; and C<Object> may be abbreviated to C<Obj> and is also
+synonymous with C<Self>.  All these are case-insensitive.)
+
+=item Accessor Type Checking
 
 You may, optionally, direct Object::InsideOut to add type-checking code to the
 I<set/combined> accessor:
@@ -2811,22 +2876,23 @@ etc.), except for the last two.
 The C<Type> keyword can also be paired with a code reference to provide custom
 type checking.  The code ref can either be in the form of an anonymous
 subroutine, or a full-qualified subroutine name.  The result of executing the
-code ref on the input argument should be a boolean value.
+code ref on the input argument(s) should be a boolean value.
 
  package My::Class; {
      use Object::InsideOut;
 
      # For accessor type checking, the subroutine can be made 'Private'
-     sub positive : Private {
+     sub positive :Private {
          return (Scalar::Util::looks_like_number($_[0]) &&
                  ($_[0] > 0));
      }
 
      # Code ref is an anonymous subroutine
-     my @data :Field('Acc' => 'data', 'type' => sub { !ref(shift) } );
+     # (This one checks that the argument is a SCALAR)
+     my @data :Field('Accessor' => 'data', 'Type' => sub { ! ref($_[0]) } );
 
      # Code ref using a fully-qualified subroutine name
-     my @num  :Field('Acc' => 'num',  'type' => \&My::Class::positive);
+     my @num  :Field('Accessor' => 'num',  'Type' => \&My::Class::positive);
  }
 
 Note that it is an error to use the C<Type> keyword by itself, or in
@@ -2843,13 +2909,15 @@ C<:Field> attribute:
  # Must be all on one line
  my @level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
 
+=back
+
 =head2 Object ID
 
 By default, the ID of an object is derived from a sequence counter for the
 object's class hierarchy.  This should suffice for nearly all cases of class
 development.  If there is a special need for the module code to control the
 object ID (see L<Math::Random::MT::Auto> as an example), then an C<:ID>
-labelled subroutine can be specified:
+labeled subroutine can be specified:
 
  sub _id :ID
  {
@@ -2866,7 +2934,7 @@ a string or a number).  However, if the ID is something other than a
 low-valued integer, then you will have to architect all your classes using
 hashes for the object fields.
 
-Within any class hierachy only one class may specify an C<:ID> subroutine.
+Within any class hierarchy only one class may specify an C<:ID> subroutine.
 
 =head2 Object Replication
 
@@ -2876,7 +2944,7 @@ application.  In nearly all cases, Object::InsideOut will take care of all the
 details for you.
 
 In rare cases, a class may require special handling for object replication.
-It must then provide a subroutine labelled with the C<:Replicate> attribute.
+It must then provide a subroutine labeled with the C<:Replicate> attribute.
 This subroutine will be sent two objects:  The parent and the clone:
 
  sub _replicate :Replicate
@@ -2898,7 +2966,7 @@ processing:  Object::InsideOut will handle all the other details.
 Object::InsideOut exports a C<DESTROY> method to each class that deletes an
 object's data from the object field arrays (hashes).  If a class requires
 additional destruction processing (e.g., closing filehandles), then it must
-provide a subroutine labelled with the C<:Destroy> attribute.  This subroutine
+provide a subroutine labeled with the C<:Destroy> attribute.  This subroutine
 will be sent the object that is being destroyed:
 
  sub _destroy :Destroy
@@ -3008,10 +3076,10 @@ and produces:
          I'm also a My::Foo
 
 As illustrated above, Cumulative methods are tagged with the C<:Cumulative>
-attribute (or S<C<:Cumulative(top down)>>), and propogate from the I<top down>
+attribute (or S<C<:Cumulative(top down)>>), and propagate from the I<top down>
 through the class hierarchy (i.e., from the base classes down through the
 child classes).  If tagged with S<C<:Cumulative(bottom up)>>, they will
-propogated from the object's class upwards through the parent classes.
+propagated from the object's class upwards through the parent classes.
 
 Note that this directionality is the reverse of Class::Std which defaults to
 bottom up, and uses S<I<BASE FIRST>> to mean from the base classes downward
@@ -3147,7 +3215,7 @@ Object::InsideOut implements its own C<:Automethod> mechanism to overcome
 these problems
 
 Classes requiring C<AUTOLOAD>-type capabilities must provided a subroutine
-labelled with the C<:Automethod> attribute.  The C<:Automethod> subroutine
+labeled with the C<:Automethod> attribute.  The C<:Automethod> subroutine
 will be called with the object and the arguments in the original method call
 (the same as for C<AUTOLOAD>).  The C<:Automethod> subroutine should return
 either a subroutine reference that implements the requested method's
@@ -3284,7 +3352,7 @@ described below.
 =item C<:Dumper> Subroutine Attribute
 
 If a class requires special processing to dump its data, then it can provide a
-subroutine labelled with the C<:Dumper> attribute.  This subroutine will be
+subroutine labeled with the C<:Dumper> attribute.  This subroutine will be
 sent the object that is being dumped.  It may then return any type of scalar
 the developer deems appropriate.  Most likely this would be a hash ref
 containing S<C<key =E<gt> value>> pairs for the object's fields.  For example,
@@ -3307,7 +3375,7 @@ name of the dump method exported by Object::InsideOut as explained above.
 =item C<:Pumper> Subroutine Attribute
 
 If a class supplies a C<:Dumper> subroutine, it will most likely need to
-provide a complementary C<:Pumper> labelled subroutine that will be used as
+provide a complementary C<:Pumper> labeled subroutine that will be used as
 part of creating an object from dumped data using
 C<Object::InsideOut::pump()>.  The subroutine will be supplied the new object
 that is being created, and whatever scalar was returned by the C<:Dumper>
@@ -3381,7 +3449,7 @@ For example:
 Object::InsideOut provides support for various forms of object coercion
 through the L<overload> mechanism.  For instance, if you want an object to be
 usable directly in a string, you would supply a subroutine in your class
-labelled with the C<:Stringify> attribute:
+labeled with the C<:Stringify> attribute:
 
  sub as_string :Stringify
  {
@@ -3517,7 +3585,7 @@ Here is a complete example with thread object sharing enabled:
      use Object::InsideOut ':SHARED';
 
      # One list-type field
-     my @data : Field('Accessor' => 'data', 'Type' => 'List');
+     my @data :Field('Accessor' => 'data', 'Type' => 'List');
  }
 
  package main;
@@ -3558,7 +3626,8 @@ supported automatically; no special coding is required.
 =head1 DIAGNOSTICS
 
 This module uses C<Exception::Class> for reporting errors.  The base error
-class for this module is C<OIO>.
+class for this module is C<OIO>.  Here is an example of the basic manner for
+trapping and handling errors:
 
  my $obj;
  eval { $obj = My::Class->new(); };
@@ -3567,11 +3636,19 @@ class for this module is C<OIO>.
      exit(1);
  }
 
+I have tried to make the messages and information returned by the error
+objects as informative as possible.  Suggested improvements are welcome.
+Also, please bring to my attention any conditions that you encounter where an
+error occurs as a result of Object::InsideOut code that doesn't generate an
+Exception::Class object.  Here is one such error:
+
 =over
 
-=item *Invalid ARRAY/HASH attribute
+=item Invalid ARRAY/HASH attribute
 
-Forgot to 'use Object::InsideOut qw(Parent::Class ...);'
+This error indicates you forgot the following in your class's code:
+
+ use Object::InsideOut qw(Parent::Class ...);
 
 =back
 
@@ -3583,24 +3660,23 @@ You cannot use two instances of the same class with mixed thread object
 sharing in same application.
 
 Cannot use attributes on I<subroutine stubs> (i.e., forward declaration
-without later definition) with C:<:Automethod>:
+without later definition) with C<:Automethod>:
 
  package My::Class; {
-     sub method : Private;   # Will not work
+     sub method :Private;   # Will not work
 
-     sub _automethod : Automethod
+     sub _automethod :Automethod
      {
          # Code to handle call to 'method' stub
      }
  }
 
-
 Due to limitations in the Perl parser, you cannot use line wrapping with the
 C<:Field> attribute.
 
-If a I<set> accessor's type is C<SCALAR>, then it can store any inside-out
-object type in it.  If it is C<HASH>, then it can store any I<ordinary> object
-type.
+If a I<set> accessor accepts scalars, then you can store any inside-out
+object type in it.  If its C<Type> is set to C<HASH>, then it can store any
+I<blessed hash> object.
 
 If you save an object inside another object when thread-sharing, you must
 rebless it when you get it out:
@@ -3650,7 +3726,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.13/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.14/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
