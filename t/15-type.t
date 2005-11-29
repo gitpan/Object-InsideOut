@@ -18,7 +18,7 @@ package My::Class; {
     my @ar : Field('acc'=>'ar', 'type' => 'array_ref');
     my @cc : Field({'acc'=>'cc', 'type' => sub{ shift > 0 } });
     my @hh : Field('acc'=>'hh', 'type' => 'hash');
-    my @hr : Field('acc'=>'hr', 'type' => 'hash_ref');
+    my @hr : Field('acc'=>'hr', 'type' => 'hashref');
     my @mc : Field({'acc'=>'mc', 'type' => 'My::Class'});
     my @nn : Field({'acc'=>'nn', 'type' => 'num'});
     my @ss : Field({'acc'=>'ss', 'type' => \&My::Class::is_scalar });

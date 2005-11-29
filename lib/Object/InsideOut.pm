@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.14;
+our $VERSION = 1.15;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -23,7 +23,7 @@ use Exception::Class (
         'isa' => 'OIO',
         'description' =>
             'Object::InsideOut exception that indicates a coding error',
-        'fields' => ['Info'],
+        'fields' => ['Info', 'Code'],
     },
 
     'OIO::Internal' => {
@@ -246,11 +246,11 @@ sub import
 
 ### Attribute Support ###
 
-# Maintain references to all object field hashes by package for easy
+# Maintain references to all object field arrays/hashes by package for easy
 # manipulation of field data during global object actions (e.g., cloning,
 # destruction).  Object field hashes are marked with an attribute called
 # 'Field'.
-my %FIELDS;
+my (%NEW_FIELDS, %FIELDS);
 
 # Field information for the dump() method
 my %DUMP_FIELDS;
@@ -346,7 +346,7 @@ sub MODIFY_HASH_ATTRIBUTES
             # Save save hash ref and accessor declarations
             # Accessors will be build during initialization
             my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i;
-            push(@{$FIELDS{$pkg}}, [ $hash, $decl ]);
+            push(@{$NEW_FIELDS{$pkg}}, [ $hash, $decl ]);
             $DO_INIT = 1;   # Flag that initialization is required
         }
 
@@ -389,7 +389,7 @@ sub MODIFY_ARRAY_ATTRIBUTES
             # Save save array ref and accessor declarations
             # Accessors will be build during initialization
             my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i;
-            push(@{$FIELDS{$pkg}}, [ $array, $decl ]);
+            push(@{$NEW_FIELDS{$pkg}}, [ $array, $decl ]);
             $DO_INIT = 1;   # Flag that initialization is required
         }
 
@@ -688,34 +688,25 @@ sub initialize : Private
 
 
     # Process :FIELD declarations for shared hashes/arrays and accessors
-    for my $pkg (keys(%FIELDS)) {
-        my @fields;
-        for my $item (@{$FIELDS{$pkg}}) {
-            if (ref($item) eq 'ARRAY') {
-                my ($fld, $decl) = @{$item};
+    for my $pkg (keys(%NEW_FIELDS)) {
+        for my $item (@{$NEW_FIELDS{$pkg}}) {
+            my ($fld, $decl) = @{$item};
 
-                # Share the field, if applicable
-                if (is_sharing($pkg)) {
-                    threads::shared::share($fld)
-                }
-
-                # Process any accessor declarations
-                if ($decl) {
-                    create_accessors($pkg, $fld, $decl);
-                }
-
-                # Save hash/array refs
-                push(@fields, $fld);
-
-            } else {
-                # Already processed
-                push(@fields, $item);
+            # Share the field, if applicable
+            if (is_sharing($pkg)) {
+                threads::shared::share($fld)
             }
-        }
 
-        # :FIELD declarations have been removed
-        $FIELDS{$pkg} = \@fields;
+            # Process any accessor declarations
+            if ($decl) {
+                create_accessors($pkg, $fld, $decl);
+            }
+
+            # Save hash/array refs
+            push(@{$FIELDS{$pkg}}, $fld);
+        }
     }
+    undef(%NEW_FIELDS);  # No longer needed
 
 
     # Create AUTOLOAD under Object::InsideOut
@@ -1427,7 +1418,7 @@ sub dump
             local $SIG{__DIE__} = 'OIO::trap';
             $dump{$pkg} = $dumper->($self);
 
-        } else {
+        } elsif ($FIELDS{$pkg}) {
             # Dump the data ourselves from all known class fields
             my @fields = @{$FIELDS{$pkg}};
 
@@ -1488,7 +1479,7 @@ sub pump
             'Info'    => '->pump() is a class method');
     }
 
-    if ($_[0] eq 'Object::InsideOut') {
+    if ($_[0] eq __PACKAGE__) {
         shift;    # Called as a class method
     }
 
@@ -1588,6 +1579,67 @@ sub pump
 
 
 ### Code Generators ###
+
+sub create_field
+{
+    # Handle being called as a method or subroutine
+    if ($_[0] eq __PACKAGE__) {
+        shift;
+    }
+
+    my ($class, $field, $attr) = @_;
+
+    # Verify valid class
+    if (! $class->isa(__PACKAGE__)) {
+        OIO::Args->die(
+            'caller_level' => 1,
+            'message'      => 'Not an Object::InsideOut class',
+            'Arg'          => $class);
+    }
+
+    # Check for valid field
+    if ($field !~ /^\s*[@%]\s*[a-zA-Z_]\w*\s*$/) {
+        OIO::Args->die(
+            'caller_level' => 1,
+            'message'      => 'Not an array or hash declaration',
+            'Arg'          => $field);
+    }
+
+    # Tidy up attribute
+    if ($attr) {
+        $attr =~ s/^\s*:\s*Field\s*//i;         # Remove :Field
+        $attr =~ s/^[(]\s*[{]?\s*//i;           # Remove ({
+        $attr =~ s/\s*[}]?\s*[)]\s*[;]?\s*$//;  # Remove })
+        $attr =~ s/[\r\n]/ /g;                  # Handle line-wrapping
+        if ($attr) {
+            $attr = "($attr)";                  # Add () if not empty string
+        }
+    } else {
+        $attr = '';
+    }
+
+    # Create the declaration
+    my @errs;
+    local $SIG{__WARN__} = sub { push(@errs, @_); };
+
+    my $code = "package $class; my $field :Field$attr;";
+    eval $code;
+    if (my $e = Exception::Class::Base->caught()) {
+        $e->rethrow();
+    }
+    if ($@ || @errs) {
+        my ($err) = split(/ at /, $@ || join(" | ", @errs));
+        OIO::Code->die(
+            'caller_level' => 1,
+            'message'      => 'Failure creating field',
+            'Error'        => $err,
+            'Code'         => $code);
+    }
+
+    # Process the declaration
+    initialize();
+}
+
 
 # Dynamically creates an AUTOLOAD subroutine
 sub create_AUTOLOAD : PRIVATE
@@ -1992,9 +2044,9 @@ _HASH_
 
         } else {
             # Support explicit specification of array refs and hash refs
-            if (uc($type) eq 'ARRAY_REF') {
+            if (uc($type) =~ /^ARRAY_?REF$/) {
                 $type = 'ARRAY';
-            } elsif (uc($type) eq 'HASH_REF') {
+            } elsif (uc($type) =~ /^HASH_?REF$/) {
                 $type = 'HASH';
             }
 
@@ -2228,7 +2280,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.14
+This document describes Object::InsideOut version 1.15
 
 =head1 SYNOPSIS
 
@@ -2847,7 +2899,8 @@ then placed in an array ref) or a single array ref.
 
 =item Array_ref
 
-This specifies that the accessor can only accept a single array reference.
+This specifies that the accessor can only accept a single array reference.  Can
+also be specified as C<Arrayref>.
 
 =item Hash
 
@@ -2856,7 +2909,8 @@ a hash ref) or a single hash ref.
 
 =item Hash_ref
 
-This specifies that the accessor can only accept a single hash reference.
+This specifies that the accessor can only accept a single hash reference.  Can
+also be specified as C<Hashref>.
 
 =item A class name
 
@@ -3391,6 +3445,54 @@ would be:
 
 =back
 
+=head2 Dynamic Field Creation
+
+Normally, object fields are declared as part of the class code.  However,
+some classes may need the capability to create object fields I<on-the-fly>,
+for example, as part of an C<:Automethod>.  Object::InsideOut provides a class
+method for this:
+
+ # Dynamically create an array field
+ Object::InsideOut->create_field($class, '@field_name');
+
+The first argument is the class to which the field will be added.  The second
+argument is a string containing the name of the field preceeded by either a
+C<@> or C<%> to declare an array field or hash field, respectively.
+
+Optionally, C<create_field> can take a third string agrument consisting of any
+of the S<C<key =E<gt> value>> pairs used in conjunction with the C<:Field>
+attribute.  For example,
+
+ # Dynamically create a hash field with standard accessors
+ Object::InsideOut->create_field($class, '%'.$fld, "'Standard'=>'$fld'");
+
+Here's a more elaborate example used in inside an C<:Automethod>:
+
+ package My::Class; {
+     use Object::InsideOut;
+
+     sub auto :Automethod
+     {
+         my $self = $_[0];
+         my $class = ref($self) || $self;
+         my $method = $_;
+
+         # Extract desired field name from get_/set_ method name
+         my ($fld_name) = $method =~ /^[gs]et_(.*)$/;
+         if (! $fld_name) {
+             return;    # Not a recognized method
+         }
+
+         # Create the field and its standard accessors
+         Object::InsideOut->create_field($class, '@'.$fld_name,
+                                         "'Standard'=>'$fld_name'");
+
+         # Return code ref for newly created accessor
+         no strict 'refs';
+         return *{$class.'::'.$method}{'CODE'};
+     }
+ }
+
 =head2 Restricted and Private Methods
 
 Access to certain methods can be narrowed by use of the C<:Restricted> and
@@ -3726,7 +3828,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.14/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.15/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
