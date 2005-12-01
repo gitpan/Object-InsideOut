@@ -1,4 +1,4 @@
-Object-InsideOut version 1.15
+Object-InsideOut version 1.16
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -64,10 +64,11 @@ applications (or applications that use 'fork' under ActiverPerl).
 Allows control over object ID specification, accessor naming, parameter name
 matching, and more.
 
-= mod_perl and Runtime Loading
+= 'Runtime' Support
 
-Usable from within mod_perl, and supports classes that may be loaded at
-runtime (i.e., using "eval { require ...; };").
+Supports classes that may be loaded at runtime (i.e., using "eval { require
+...; };").  This makes it usable from within mod_perl, as well.  Also supports
+dynamic creation of object fields during runtime.
 
 = Perl 5.6
 

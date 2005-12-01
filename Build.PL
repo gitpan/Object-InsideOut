@@ -5,6 +5,24 @@ use warnings;
 
 use Module::Build;
 
+
+# Check for Scalar::Util::weaken()
+eval { require Scalar::Util; };
+if ($@) {
+    # Not found - require minimum version
+    $Scalar::Util::VERSION = 1.10;
+} elsif (! Scalar::Util->can('weaken')) {
+    # Pure Perl version only
+    if ($Scalar::Util::VERSION < 1.10) {
+        # Require minimum version
+        $Scalar::Util::VERSION = 1.10;
+    } else {
+        # Require next higher version
+        $Scalar::Util::VERSION += 0.01;
+    }
+}
+
+
 # Create make file
 Module::Build->new(
     'module_name' => 'Object::InsideOut',
@@ -21,7 +39,7 @@ Module::Build->new(
                             'attributes'          => 0,
                             'overload'            => 0,
                             'Data::Dumper'        => 0,
-                            'Scalar::Util'        => 1.10,
+                            'Scalar::Util'        => $Scalar::Util::VERSION,
                         },
 
 )->create_build_script();

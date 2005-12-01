@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.16 Thu Dec 01 13:51:50 2005
+	- Preclude name collisions in ->dump()
+	- Added installation check for Scalar::Util::weaken()
+
 1.15 Tue Nov 29 13:16:40 2005
 	- Added create_field() for dynamic field creation
 

@@ -6,6 +6,7 @@ use Test::More 'no_plan';
 package My::Class; {
     use Object::InsideOut;
 
+
     sub auto : Automethod
     {
         my $self = $_[0];
@@ -29,6 +30,8 @@ package My::Class; {
 
 package My::Sub; {
     use Object::InsideOut qw(My::Class);
+
+    my @data :Field('set'=>'munge');
 }
 
 
@@ -42,6 +45,8 @@ MAIN:
     can_ok($obj, qw(get_data set_data));
     is($obj->get_data(), 5              => 'Method works');
     can_ok('My::Sub', qw(get_data set_data));
+    $obj->munge('hello');
+    is($obj->get_data(), 5              => 'Not munged');
     #print(STDERR $obj->dump(1), "\n");
 }
 

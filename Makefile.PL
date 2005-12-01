@@ -8,6 +8,23 @@ use warnings;
 use ExtUtils::MakeMaker;
 
 
+# Check for Scalar::Util::weaken()
+eval { require Scalar::Util; };
+if ($@) {
+    # Not found - require minimum version
+    $Scalar::Util::VERSION = 1.10;
+} elsif (! Scalar::Util->can('weaken')) {
+    # Pure Perl version only
+    if ($Scalar::Util::VERSION < 1.10) {
+        # Require minimum version
+        $Scalar::Util::VERSION = 1.10;
+    } else {
+        # Require next higher version
+        $Scalar::Util::VERSION += 0.01;
+    }
+}
+
+
 # Construct make file
 WriteMakefile(
     'NAME'          => 'Object::InsideOut',
@@ -19,7 +36,7 @@ WriteMakefile(
                          'attributes'       => 0,
                          'overload'         => 0,
                          'Data::Dumper'     => 0,
-                         'Scalar::Util'     => 1.10,
+                         'Scalar::Util'     => $Scalar::Util::VERSION,
                        },
     ((ExtUtils::MakeMaker->VERSION() < 6.25) ?
         ('PL_FILES' => { })            : ()),

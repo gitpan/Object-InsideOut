@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.15;
+our $VERSION = 1.16;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -607,7 +607,7 @@ sub initialize : Private
     {
         # Propagate ID subs through the class hierarchies
         for my $class (keys(%TREE_TOP_DOWN)) {
-            # Find and ID sub for this class somewhere in its hierarchy
+            # Find ID sub for this class somewhere in its hierarchy
             my $id_sub_pkg;
             for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
                 if ($ID_SUBS{$pkg}) {
@@ -687,41 +687,15 @@ sub initialize : Private
     }
 
 
-    # Process :FIELD declarations for shared hashes/arrays and accessors
-    for my $pkg (keys(%NEW_FIELDS)) {
-        for my $item (@{$NEW_FIELDS{$pkg}}) {
-            my ($fld, $decl) = @{$item};
-
-            # Share the field, if applicable
-            if (is_sharing($pkg)) {
-                threads::shared::share($fld)
-            }
-
-            # Process any accessor declarations
-            if ($decl) {
-                create_accessors($pkg, $fld, $decl);
-            }
-
-            # Save hash/array refs
-            push(@{$FIELDS{$pkg}}, $fld);
-        }
-    }
-    undef(%NEW_FIELDS);  # No longer needed
+    # Process :FIELD declarations
+    process_fields();
 
 
-    # Create AUTOLOAD under Object::InsideOut
-    if (! Object::InsideOut->can('AUTOLOAD')) {
-        *Object::InsideOut::AUTOLOAD = create_AUTOLOAD(\%AUTOMETHODS,
-                                                       \%TREE_TOP_DOWN,
-                                                       \%TREE_BOTTOM_UP,
-                                                       \&create_CUMULATIVE,
-                                                       \&create_CHAINED);
-
-        # Install our version of UNIVERSAL::can that understands :Automethod
-        *UNIVERSAL::can = create_UNIVERSAL_can(\&UNIVERSAL::can,
-                                               \%AUTOMETHODS,
-                                               \%TREE_BOTTOM_UP);
-    }
+    # Install our version of UNIVERSAL::can that understands :Automethod
+    *UNIVERSAL::can = UNIVERSAL_can(\&UNIVERSAL::can,
+                                    \%AUTOMETHODS,
+                                    \%TREE_BOTTOM_UP);
+    *Object::InsideOut::UNIVERSAL_can = sub { \&UNIVERSAL::can };
 
 
     # Implement cumulative methods
@@ -929,10 +903,7 @@ _CODE_
 
 
     # Export certain methods to all classes
-    my @EXPORT = qw(new clone set DESTROY dump);
-    if (%AUTOMETHODS) {
-        push(@EXPORT, 'AUTOLOAD');
-    }
+    my @EXPORT = qw(new clone set DESTROY AUTOLOAD dump);
     for my $pkg (keys(%TREE_TOP_DOWN)) {
         for my $sym (@EXPORT) {
             my $full_sym = $pkg.'::'.$sym;
@@ -945,6 +916,31 @@ _CODE_
 
 
     $DO_INIT = 0;   # Clear initialization flag
+}
+
+
+# Process :FIELD declarations for shared hashes/arrays and accessors
+sub process_fields : PRIVATE
+{
+    for my $pkg (keys(%NEW_FIELDS)) {
+        for my $item (@{$NEW_FIELDS{$pkg}}) {
+            my ($fld, $decl) = @{$item};
+
+            # Share the field, if applicable
+            if (is_sharing($pkg)) {
+                threads::shared::share($fld)
+            }
+
+            # Process any accessor declarations
+            if ($decl) {
+                create_accessors($pkg, $fld, $decl);
+            }
+
+            # Save hash/array refs
+            push(@{$FIELDS{$pkg}}, $fld);
+        }
+    }
+    undef(%NEW_FIELDS);  # No longer needed
 }
 
 
@@ -1381,6 +1377,105 @@ sub DESTROY
 }
 
 
+# Handles :Automethods
+sub AUTOLOAD
+{
+    my $thing = $_[0];
+    my $class = ref($thing) || $thing;
+
+    # Extract the base method name from the fully-qualified name
+    my ($method) = our $AUTOLOAD =~ /.*::(.*)/;
+
+    # Find an Automethod
+    my ($code_type, $code_dir, %code_refs);
+    for my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+        if (my $automethod = $AUTOMETHODS{$pkg}) {
+            # Call the Automethod to get a code ref
+            local $CALLER::_ = $_;
+            local $_ = $method;
+            local $SIG{__DIE__} = 'OIO::trap';
+            if (my ($code, $ctype) = $automethod->(@_)) {
+                if (ref($code) ne 'CODE') {
+                    # Not a code ref
+                    OIO::Code->die(
+                        'message' => ':Automethod did not return a code ref',
+                        'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
+                }
+
+                if (defined($ctype)) {
+                    my ($type, $dir) = $ctype =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
+                    if ($type && $type =~ /CUM/i) {
+                        if ($code_type) {
+                            $type = ':Cumulative';
+                            $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                            if ($code_type ne $type || $code_dir ne $dir) {
+                                # Mixed types
+                                my ($pkg2) = keys(%code_refs);
+                                OIO::Code->die(
+                                    'message' => 'Inconsistent code types returned by :Automethods',
+                                    'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
+                            }
+                        } else {
+                            $code_type = ':Cumulative';
+                            $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                        }
+                        $code_refs{$pkg} = $code;
+                        next;
+                    }
+                    if ($type && $type =~ /CHA/i) {
+                        if ($code_type) {
+                            $type = ':Chained';
+                            $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                            if ($code_type ne $type || $code_dir ne $dir) {
+                                # Mixed types
+                                my ($pkg2) = keys(%code_refs);
+                                OIO::Code->die(
+                                    'message' => 'Inconsistent code types returned by :Automethods',
+                                    'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
+                            }
+                        } else {
+                            $code_type = ':Chained';
+                            $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                        }
+                        $code_refs{$pkg} = $code;
+                        next;
+                    }
+
+                    # Unknown automethod code type
+                    OIO::Code->die(
+                        'message' => "Unknown :Automethod code type: $ctype",
+                        'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
+                }
+
+                if ($code_type) {
+                    # Mixed types
+                    my ($pkg2) = keys(%code_refs);
+                    OIO::Code->die(
+                        'message' => 'Inconsistent code types returned by :Automethods',
+                        'Info'    => "Class '$pkg' returned an 'execute immediately' type, and class '$pkg2' returned type $code_type($code_dir)");
+                }
+
+                # Just a one-shot - execute it
+                goto &{$code};
+            }
+        }
+    }
+
+    if ($code_type) {
+        my $tree = ($code_dir eq 'bottom up') ? \%TREE_BOTTOM_UP : \%TREE_TOP_DOWN;
+        my $code = ($code_type eq ':Cumulative')
+                        ? create_CUMULATIVE($tree, \%code_refs)
+                        : create_CHAINED($tree, \%code_refs);
+
+        goto &{$code};
+    }
+
+    # Failed to AUTOLOAD
+    my $type = ref($thing) ? 'object' : 'class';
+    OIO::Method->die('message' => qq/Can't locate $type method "$method" via package "$class"/);
+}
+
+
 # Object dumper
 sub dump
 {
@@ -1403,6 +1498,13 @@ sub dump
                             delete($DUMP_FIELDS{$pkg}{$name2});
                             last;
                         }
+                    }
+                    if (exists($DUMP_FIELDS{$pkg}{$name}) &&
+                        $field != $DUMP_FIELDS{$pkg}{$name}[0])
+                    {
+                        OIO::Code->die(
+                            'message' => 'Cannot dump object',
+                            'Info'    => "In class '$pkg', '$name' refers to two different fields set by 'InitArgs' and '$DUMP_FIELDS{$pkg}{$name}[1]'");
                     }
                     $DUMP_FIELDS{$pkg}{$name} = [ $field, 'InitArgs' ];
                 }
@@ -1580,6 +1682,57 @@ sub pump
 
 ### Code Generators ###
 
+# Returns a closure back to initialize() that is used to redefine
+# UNIVERSAL::can()
+sub UNIVERSAL_can
+{
+    # $univ_can       - ref to the orginal UNIVERSAL::can()
+    # $AUTOMETHODS    - ref to %AUTOMETHODS
+    # $TREE_BOTTOM_UP - ref to %TREE_BOTTOM_UP
+    my ($univ_can, $AUTOMETHODS, $TREE_BOTTOM_UP) = @_;
+
+    return sub {
+        my ($thing, $method) = @_;
+
+        # Special handling for 'SUPER::'
+        # http://rt.cpan.org/NoAuth/Bug.html?id=14431
+        # 'SUPER::' refers to the context of the caller.  Therefore, need to
+        # preface 'SUPER::' with the caller's package name.
+        if ($method =~ /SUPER::/) {
+            my $caller = caller();
+            $method =~ s/SUPER::/${caller}::SUPER::/;
+        }
+
+        # First, try the original UNIVERSAL::can()
+        if (my $code = $univ_can->($thing, $method)) {
+            return $code;
+        }
+
+        # Next, check with the Automethods
+        for my $package (@{$TREE_BOTTOM_UP->{ref($thing) || $thing}}) {
+            if (my $automethod = $AUTOMETHODS->{$package}) {
+                # Call the Automethod to get a code ref
+                local $CALLER::_ = $_;
+                local $_ = $_[1];    # Method name
+                local $SIG{__DIE__} = 'OIO::trap';
+                if (my $code = $automethod->($thing, $method)) {
+                    # Use the code ref returned by the Automethod
+                    my $method_name = $_[1];
+                    return sub {
+                        my $self = shift;
+                        no strict 'refs';
+                        $self->$method_name($thing, $method);
+                    };
+                }
+            }
+        }
+
+        return;   # Nothing found
+    };
+}
+
+
+# Dynamically create a new object field
 sub create_field
 {
     # Handle being called as a method or subroutine
@@ -1637,164 +1790,7 @@ sub create_field
     }
 
     # Process the declaration
-    initialize();
-}
-
-
-# Dynamically creates an AUTOLOAD subroutine
-sub create_AUTOLOAD : PRIVATE
-{
-    my ($AUTOMETHODS,
-        $TREE_TOP_DOWN,
-        $TREE_BOTTOM_UP,
-        $create_CUMULATIVE,
-        $create_CHAINED) = @_;
-
-    return sub {
-        my $thing = $_[0];
-        my $class = ref($thing) || $thing;
-
-        # Extract the base method name from the fully-qualified name
-        my ($method) = our $AUTOLOAD =~ /.*::(.*)/;
-
-        # Find an Automethod
-        my ($code_type, $code_dir, %code_refs);
-        for my $pkg (@{$TREE_BOTTOM_UP->{$class}}) {
-            if (my $automethod = $AUTOMETHODS->{$pkg}) {
-                # Call the Automethod to get a code ref
-                local $CALLER::_ = $_;
-                local $_ = $method;
-                local $SIG{__DIE__} = 'OIO::trap';
-                if (my ($code, $ctype) = $automethod->(@_)) {
-                    if (ref($code) ne 'CODE') {
-                        # Not a code ref
-                        OIO::Code->die(
-                            'message' => ':Automethod did not return a code ref',
-                            'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
-                    }
-
-                    if (defined($ctype)) {
-                        my ($type, $dir) = $ctype =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
-                        if ($type && $type =~ /CUM/i) {
-                            if ($code_type) {
-                                $type = ':Cumulative';
-                                $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
-                                if ($code_type ne $type || $code_dir ne $dir) {
-                                    # Mixed types
-                                    my ($pkg2) = keys(%code_refs);
-                                    OIO::Code->die(
-                                        'message' => 'Inconsistent code types returned by :Automethods',
-                                        'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
-                                }
-                            } else {
-                                $code_type = ':Cumulative';
-                                $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
-                            }
-                            $code_refs{$pkg} = $code;
-                            next;
-                        }
-                        if ($type && $type =~ /CHA/i) {
-                            if ($code_type) {
-                                $type = ':Chained';
-                                $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
-                                if ($code_type ne $type || $code_dir ne $dir) {
-                                    # Mixed types
-                                    my ($pkg2) = keys(%code_refs);
-                                    OIO::Code->die(
-                                        'message' => 'Inconsistent code types returned by :Automethods',
-                                        'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
-                                }
-                            } else {
-                                $code_type = ':Chained';
-                                $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
-                            }
-                            $code_refs{$pkg} = $code;
-                            next;
-                        }
-
-                        # Unknown automethod code type
-                        OIO::Code->die(
-                            'message' => "Unknown :Automethod code type: $ctype",
-                            'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
-                    }
-
-                    if ($code_type) {
-                        # Mixed types
-                        my ($pkg2) = keys(%code_refs);
-                        OIO::Code->die(
-                            'message' => 'Inconsistent code types returned by :Automethods',
-                            'Info'    => "Class '$pkg' returned an 'execute immediately' type, and class '$pkg2' returned type $code_type($code_dir)");
-                    }
-
-                    # Just a one-shot - execute it
-                    goto &{$code};
-                }
-            }
-        }
-
-        if ($code_type) {
-            my $tree = ($code_dir eq 'bottom up') ? $TREE_BOTTOM_UP : $TREE_TOP_DOWN;
-            my $code = ($code_type eq ':Cumulative')
-                            ? $create_CUMULATIVE->($tree, \%code_refs)
-                            : $create_CHAINED->($tree, \%code_refs);
-
-            goto &{$code};
-        }
-
-        # Failed to AUTOLOAD
-        my $type = ref($thing) ? 'object' : 'class';
-        OIO::Method->die('message' => qq/Can't locate $type method "$method" via package "$class"/);
-    };
-}
-
-
-# Returns a closure back to initialize() that is used to redefine
-# UNIVERSAL::can()
-sub create_UNIVERSAL_can : PRIVATE
-{
-    # $univ_can       - ref to the orginal UNIVERSAL::can()
-    # $AUTOMETHODS    - ref to %AUTOMETHODS
-    # $TREE_BOTTOM_UP - ref to %TREE_BOTTOM_UP
-    my ($univ_can, $AUTOMETHODS, $TREE_BOTTOM_UP) = @_;
-
-    return sub {
-        my ($thing, $method) = @_;
-
-        # Special handling for 'SUPER::'
-        # http://rt.cpan.org/NoAuth/Bug.html?id=14431
-        # 'SUPER::' refers to the context of the caller.  Therefore, need to
-        # preface 'SUPER::' with the caller's package name.
-        if ($method =~ /SUPER::/) {
-            my $caller = caller();
-            $method =~ s/SUPER::/${caller}::SUPER::/;
-        }
-
-        # First, try the original UNIVERSAL::can()
-        if (my $code = $univ_can->($thing, $method)) {
-            return $code;
-        }
-
-        # Next, check with the Automethods
-        for my $package (@{$TREE_BOTTOM_UP->{ref($thing) || $thing}}) {
-            if (my $automethod = $AUTOMETHODS->{$package}) {
-                # Call the Automethod to get a code ref
-                local $CALLER::_ = $_;
-                local $_ = $_[1];    # Method name
-                local $SIG{__DIE__} = 'OIO::trap';
-                if (my $code = $automethod->($thing, $method)) {
-                    # Use the code ref returned by the Automethod
-                    my $method_name = $_[1];
-                    return sub {
-                        my $self = shift;
-                        no strict 'refs';
-                        $self->$method_name($thing, $method);
-                    };
-                }
-            }
-        }
-
-        return;   # Nothing found
-    };
+    process_fields();
 }
 
 
@@ -1861,14 +1857,35 @@ sub create_accessors : PRIVATE
 
     # Add field info for dump()
     if ($name) {
+        if (exists($DUMP_FIELDS{$package}{$name}) &&
+            $field_ref != $DUMP_FIELDS{$package}{$name}[0])
+        {
+            OIO::Code->die(
+                'message' => 'Cannot dump object',
+                'Info'    => "In class '$package', '$name' refers to two different fields set by 'Name' and '$DUMP_FIELDS{$package}{$name}[1]'");
+        }
         $DUMP_FIELDS{$package}{$name} = [ $field_ref, 'Name' ];
         # Done if only 'Name' present
         if (! $get && ! $set && ! $type && ! $return) {
             return;
         }
     } elsif ($get) {
+        if (exists($DUMP_FIELDS{$package}{$get}) &&
+            $field_ref != $DUMP_FIELDS{$package}{$get}[0])
+        {
+            OIO::Code->die(
+                'message' => 'Cannot dump object',
+                'Info'    => "In class '$package', '$get' refers to two different fields set by 'Get' and '$DUMP_FIELDS{$package}{$get}[1]'");
+        }
         $DUMP_FIELDS{$package}{$get} = [ $field_ref, 'Get' ];
     } elsif ($set) {
+        if (exists($DUMP_FIELDS{$package}{$set}) &&
+            $field_ref != $DUMP_FIELDS{$package}{$set}[0])
+        {
+            OIO::Code->die(
+                'message' => 'Cannot dump object',
+                'Info'    => "In class '$package', '$set' refers to two different fields set by 'Set' and '$DUMP_FIELDS{$package}{$set}[1]'");
+        }
         $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
     }
 
@@ -2280,7 +2297,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.15
+This document describes Object::InsideOut version 1.16
 
 =head1 SYNOPSIS
 
@@ -2411,10 +2428,11 @@ threaded applications (or applications that use C<fork> under ActivePerl).
 Allows control over object ID specification, accessor naming, parameter name
 matching, and more.
 
-=item L<mod_perl> and Runtime Loading
+=item Runtime Support
 
-Usable from within L<mod_perl>, and supports classes that may be loaded at
-runtime (i.e., using S<C<eval { require ...; };>>).
+Supports classes that may be loaded at runtime (i.e., using S<C<eval { require
+...; };>>).  This makes it usable from within L<mod_perl, as well.  Also
+supports dynamic creation of object fields during runtime.
 
 =item Perl 5.6
 
@@ -3828,7 +3846,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.15/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.16/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
