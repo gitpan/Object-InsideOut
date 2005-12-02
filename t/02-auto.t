@@ -24,7 +24,6 @@ package My::Class; {
     }
 }
 
-
 package My::Sub; {
     use Object::InsideOut qw(My::Class);
 
@@ -39,26 +38,63 @@ package My::Sub; {
     }
 }
 
-
-package Bar; {
+package My::Bar; {
     use Object::InsideOut qw(My::Class);
 
-    sub AUTOMETHOD {
+    sub auto : Automethod
+    {
         if (/^foo$/) {
-            return sub { return 'Bar->foo' }
+            return sub { return 'BOOM' }
         }
         return;
     }
 }
 
-
-package Baz; {
-    use Object::InsideOut qw(Bar);
+package My::Baz; {
+    use Object::InsideOut qw(My::Bar);
 }
-
 
 package My::MT; {
     sub new { return bless({}, __PACKAGE__); }
+}
+
+
+package Foo; {
+    use Object::InsideOut;
+
+    sub auto : Automethod
+    {
+        my $name = $_;
+        return sub {
+                        my $self = $_[0];
+                        my $class = ref($self) || $self;
+                        return __PACKAGE__ . ": $class->$name";
+                   };
+    };
+}
+
+package Bar; {
+    use Object::InsideOut qw(Foo);
+}
+
+package Baz; {
+    use Object::InsideOut qw(Bar);
+
+    sub auto : Automethod
+    {
+        my $name = $_;
+
+        if ($name eq 'bing') {
+            my $self = shift;
+            return ($self->can('SUPER::bing'));
+        }
+
+        return sub {
+                        my $self = $_[0];
+                        my $class = ref($self) || $self;
+                        return __PACKAGE__ . ": $class->$name";
+                   };
+    }
 }
 
 
@@ -83,25 +119,25 @@ MAIN:
     is(My::Sub->bar(),     'My::Sub->bar'  => 'Direct My::Sub->bar()');
     is(My::Sub->$method(), 'My::Sub->bar'  => 'Indirect My::Sub->bar()');
 
-    $method = Bar->can('foo');
-    ok($method                     => 'Bar can foo()');
-    is(Bar->foo(),     'Bar->foo'  => 'Direct Bar->foo()');
-    is(Bar->$method(), 'Bar->foo'  => 'Indirect Bar->foo()');
+    $method = My::Bar->can('foo');
+    ok($method                     => 'My::Bar can foo()');
+    is(My::Bar->foo(),     'BOOM'      => 'Direct My::Bar->foo()');
+    is(My::Bar->$method(), 'BOOM'      => 'Indirect My::Bar->foo()');
 
-    $method = Bar->can('bar');
-    ok($method                     => 'Bar can bar()');
-    is(Bar->bar(),     'Bar->bar'  => 'Direct Bar->bar()');
-    is(Bar->$method(), 'Bar->bar'  => 'Indirect Bar->bar()');
+    $method = My::Bar->can('bar');
+    ok($method                     => 'My::Bar can bar()');
+    is(My::Bar->bar(),     'My::Bar->bar'  => 'Direct My::Bar->bar()');
+    is(My::Bar->$method(), 'My::Bar->bar'  => 'Indirect My::Bar->bar()');
 
-    $method = Baz->can('foo');
-    ok($method                     => 'Baz can foo()');
-    is(Baz->foo(),     'Baz->foo'  => 'Direct Baz->foo()');
-    is(Baz->$method(), 'Baz->foo'  => 'Indirect Baz->foo()');
+    $method = My::Baz->can('foo');
+    ok($method                     => 'My::Baz can foo()');
+    is(My::Baz->foo(),     'BOOM'      => 'Direct My::Baz->foo()');
+    is(My::Baz->$method(), 'BOOM'      => 'Indirect My::Baz->foo()');
 
-    $method = Baz->can('bar');
-    ok($method                     => 'Baz can bar()');
-    is(Baz->bar(),     'Baz->bar'  => 'Direct Baz->bar()');
-    is(Baz->$method(), 'Baz->bar'  => 'Indirect Baz->bar()');
+    $method = My::Baz->can('bar');
+    ok($method                     => 'My::Baz can bar()');
+    is(My::Baz->bar(),     'My::Baz->bar'  => 'Direct My::Baz->bar()');
+    is(My::Baz->$method(), 'My::Baz->bar'  => 'Indirect My::Baz->bar()');
 
     $method = My::MT->can('foo');
     ok(!$method              => 'My::MT no can foo()');
@@ -127,16 +163,21 @@ MAIN:
     $y = $z->can('snort');
     is($z->$y, 'My::Sub->snort', 'Sublass can+automethod');
 
-    my $obj = Bar->new();
+    my $obj = My::Bar->new();
     @j = $obj->jinx();
     @result = qw(My::Class->jinx);
     is_deeply(\@j, \@result, 'Inherited cumulative');
 
-    $obj = Bar->new();
-    is($obj->foom(), 'Bar->foom', 'Object automethod');
+    $obj = My::Bar->new();
+    is($obj->foom(), 'My::Bar->foom', 'Object automethod');
 
-    $obj = Baz->new();
-    is($obj->foom(), 'Baz->foom', 'Object automethod');
+    $obj = My::Baz->new();
+    is($obj->foom(), 'My::Baz->foom', 'Object automethod');
+
+    is(Foo->Baz::SUPER::foo(), 'Foo: Foo->foo'  => 'class::SUPER::method');
+    is(Bar->Baz::SUPER::foo(), 'Foo: Bar->foo'  => 'class::SUPER::method');
+    is(Baz->bing(),            'Foo: Baz->bing' => 'SUPER::method');
+    is(Bar->Baz::foo(),        'Baz: Bar->foo'  => 'class::method');
 }
 
 exit(0);

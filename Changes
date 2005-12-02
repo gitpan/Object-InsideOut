@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.17 Fri Dec 02 12:29:40 2005
+	- Handle ->class::method(), ->SUPER::method(), and ->class::SUPER::method()
+	- Handle ->can('class::method') and ->can('class::SUPER::method')
+
 1.16 Thu Dec 01 13:51:50 2005
 	- Preclude name collisions in ->dump()
 	- Added installation check for Scalar::Util::weaken()
@@ -48,7 +52,7 @@ Revision history for Perl extension Object::InsideOut.
 	- Verified on Perl 5.6.0 through 5.9.2
 
 0.06.00 Thu Nov 03 14:44:20 2005
-	- Fix for ->can('SUPER::method')
+	- Handle ->can('SUPER::method')
 
 0.05.00 Thu Nov 03 10:48:05 2005
 	- More tests (and fixes to a couple of bugs they turned up)

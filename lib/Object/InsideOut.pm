@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.16;
+our $VERSION = 1.17;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -174,7 +174,7 @@ sub import
         next if (! $pkg);    # Ignore empty strings and such
 
         # Handle thread object sharing flag
-        if ($pkg =~ /^:(NOT?_?|!)?SHAR/i) {
+        if ($pkg =~ /^:(?:NOT?_?|!)?SHAR/i) {
             my $sharing = (defined($1)) ? 0 : 1;
             set_sharing($class, $sharing, (caller())[1..2]);
             next;
@@ -1381,14 +1381,24 @@ sub DESTROY
 sub AUTOLOAD
 {
     my $thing = $_[0];
-    my $class = ref($thing) || $thing;
 
-    # Extract the base method name from the fully-qualified name
-    my ($method) = our $AUTOLOAD =~ /.*::(.*)/;
+    # Extract the class and method names from the fully-qualified name
+    my ($class, $method) = our $AUTOLOAD =~ /(.*)::(.*)/;
+
+    # Handle superclass calls
+    my $super;
+    if ($class =~ /::SUPER$/) {
+        $class =~ s/::SUPER//;
+        $super = 1;
+    }
 
     # Find an Automethod
     my ($code_type, $code_dir, %code_refs);
     for my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+        if ($super && $class eq $pkg) {
+            next;
+        }
+
         if (my $automethod = $AUTOMETHODS{$pkg}) {
             # Call the Automethod to get a code ref
             local $CALLER::_ = $_;
@@ -1648,7 +1658,7 @@ sub pump
                 if (my $field = $DUMP_FIELDS{$pkg}{$fld_name}[0]) {
                     $self->set($field, $value);
                 } else {
-                    if ($fld_name =~ /^(HASH|ARRAY)/) {
+                    if ($fld_name =~ /^(?:HASH|ARRAY)/) {
                         OIO::Args->die(
                             'message' => "Unnamed field encounted in class '$pkg'",
                             'Arg'     => "$fld_name => $value");
@@ -1694,35 +1704,57 @@ sub UNIVERSAL_can
     return sub {
         my ($thing, $method) = @_;
 
-        # Special handling for 'SUPER::'
-        # http://rt.cpan.org/NoAuth/Bug.html?id=14431
-        # 'SUPER::' refers to the context of the caller.  Therefore, need to
-        # preface 'SUPER::' with the caller's package name.
-        if ($method =~ /SUPER::/) {
-            my $caller = caller();
-            $method =~ s/SUPER::/${caller}::SUPER::/;
-        }
-
         # First, try the original UNIVERSAL::can()
-        if (my $code = $univ_can->($thing, $method)) {
+        my $code;
+        if ($method =~ /^SUPER::/) {
+            # Superclass WRT caller
+            my $caller = caller();
+            $code = $univ_can->($thing, $caller.'::'.$method);
+        } else {
+            $code = $univ_can->($thing, $method);
+        }
+        if ($code) {
             return $code;
         }
 
+        # Handle various calling methods
+        my ($class, $super);
+        if ($method !~ /::/) {
+            # Ordinary method check
+            #   $obj->can('x');
+            $class = ref($thing) || $thing;
+
+        } elsif ($method !~ /SUPER::/) {
+            # Fully-qualified method check
+            #   $obj->can('FOO::x');
+            ($class, $method) = $method =~ /^(.+)::([^:]+)$/;
+
+        } elsif ($method =~ /^SUPER::/) {
+            # Superclass method check
+            #   $obj->can('SUPER::x');
+            $class = caller();
+            $method =~ s/SUPER:://;
+            $super = 1;
+
+        } else {
+            # Qualified superclass method check
+            #   $obj->can('Foo::SUPER::x');
+            ($class, $method) = $method =~ /^(.+)::SUPER::([^:]+)$/;
+            $super = 1;
+        }
+
         # Next, check with the Automethods
-        for my $package (@{$TREE_BOTTOM_UP->{ref($thing) || $thing}}) {
+        for my $package (@{$TREE_BOTTOM_UP->{$class}}) {
+            if ($super && $class eq $package) {
+                next;
+            }
             if (my $automethod = $AUTOMETHODS->{$package}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
-                local $_ = $_[1];    # Method name
+                local $_ = $method;
                 local $SIG{__DIE__} = 'OIO::trap';
-                if (my $code = $automethod->($thing, $method)) {
-                    # Use the code ref returned by the Automethod
-                    my $method_name = $_[1];
-                    return sub {
-                        my $self = shift;
-                        no strict 'refs';
-                        $self->$method_name($thing, $method);
-                    };
+                if (my $code = $automethod->($thing)) {
+                    return $code;
                 }
             }
         }
@@ -1806,7 +1838,7 @@ sub create_accessors : PRIVATE
         local $SIG{__WARN__} = sub { push(@errs, @_); };
 
         if ($decl =~ /{/) {
-            eval "\$acc_spec = $decl;";
+            eval "\$acc_spec = $decl";
         } else {
             eval "\$acc_spec = { $decl }";
         }
@@ -1835,9 +1867,9 @@ sub create_accessors : PRIVATE
             if ($key =~ /acc|com|set/i) {
                 $set = $val;
             }
-        } elsif ($key =~ /^type$/i) {
+        } elsif (uc($key) eq 'TYPE') {
             $type = $val;
-        } elsif ($key =~ /^name$/i) {
+        } elsif (uc($key) eq 'NAME') {
             $name = $val;
         } elsif ($key =~ /^ret(?:urn)?$/i) {
             $return = uc($val);
@@ -1860,36 +1892,44 @@ sub create_accessors : PRIVATE
         if (exists($DUMP_FIELDS{$package}{$name}) &&
             $field_ref != $DUMP_FIELDS{$package}{$name}[0])
         {
-            OIO::Code->die(
-                'message' => 'Cannot dump object',
-                'Info'    => "In class '$package', '$name' refers to two different fields set by 'Name' and '$DUMP_FIELDS{$package}{$name}[1]'");
+            OIO::Attribute->die(
+                'caller_level' => 3,
+                'message'      => "Can't create accessor method for package '$package'",
+                'Info'         => "'$name' already specified for another field using '$DUMP_FIELDS{$package}{$name}[1]'",
+                'Attribute'    => "Field( $decl )");
         }
         $DUMP_FIELDS{$package}{$name} = [ $field_ref, 'Name' ];
         # Done if only 'Name' present
         if (! $get && ! $set && ! $type && ! $return) {
             return;
         }
+
     } elsif ($get) {
         if (exists($DUMP_FIELDS{$package}{$get}) &&
             $field_ref != $DUMP_FIELDS{$package}{$get}[0])
         {
-            OIO::Code->die(
-                'message' => 'Cannot dump object',
-                'Info'    => "In class '$package', '$get' refers to two different fields set by 'Get' and '$DUMP_FIELDS{$package}{$get}[1]'");
+            OIO::Attribute->die(
+                'caller_level' => 3,
+                'message'      => "Can't create accessor method for package '$package'",
+                'Info'         => "'$get' already specified for another field using '$DUMP_FIELDS{$package}{$get}[1]'",
+                'Attribute'    => "Field( $decl )");
         }
         $DUMP_FIELDS{$package}{$get} = [ $field_ref, 'Get' ];
+
     } elsif ($set) {
         if (exists($DUMP_FIELDS{$package}{$set}) &&
             $field_ref != $DUMP_FIELDS{$package}{$set}[0])
         {
-            OIO::Code->die(
-                'message' => 'Cannot dump object',
-                'Info'    => "In class '$package', '$set' refers to two different fields set by 'Set' and '$DUMP_FIELDS{$package}{$set}[1]'");
+            OIO::Attribute->die(
+                'caller_level' => 3,
+                'message'      => "Can't create accessor method for package '$package'",
+                'Info'         => "'$set' already specified for another field using '$DUMP_FIELDS{$package}{$set}[1]'",
+                'Attribute'    => "Field( $decl )");
         }
         $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
     }
 
-    # If 'TYPE', need 'SET' too
+    # If 'TYPE' and/or 'RETURN', need 'SET', too
     if (($type || $return) && ! $set) {
         OIO::Attribute->die(
             'caller_level' => 3,
@@ -1922,7 +1962,7 @@ sub create_accessors : PRIVATE
             'message'      => q/Can't create accessor method/,
             'Info'         => q/Invalid setting for 'TYPE'/,
             'Attribute'    => "Field( $decl )");
-    } elsif ($type =~ /^num(ber|eric)?/i) {
+    } elsif ($type =~ /^num(?:ber|eric)?/i) {
         $type = 'NUMERIC';
     } elsif (uc($type) eq 'LIST' || uc($type) eq 'ARRAY') {
         $type = 'ARRAY';
@@ -1991,27 +2031,25 @@ _CHECK_ARGS_
                 OIO::Attribute->die(
                     'caller_level' => 3,
                     'message'      => q/Can't create accessor method/,
-                    'Info'         => q/'Type' is not a code ref or string/,
+                    'Info'         => q/'Type' must be a 'string' or code ref/,
                     'Attribute'    => "Field( $decl )");
             }
 
-            $code .= <<'_CODE_';
-    my ($arg, $ok, @errs);
-    local $SIG{__WARN__} = sub { push(@errs, @_); };
-    eval { $ok = $type->($arg = $_[1]) };
-    if ($@ || @errs) {
-        my ($err) = split(/ at /, $@ || join(" | ", @errs));
+            $code .= <<"_CODE_";
+    my (\$arg, \$ok, \@errs);
+    local \$SIG{__WARN__} = sub { push(\@errs, \@_); };
+    eval { \$ok = \$type->(\$arg = \$_[1]) };
+    if (\$@ || \@errs) {
+        my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
         OIO::Code->die(
             'message' => q/Problem with type check routine for '$package->$set'/,
-            'Error'   => $err);
+            'Error'   => \$err);
     }
-_CODE_
-            $code .= <<"_CODE2_";
     if (! \$ok) {
         OIO::Args->die(
             'message' => "Argument to '$package->$set' failed type check: \$arg");
     }
-_CODE2_
+_CODE_
 
         } elsif ($type eq 'NONE') {
             # No data type check required
@@ -2068,14 +2106,14 @@ _HASH_
             }
 
             # One object or ref arg - exact spelling and case required
-            $code .= <<"_OTHER_TYPE_";
+            $code .= <<"_REF_";
     my \$arg;
     if (! Object::InsideOut::Util::is_it(\$arg = \$_[1], '$type')) {
         OIO::Args->die(
             'message' => q/Bad argument: Wrong type/,
             'Usage'   => q/Argument to '$package->$set' must be of type '$type'/);
     }
-_OTHER_TYPE_
+_REF_
         }
 
         # Grab 'OLD' value
@@ -2234,6 +2272,7 @@ sub create_RESTRICTED : PRIVATE
     my ($package, $method, $code) = @_;
     return sub {
         my $caller = caller();
+        # Caller must be in class hierarchy
         if ($caller->isa($package) || $package->isa($caller)) {
             goto &{$code}
         }
@@ -2249,6 +2288,7 @@ sub create_PRIVATE : PRIVATE
     my ($package, $method, $code) = @_;
     return sub {
         my $caller = caller();
+        # Caller must be in the package
         if ($caller eq $package) {
             goto &{$code}
         }
@@ -2257,18 +2297,20 @@ sub create_PRIVATE : PRIVATE
 }
 
 
-# Redefines a subroutine in this package to make it uncallable from the outside
-# world.
+# Redefines a subroutine to make it uncallable - with the original code ref
+# stored elsewhere, of course.
 sub create_HIDDEN : PRIVATE
 {
     my ($package, $method) = @_;
 
+    # Create new code that hides the original method
     my $code = <<"_CODE_";
 sub ${package}::$method {
     OIO::Method->die('message' => q/Can't call hidden method '$package->$method'/);
 }
 _CODE_
 
+    # Eval the new code
     my @errs;
     local $SIG{__WARN__} = sub { push(@errs, @_); };
     no warnings 'redefine';
@@ -2297,7 +2339,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.16
+This document describes Object::InsideOut version 1.17
 
 =head1 SYNOPSIS
 
@@ -3846,7 +3888,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.16/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.17/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
