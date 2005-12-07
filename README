@@ -1,4 +1,4 @@
-Object-InsideOut version 1.17
+Object-InsideOut version 1.18
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -85,6 +85,12 @@ Exception::Class for handling errors in an OO-compatible manner.
 Object::InsideOut has built-in support for object dumping and reloading that
 can be accomplished in either an automated fashion or through the use of
 class-supplied subroutines.
+
+= Foreign Class Inheritance
+
+Object::InsideOut allows classes to inherit from foreign (i.e.,
+non-Object::InsideOut) classes, thus allowing you to sub-class other Perl
+class, and access their methods from your own objects.
 
 INSTALLATION
 

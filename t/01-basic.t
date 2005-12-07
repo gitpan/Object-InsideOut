@@ -37,7 +37,7 @@ package MyBase; {
         Test::More::is($priv{$$self}, 'MyBase::priv'
                             => 'MyBase priv arg unpacked correctly');
 
-        $self->set(\%snum, $args->{'SNUM'} . '!');
+        $self->Object::InsideOut::set(\%snum, $args->{'SNUM'} . '!');
         Test::More::is($snum{$$self}, 'MyBase::snum!'  => 'MyBase snum arg unpacked correctly');
     }
 

@@ -5,9 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.17;
+our $VERSION = 1.18;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
+
+# Cached of original -isa() method
+my $univ_isa = \&UNIVERSAL::isa;
 
 ### Exception Processing ###
 
@@ -154,6 +157,10 @@ BEGIN {
 # Cache of class trees
 my (%TREE_TOP_DOWN, %TREE_BOTTOM_UP);
 
+# Foreign class inheritance information
+my %HERITAGE;
+
+
 # Doesn't export anything - just builds class trees and stores sharing flags
 sub import
 {
@@ -181,8 +188,11 @@ sub import
         }
 
         # Load the package, if needed
-        if (! $class->isa($pkg)) {
-            if (! @{$pkg.'::ISA'}) {
+        if (! $class->$univ_isa($pkg)) {
+            my @parts = split(/::/, $pkg);
+            my $part2 = pop(@parts) . '::';
+            my $part1 = join('::', @parts) . '::';
+            if (! exists(${$part1}{$part2})) {
                 eval "require $pkg";
                 if ($@) {
                     OIO::Code->die(
@@ -212,24 +222,33 @@ sub import
     }
 
     # Create calling class's @ISA array
-    push(@{$class.'::ISA'}, $self, @packages);
+    push(@{$class.'::ISA'}, $self);
 
     # Create class tree
     my @tree;
     my %seen;   # Used to prevent duplicate entries in @tree
     for my $parent (@packages) {
-        # Parent class must exist
-        if (! exists($TREE_TOP_DOWN{$parent})) {
-            OIO::Code->die(
-                'message' => "Cannot declare '$parent' as a parent class for '$class'",
-                'Error'   => "Class '$parent' is not an Object::InsideOut class");
-        }
-
-        for my $ancestor (@{$TREE_TOP_DOWN{$parent}}) {
-            if (! exists($seen{$ancestor})) {
-                push(@tree, $ancestor);
-                $seen{$ancestor} = undef;
+        if (exists($TREE_TOP_DOWN{$parent})) {
+            # Inherit from Object::InsideOut class
+            for my $ancestor (@{$TREE_TOP_DOWN{$parent}}) {
+                if (! exists($seen{$ancestor})) {
+                    push(@tree, $ancestor);
+                    $seen{$ancestor} = undef;
+                }
             }
+            push(@{$class.'::ISA'}, $parent);
+
+        } else {
+            # Inherit from foreign class
+
+            # Get inheritance 'classes' hash
+            if (! exists($HERITAGE{$class})) {
+                create_heritage($class);
+            }
+            my $classes = $HERITAGE{$class}->[1];
+
+            # Add parent to inherited classes
+            $classes->{$parent} = undef;
         }
     }
 
@@ -329,6 +348,7 @@ my %OVERLOAD_TYPES = (
     'GLOBIFY'   => q/*{}/,
     'CODIFY'    => q/&{}/,
 );
+
 
 
 # This subroutine handles attributes on hashes as part of this package.
@@ -697,6 +717,9 @@ sub initialize : Private
                                     \%TREE_BOTTOM_UP);
     *Object::InsideOut::UNIVERSAL_can = sub { \&UNIVERSAL::can };
 
+    *UNIVERSAL::isa = UNIVERSAL_isa($univ_isa,
+                                    \%TREE_BOTTOM_UP);
+
 
     # Implement cumulative methods
     if (%CUMULATIVE || %ANTICUMULATIVE) {
@@ -721,8 +744,8 @@ sub initialize : Private
                 # Check for conflicting definitions of $name
                 if ($cum{$name}) {
                     for my $other_package (keys(%{$cum{$name}})) {
-                        if ($other_package->isa($package) ||
-                            $package->isa($other_package))
+                        if ($other_package->$univ_isa($package) ||
+                            $package->$univ_isa($other_package))
                         {
                             my ($pkg,  $file,  $line)  = @{$cum_loc{$name}{$other_package}};
                             my ($pkg2, $file2, $line2) = @{$location};
@@ -782,8 +805,8 @@ sub initialize : Private
                 # Check for conflicting definitions of $name
                 if ($chain{$name}) {
                     for my $other_package (keys(%{$chain{$name}})) {
-                        if ($other_package->isa($package) ||
-                            $package->isa($other_package))
+                        if ($other_package->$univ_isa($package) ||
+                            $package->$univ_isa($other_package))
                         {
                             my ($pkg,  $file,  $line)  = @{$chain_loc{$name}{$other_package}};
                             my ($pkg2, $file2, $line2) = @{$location};
@@ -903,7 +926,8 @@ _CODE_
 
 
     # Export certain methods to all classes
-    my @EXPORT = qw(new clone set DESTROY AUTOLOAD dump);
+    my @EXPORT = qw(new clone set DESTROY AUTOLOAD dump
+                    inherit heritage disinherit);
     for my $pkg (keys(%TREE_TOP_DOWN)) {
         for my $sym (@EXPORT) {
             my $full_sym = $pkg.'::'.$sym;
@@ -1167,7 +1191,7 @@ sub new
         if ($init) {
             # Send remaining args, if any, to Init subroutine
             local $SIG{__DIE__} = 'OIO::trap';
-            $init->($self, $args);
+            $self->$init($args);
 
         } elsif (%$args) {
             # It's an error if no Init subroutine, and there are unhandled
@@ -1234,7 +1258,7 @@ sub clone
         # Dispatch any special replication handling
         if (my $replicate = $REPLICATORS{$pkg}) {
             local $SIG{__DIE__} = 'OIO::trap';
-            $replicate->($parent, $clone);
+            $parent->$replicate($clone);
         }
     }
 
@@ -1350,7 +1374,7 @@ sub DESTROY
             # Dispatch any special destruction handling
             if (my $destroy = $DESTROYERS{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
-                $destroy->($self);
+                $self->$destroy();
             }
 
             # Delete object field data
@@ -1392,13 +1416,39 @@ sub AUTOLOAD
         $super = 1;
     }
 
-    # Find an Automethod
+    # Find a something to handle the method call
     my ($code_type, $code_dir, %code_refs);
     for my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+        # Skip self's class if SUPER
         if ($super && $class eq $pkg) {
             next;
         }
 
+        # Check with heritage objects/classes
+        if (exists($HERITAGE{$pkg})) {
+            my ($heritage, $classes) = @{$HERITAGE{$pkg}};
+            if (Scalar::Util::blessed($thing)) {
+                # Check objects
+                foreach my $obj (@{$heritage->{$$thing}}) {
+                    if (my $code = $obj->can($method)) {
+                        shift;
+                        unshift(@_, $obj);
+                        goto $code;
+                    }
+                }
+            } else {
+                # Check classes
+                foreach my $pkg (keys(%{$classes})) {
+                    if (my $code = $pkg->can($method)) {
+                        shift;
+                        unshift(@_, $pkg);
+                        goto $code;
+                    }
+                }
+            }
+        }
+
+        # Check with Automethod
         if (my $automethod = $AUTOMETHODS{$pkg}) {
             # Call the Automethod to get a code ref
             local $CALLER::_ = $_;
@@ -1466,7 +1516,7 @@ sub AUTOLOAD
                 }
 
                 # Just a one-shot - execute it
-                goto &{$code};
+                goto $code;
             }
         }
     }
@@ -1477,7 +1527,7 @@ sub AUTOLOAD
                         ? create_CUMULATIVE($tree, \%code_refs)
                         : create_CHAINED($tree, \%code_refs);
 
-        goto &{$code};
+        goto $code;
     }
 
     # Failed to AUTOLOAD
@@ -1528,7 +1578,7 @@ sub dump
         # Try to use a class-supplied dumper
         if (my $dumper = $DUMPERS{$pkg}) {
             local $SIG{__DIE__} = 'OIO::trap';
-            $dump{$pkg} = $dumper->($self);
+            $dump{$pkg} = $self->$dumper();
 
         } elsif ($FIELDS{$pkg}) {
             # Dump the data ourselves from all known class fields
@@ -1649,7 +1699,7 @@ sub pump
         # Try to use a class-supplied pumper
         if (my $pumper = $PUMPERS{$pkg}) {
             local $SIG{__DIE__} = 'OIO::trap';
-            $pumper->($self, $data);
+            $self->$pumper($data);
 
         } else {
             # Pump in the data ourselves
@@ -1690,6 +1740,221 @@ sub pump
 }
 
 
+# Inherit from non-Object::InsideOut objects
+sub inherit
+{
+    my $self = shift;
+
+    # Must be called as an object method
+    my $obj_class = Scalar::Util::blessed($self);
+    if (! $obj_class) {
+        OIO::Code->die(
+            'message' => '->inherit() invoked as a class method',
+            'Info'    => '->inherit() is an object method');
+    }
+
+    # Inheritance takes place in caller's package
+    my $package = caller();
+
+    # Restrict usage to inside class hierarchy
+    if (! $obj_class->$univ_isa($package)) {
+        OIO::Code->die(
+            'message' => '->inherit() not called within class hierarchy',
+            'Info'    => '->inherit() is a restricted method');
+    }
+
+    # Flatten arg list
+    my @arg_objs;
+    while (my $arg = shift) {
+        if (ref($arg) eq 'ARRAY') {
+            push(@arg_objs, @{$arg});
+        } else {
+            push(@arg_objs, $arg);
+        }
+    }
+
+    # Must be called with at least one arg
+    if (! @arg_objs) {
+        OIO::Args->die('message' => q/Missing arg(s) to '->inherit()'/);
+    }
+
+    # Get 'heritage' field and 'classes' hash
+    if (! exists($HERITAGE{$package})) {
+        create_heritage($package);
+    }
+    my ($heritage, $classes) = @{$HERITAGE{$package}};
+
+    # Process args
+    my $objs = exists($heritage->{$$self}) ? $heritage->{$$self} : [];
+    while (my $obj = shift(@arg_objs)) {
+        # Must be an object
+        my $arg_class = Scalar::Util::blessed($obj);
+        if (! $arg_class) {
+            OIO::Args->die('message' => q/Arg to '->inherit()' is not an object/);
+        }
+        # Must not be in class hierarchy
+        if ($obj_class->$univ_isa($arg_class) ||
+            $arg_class->$univ_isa($obj_class))
+        {
+            OIO::Args->die('message' => q/Args to '->inherit()' cannot be within class hierarchy/);
+        }
+        # Add arg to object list
+        push(@{$objs}, $obj);
+        # Add arg class to classes hash
+        $classes->{$arg_class} = undef;
+    }
+    # Add objects to heritage field
+    $self->set($heritage, $objs);
+}
+
+
+# Returns foreign objects inherited by an Object::InsideOut object
+sub heritage
+{
+    my $self = shift;
+
+    # Must be called as an object method
+    my $obj_class = Scalar::Util::blessed($self);
+    if (! $obj_class) {
+        OIO::Code->die(
+            'message' => '->inherit() invoked as a class method',
+            'Info'    => '->inherit() is an object method');
+    }
+
+    # Inheritance takes place in caller's package
+    my $package = caller();
+
+    # Restrict usage to inside class hierarchy
+    if (! $obj_class->$univ_isa($package)) {
+        OIO::Code->die(
+            'message' => '->inherit() not called within class hierarchy',
+            'Info'    => '->inherit() is a restricted method');
+    }
+
+    # Anything to return?
+    if (! exists($HERITAGE{$package})) {
+        return;
+    }
+
+    my @objs;
+    if (@_) {
+        # Filter by specified classes
+        @objs = grep {
+                    my $obj = $_;
+                    grep { ref($obj) eq $_ } @_
+                } @{$HERITAGE{$package}[0]->{$$self}};
+    } else {
+        # Return entire list
+        @objs = @{$HERITAGE{$package}[0]->{$$self}};
+    }
+
+    # Return results
+    if (wantarray()) {
+        return (@objs);
+    }
+    if (@objs == 1) {
+        return ($objs[0]);
+    }
+    return (\@objs);
+}
+
+
+sub disinherit
+{
+    my $self = shift;
+
+    # Must be called as an object method
+    my $class = Scalar::Util::blessed($self);
+    if (! $class) {
+        OIO::Code->die(
+            'message' => '->disinherit() invoked as a class method',
+            'Info'    => '->disinherit() is an object method');
+    }
+
+    # Disinheritance takes place in caller's package
+    my $package = caller();
+
+    # Restrict usage to inside class hierarchy
+    if (! $class->$univ_isa($package)) {
+        OIO::Code->die(
+            'message' => '->disinherit() not called within class hierarchy',
+            'Info'    => '->disinherit() is a restricted method');
+    }
+
+    # Flatten arg list
+    my @args;
+    while (my $arg = shift) {
+        if (ref($arg) eq 'ARRAY') {
+            push(@args, @{$arg});
+        } else {
+            push(@args, $arg);
+        }
+    }
+
+    # Must be called with at least one arg
+    if (! @args) {
+        OIO::Args->die('message' => q/Missing arg(s) to '->disinherit()'/);
+    }
+
+    # Get 'heritage' field
+    if (! exists($HERITAGE{$package})) {
+        OIO::Code->die(
+            'message' => 'Nothing to ->disinherit()',
+            'Info'    => "Class '$package' is currently not inheriting from any foreign classes");
+    }
+    my $heritage = $HERITAGE{$package}->[0];
+
+    # Get inherited objects
+    my @objs = exists($heritage->{$$self}) ? @{$heritage->{$$self}} : ();
+
+    # Check that object is inheriting all args
+    foreach my $arg (@args) {
+        if (Scalar::Util::blessed($arg)) {
+            # Arg is an object
+            if (! grep { $_ == $arg } @objs) {
+                my $arg_class = ref($arg);
+                OIO::Args->die(
+                    'message' => 'Cannot ->disinherit()',
+                    'Info'    => "Object is not inheriting from an object of class '$arg_class' inside class '$class'");
+            }
+        } else {
+            # Arg is a class
+            if (! grep { ref($_) eq $arg } @objs) {
+                OIO::Args->die(
+                    'message' => 'Cannot ->disinherit()',
+                    'Info'    => "Object is not inheriting from an object of class '$arg' inside class '$class'");
+            }
+        }
+    }
+
+    # Delete args from object
+    my @new_list = ();
+    OBJECT:
+    foreach my $obj (@objs) {
+        foreach my $arg (@args) {
+            if (Scalar::Util::blessed($arg)) {
+                if ($obj == $arg) {
+                    next OBJECT;
+                }
+            } else {
+                if (ref($obj) eq $arg) {
+                    next OBJECT;
+                }
+            }
+        }
+        push(@new_list, $obj);
+    }
+
+    # Set new object list
+    if (@new_list) {
+        $self->set($heritage, \@new_list);
+    } else {
+        # No objects left
+        delete($heritage->{$$self});
+    }
+}
+
+
 ### Code Generators ###
 
 # Returns a closure back to initialize() that is used to redefine
@@ -1714,7 +1979,7 @@ sub UNIVERSAL_can
             $code = $univ_can->($thing, $method);
         }
         if ($code) {
-            return $code;
+            return ($code);
         }
 
         # Handle various calling methods
@@ -1743,23 +2008,91 @@ sub UNIVERSAL_can
             $super = 1;
         }
 
-        # Next, check with the Automethods
+        # Next, check with heritage objects and Automethods
         for my $package (@{$TREE_BOTTOM_UP->{$class}}) {
+            # Skip self's class if SUPER
             if ($super && $class eq $package) {
                 next;
             }
+
+            # Check with heritage objects/classes
+            if (exists($HERITAGE{$package})) {
+                my ($heritage, $classes) = @{$HERITAGE{$package}};
+                if (Scalar::Util::blessed($thing)) {
+                    # Check objects
+                    foreach my $obj (@{$heritage->{$$thing}}) {
+                        if ($code = $obj->$univ_can($method)) {
+                            return ($code);
+                        }
+                    }
+                } else {
+                    # Check classes
+                    foreach my $pkg (keys(%{$classes})) {
+                        if ($code = $pkg->$univ_can($method)) {
+                            return ($code);
+                        }
+                    }
+                }
+            }
+
+            # Check with the Automethods
             if (my $automethod = $AUTOMETHODS->{$package}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
                 local $SIG{__DIE__} = 'OIO::trap';
-                if (my $code = $automethod->($thing)) {
-                    return $code;
+                if ($code = $thing->$automethod()) {
+                    return ($code);
                 }
             }
         }
 
-        return;   # Nothing found
+        return;   # Can't
+    };
+}
+
+
+# Returns a closure back to initialize() that is used to redefine
+# UNIVERSAL::isa()
+sub UNIVERSAL_isa
+{
+    # $univ_isa       - ref to the orginal UNIVERSAL::isa()
+    # $TREE_BOTTOM_UP - ref to %TREE_BOTTOM_UP
+    my ($u_isa, $TREE_BOTTOM_UP) = @_;
+
+    return sub {
+        my ($thing, $type) = @_;
+
+        # First, try the original UNIVERSAL::isa()
+        my $isa = $thing->$u_isa($type);
+        if ($isa) {
+            return ($isa);
+        }
+
+        # Next, check with heritage objects
+        for my $package (@{$TREE_BOTTOM_UP->{ref($thing) || $thing}}) {
+            # Check with heritage objects
+            if (exists($HERITAGE{$package})) {
+                my ($heritage, $classes) = @{$HERITAGE{$package}};
+                if (Scalar::Util::blessed($thing)) {
+                    # Check objects
+                    foreach my $obj (@{$heritage->{$$thing}}) {
+                        if ($isa = $obj->$u_isa($type)) {
+                            return ($isa);
+                        }
+                    }
+                } else {
+                    # Check classes
+                    foreach my $pkg (keys(%{$classes})) {
+                        if ($isa = $pkg->$u_isa($type)) {
+                            return ($isa);
+                        }
+                    }
+                }
+            }
+        }
+
+        return ('');   # Isn't
     };
 }
 
@@ -1775,7 +2108,7 @@ sub create_field
     my ($class, $field, $attr) = @_;
 
     # Verify valid class
-    if (! $class->isa(__PACKAGE__)) {
+    if (! $class->$univ_isa(__PACKAGE__)) {
         OIO::Args->die(
             'caller_level' => 1,
             'message'      => 'Not an Object::InsideOut class',
@@ -1799,8 +2132,12 @@ sub create_field
         if ($attr) {
             $attr = "($attr)";                  # Add () if not empty string
         }
-    } else {
-        $attr = '';
+    }
+    if (! $attr) {
+        OIO::Args->die(
+            'caller_level' => 1,
+            'message'      => 'Missing accessor generation parameters',
+            'Usage'        => 'See POD for correct usage');
     }
 
     # Create the declaration
@@ -1823,6 +2160,38 @@ sub create_field
 
     # Process the declaration
     process_fields();
+}
+
+
+# Add heritage field for a package
+sub create_heritage : PRIVATE
+{
+    my $package = $_[0];
+
+    # Check if 'heritage' already exists
+    if (exists($DUMP_FIELDS{$package}{'heritage'})) {
+        OIO::Attribute->die(
+            'caller_level' => 1,
+            'message'      => "Can't inherit into '$package'",
+            'Info'         => "'heritage' already specified for another field using '$DUMP_FIELDS{$package}{'heritage'}[1]'");
+    }
+
+    # Create the heritage field
+    my $heritage = {};
+
+    # Share the field, if applicable
+    if (is_sharing($package)) {
+        threads::shared::share($heritage)
+    }
+
+    # Save the field's ref
+    push(@{$FIELDS{$package}}, $heritage);
+
+    # Save info for ->dump()
+    $DUMP_FIELDS{$package}{'heritage'} = [ $heritage, 'Inherit' ];
+
+    # Save heritage info
+    $HERITAGE{$package} = [ $heritage, {} ];
 }
 
 
@@ -2254,7 +2623,7 @@ sub create_CHAINED : PRIVATE
         for my $pkg (@{$tree->{$class}}) {
             if (my $code = $code_refs->{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
-                @args = $code->($thing, @args);
+                @args = $thing->$code(@args);
                 push(@classes, $pkg);
             }
         }
@@ -2273,7 +2642,7 @@ sub create_RESTRICTED : PRIVATE
     return sub {
         my $caller = caller();
         # Caller must be in class hierarchy
-        if ($caller->isa($package) || $package->isa($caller)) {
+        if ($caller->$univ_isa($package) || $package->$univ_isa($caller)) {
             goto &{$code}
         }
         OIO::Method->die('message' => "Can't call restricted method '$package->$method' from class '$caller'");
@@ -2339,7 +2708,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.17
+This document describes Object::InsideOut version 1.18
 
 =head1 SYNOPSIS
 
@@ -2473,7 +2842,7 @@ matching, and more.
 =item Runtime Support
 
 Supports classes that may be loaded at runtime (i.e., using S<C<eval { require
-...; };>>).  This makes it usable from within L<mod_perl, as well.  Also
+...; };>>).  This makes it usable from within L<mod_perl>, as well.  Also
 supports dynamic creation of object fields during runtime.
 
 =item Perl 5.6
@@ -2491,6 +2860,12 @@ L<Exception::Class> for handling errors in an OO-compatible manner.
 Object::InsideOut has built-in support for object dumping and reloading that
 can be accomplished in either an automated fashion or through the use of
 class-supplied subroutines.
+
+=item Foreign Class Inheritance
+
+Object::InsideOut allows classes to inherit from foreign (i.e.,
+non-Object::InsideOut) classes, thus allowing you to sub-class other Perl
+class, and access their methods from your own objects.
 
 =back
 
@@ -2518,10 +2893,10 @@ Multiple inheritance is also supported:
      ...
  }
 
-There is no need for S<C<use base ...>>, or to set up C<@ISA> arrays.  (In
-fact, you shouldn't do either:  Object::InsideOut acts as a replacement for
-the C<base> pragma.)  Object::InsideOut loads the parent module(s), calls
-their C<import> functions, and sets up the sub-class's @ISA array.
+Object::InsideOut acts as a replacement for the C<base> pragma:  It loads the
+parent module(s), calls their C<import> functions, and sets up the sub-class's
+@ISA array.  Therefore, you must not S<C<use base ...>> yourself, or try to
+set up C<@ISA> arrays.
 
 If a parent class takes parameters, enclose them in an array ref (mandatory)
 following the name of the parent class:
@@ -2859,6 +3234,11 @@ field array/hash, and the data (as a scalar) to be put in it:
 To be clear, the C<-E<gt>set()> method is used inside class code; not
 application code.  Use it inside any object methods that set data in object
 field arrays/hashes.
+
+In the event of a method naming conflict, the C<-E<gt>set()> method can be
+called using its fully-qualified name:
+
+ $self->Object::InsideOut::set(\@field, $data);
 
 =head2 Automatic Accessor Generation
 
@@ -3446,6 +3826,11 @@ of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
 When called with a I<true> argument, C<-E<gt>dump()> returns a string version
 of the I<Perl> representation using L<Data::Dumper>.
 
+In the event of a method naming conflict, the C<-E<gt>dump()> method can be
+called using its fully-qualified name:
+
+ my $dump = $obj->Object::InsideOut::dump();
+
 =item my $obj = Object::InsideOut->pump($data);
 
 C<Object::InsideOut->pump()> takes the output from the C<-E<gt>dump()> method,
@@ -3512,19 +3897,14 @@ some classes may need the capability to create object fields I<on-the-fly>,
 for example, as part of an C<:Automethod>.  Object::InsideOut provides a class
 method for this:
 
- # Dynamically create an array field
- Object::InsideOut->create_field($class, '@field_name');
+ # Dynamically create a hash field with standard accessors
+ Object::InsideOut->create_field($class, '%'.$fld, "'Standard'=>'$fld'");
 
 The first argument is the class to which the field will be added.  The second
 argument is a string containing the name of the field preceeded by either a
-C<@> or C<%> to declare an array field or hash field, respectively.
-
-Optionally, C<create_field> can take a third string agrument consisting of any
-of the S<C<key =E<gt> value>> pairs used in conjunction with the C<:Field>
-attribute.  For example,
-
- # Dynamically create a hash field with standard accessors
- Object::InsideOut->create_field($class, '%'.$fld, "'Standard'=>'$fld'");
+C<@> or C<%> to declare an array field or hash field, respectively.  The third
+argument is a string containing S<C<key =E<gt> value>> pairs used in
+conjunction with the C<:Field> attribute for generating field accessors.
 
 Here's a more elaborate example used in inside an C<:Automethod>:
 
@@ -3666,6 +4046,122 @@ The following coercion attributes are supported:
 
 Coercing an object to a scalar (C<:Scalarify>) is not supported as C<$$obj> is
 the ID of the object and cannot be overridden.
+
+=head2 Foreign Class Inheritance
+
+Object::InsideOut supports inheritance from foreign (i.e.,
+non-Object::InsideOut) classes.  This means that your classes can inherit from
+other Perl class, and access their methods from your own objects.
+
+One method of declaring foreign class inheritance is to add the class name to
+the Object::InsideOut declaration inside your package:
+
+ package My::Class; {
+     use Object::InsideOut qw(Foreign::Class);
+     ...
+ }
+
+This allows you to access the foreign class's static methods from your own
+class.  For example, suppose C<Foreign::Class> has a class method called
+C<foo>.  With the above, you can access that method using
+C<My::Class-E<gt>foo()> instead.
+
+Multiple foreign inheritance is supported, as well:
+
+ package My::Class; {
+     use Object::InsideOut qw(Foreign::Class Other::Foreign::Class);
+     ...
+ }
+
+=over
+
+=item $self->inherit($obj, ...);
+
+To use object methods from foreign classes, an object must I<inherit> from an
+object of that class.  This would normally be done inside a class's C<:Init>
+subroutine:
+
+ package My::Class; {
+     use Object::InsideOut qw(Foreign::Class);
+
+     sub init :Init
+     {
+         my ($self, $args) = @_;
+
+         my $foreign_obj = Foreign::Class->new(...);
+         $self->inherit($foreign_obj);
+     }
+ }
+
+Thus with the above, if C<Foreign::Class> has an object method called C<bar>,
+you can call that method from your own objects:
+
+ package main;
+
+ my $obj = My::Class->new();
+ $obj->bar();
+
+Object::InsideOut handles the dispatching of the C<-E<gt>bar()> method call
+using the internally held inherited object (in this case, C<$foreign_obj>).
+
+Multiple inheritance is supportes as well:  You can call the
+C<-E<gt>inherit()> method multiple times, or make just one call with all the
+objects to be inherited from.
+
+C<-E<gt>inherit()> is a restricted method.  In other words, you cannot use it
+on an object outside of code belonging to the object's class tree (e.g., you
+can't call it from application code).
+
+In the event of a method naming conflict, the C<-E<gt>inherit()> method can be
+called using its fully-qualified name:
+
+ $self->Object::InsideOut::inherit($obj);
+
+=item my @objs = $self->heritage();
+
+=item my $obj = $self->heritage($class);
+
+=item my @objs = $self->heritage($class1, $class2, ...);
+
+Your class code can retrieve any inherited objects using the
+C<-E<gt>heritage()> method. When called without any arguments, it returns a
+list of any objects that were stored by the calling class using the calling
+object.  In other words, if class C<My::Class> uses object C<$obj> to store
+foreign objects C<$fobj1> and C<$fobj2>, then later on in class C<My::Class>,
+C<$obj-E<gt>heritage()> will return C<$fobj1> and C<$fobj2>.
+
+C<-E<gt>heritage()> can also be called with one or more class name arguments.
+In this case, only objects of the specified class(es) are returned.
+
+In the event of a method naming conflict, the C<-E<gt>heritage()> method can
+be called using its fully-qualified name:
+
+ my @objs = $self->Object::InsideOut::heritage();
+
+=item $self->disinherit($class [, ...])
+
+=item $self->disinherit($obj [, ...])
+
+The C<-E<gt>disinherit()> method disassociates (i.e., deletes) the inheritance
+of foreign object(s) from an object.  The foreign objects may be specified by
+class, or using the actual inherited object (retrieved via C<-E<gt>heritage()>,
+for example).
+
+The call is only effective when called inside the class code that established
+the initial inheritance.  In other words, if an inheritance is set up inside a
+class, then disinheritance can only be done from inside that class.
+
+In the event of a method naming conflict, the C<-E<gt>disinherit()> method can
+be called using its fully-qualified name:
+
+ $self->Object::InsideOut::disinherit($obj [, ...])
+
+=back
+
+Note that with foreign inheritance, you only have access to class and object
+methods.  The internally held inherited objects are not directly available,
+nor are the hash fields inside I<blessed hash> objects.  You'll need to write
+your own accessors for such things.
 
 =head1 THREAD SUPPORT
 
@@ -3888,7 +4384,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.17/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.18/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

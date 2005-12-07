@@ -31,4 +31,5 @@ t/14-auto_cc.t
 t/15-type.t
 t/16-return.t
 t/17-dynamic.t
+t/18-inherit.t
 META.yml                                 Module meta-data (added by MakeMaker)

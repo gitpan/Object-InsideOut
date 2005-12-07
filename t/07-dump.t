@@ -83,7 +83,7 @@ MAIN:
     is(Object::InsideOut::Util::hash_re($hash->{MyDer}, qr/^HASH/), 'invisible'
                                               => 'Hidden derived attribute');
 
-    my $str = $obj->dump(1);
+    my $str = $obj->Object::InsideOut::dump(1);
     #print(STDERR $str, "\n");
 
     my $dump2 = eval $str;
