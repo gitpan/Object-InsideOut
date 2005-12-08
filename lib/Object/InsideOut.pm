@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.19;
+our $VERSION = 1.21;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2206,7 +2206,7 @@ sub create_accessors : PRIVATE
         my @errs;
         local $SIG{__WARN__} = sub { push(@errs, @_); };
 
-        if ($decl =~ /{/) {
+        if ($decl =~ /^{/) {
             eval "\$acc_spec = $decl";
         } else {
             eval "\$acc_spec = { $decl }";
@@ -2708,7 +2708,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.19
+This document describes Object::InsideOut version 1.21
 
 =head1 SYNOPSIS
 
@@ -4405,7 +4405,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.19/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.21/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

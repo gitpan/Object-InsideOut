@@ -3,7 +3,7 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 1.19;
+our $VERSION = 1.21;
 
 use Object::InsideOut;
 

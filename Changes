@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.21 Thu Dec 08 11:47:20 2005
+	- Minor fix to :Field declaration code
+
 1.19 Thu Dec 08 10:41:10 2005
 	- Store clone of :InitArgs 'Default's if ref
 
