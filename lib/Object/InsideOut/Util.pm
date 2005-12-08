@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.18;
+our $VERSION = 1.19;
 
 
 ### Module Initialization ###
@@ -177,7 +177,7 @@ sub process_args
             }
 
             # Assign default value
-            $found{$key} = hash_re($spec, qr/^DEF(?:AULTs?)?$/i);
+            $found{$key} = clone(hash_re($spec, qr/^DEF(?:AULTs?)?$/i));
 
             # If no default, then remove it from the found args hash
             if (! defined($found{$key})) {
@@ -274,19 +274,20 @@ sub make_shared
 
 
 # Make a copy of a complex data structure that is thread-shared.
-# If not thread sharing, then make a 'regular' copy.
 sub shared_copy
 {
-    my $in = $_[0];
+    # If not thread sharing, then make a 'regular' copy.
+    if (! $threads::shared::threads_shared) {
+        return (clone(@_));
+    }
 
     # Make copies of array, hash and scalar refs
+    my $in = $_[0];
     if (my $ref_type = ref($in)) {
         # Copy an array ref
         if ($ref_type eq 'ARRAY') {
             # Make empty shared array ref
-            my $out = ($threads::shared::threads_shared)
-                            ? &threads::shared::share([])
-                            : [];
+            my $out = &threads::shared::share([]);
             # Recursively copy and add contents
             for my $val (@$in) {
                 push(@$out, shared_copy($val));
@@ -297,9 +298,7 @@ sub shared_copy
         # Copy a hash ref
         if ($ref_type eq 'HASH') {
             # Make empty shared hash ref
-            my $out = ($threads::shared::threads_shared)
-                            ? &threads::shared::share({})
-                            : {};
+            my $out = &threads::shared::share({});
             # Recursively copy and add contents
             foreach my $key (keys(%{$in})) {
                 $out->{$key} = shared_copy($in->{$key});
@@ -309,10 +308,47 @@ sub shared_copy
 
         # Copy a scalar ref
         if ($ref_type eq 'SCALAR') {
-            if ($threads::shared::threads_shared) {
-                return (threads::shared::share($in));
+            return (threads::shared::share($in));
+        }
+    }
+
+    # Just return anything else
+    # NOTE: This will generate an error if we're thread-sharing,
+    #       and $in is not an ordinary scalar.
+    return ($in);
+}
+
+
+# Make a copy of a complex data structure.
+sub clone
+{
+    # Make copies of array, hash and scalar refs
+    my $in = $_[0];
+    if (my $ref_type = ref($in)) {
+        # Copy an array ref
+        if ($ref_type eq 'ARRAY') {
+            # Make empty shared array ref
+            my $out = [];
+            # Recursively copy and add contents
+            for my $val (@$in) {
+                push(@$out, clone($val));
             }
-            # If not sharing, then make a copy of the scalar ref
+            return ($out);
+        }
+
+        # Copy a hash ref
+        if ($ref_type eq 'HASH') {
+            # Make empty shared hash ref
+            my $out = {};
+            # Recursively copy and add contents
+            foreach my $key (keys(%{$in})) {
+                $out->{$key} = clone($in->{$key});
+            }
+            return ($out);
+        }
+
+        # Copy a scalar ref
+        if ($ref_type eq 'SCALAR') {
             my $out = \do{ my $scalar; };
             $$out = $$in;
             return ($out);
@@ -320,8 +356,6 @@ sub shared_copy
     }
 
     # Just return anything else
-    # NOTE: This will generate an error if we're thread-sharing,
-    #       and $in is not an ordinary scalar.
     return ($in);
 }
 

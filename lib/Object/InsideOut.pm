@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.18;
+our $VERSION = 1.19;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2708,7 +2708,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.18
+This document describes Object::InsideOut version 1.19
 
 =head1 SYNOPSIS
 
@@ -4093,7 +4093,7 @@ subroutine:
      }
  }
 
-Thus with the above, if C<Foreign::Class> has an object method called C<bar>,
+Thus, with the above, if C<Foreign::Class> has an object method called C<bar>,
 you can call that method from your own objects:
 
  package main;
@@ -4158,10 +4158,31 @@ be called using its fully-qualified name:
 
 =back
 
-Note that with foreign inheritance, you only have access to class and object
-methods.  The internally held inherited objects are not directly available,
-nor are the hash fields inside I<blessed hash> objects.  You'll need to write
-your own accessors for such things.
+B<NOTE>:  With foreign inheritance, you only have access to class and object
+methods.  The encapsulation of the inherited objects is strong, meaning that
+only the class where the inheritance takes place has direct access to the
+inherited object.  If access to the inherited objects themselves, or their
+internal hash fields (in the case of I<blessed hash> objects) is needed
+outside the class, then you'll need to write your own accessors for that.
+
+B<LIMITATION>:  You cannot use fully-qualified method names to access foreign
+methods.  Thus, the following will not work:
+
+ my $obj = My::Class->new();
+ $obj->Foreign::Class::bar();
+
+Normally, you shouldn't ever need to do the above:  C<$obj-E<gt>bar()> would
+suffice.
+
+The only time this may be an issue is when the I<native> class I<overrides> an
+inherited foreign class's method (e.g., C<My::Class> has its own
+C<-E<gt>bar()> method).  Such overridden methods are not directly callable.
+If such overriding is intentional, then this should not be an issue:  No one
+should be writing code that tries to by-pass the override.  However, if the
+overriding is accidently, then either the I<native> method should be renamed,
+or the I<native> class should provide a wrapper method so that the
+functionality of the overridden method is made available under a different
+name.
 
 =head1 THREAD SUPPORT
 
@@ -4384,7 +4405,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.18/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.19/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

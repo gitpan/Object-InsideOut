@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.19 Thu Dec 08 10:41:10 2005
+	- Store clone of :InitArgs 'Default's if ref
+
 1.18 Wed Dec 07 11:59:35 2005
 	- Can inherit from non-Object::InsideOut classes
 	- create_field() requires 3 args
