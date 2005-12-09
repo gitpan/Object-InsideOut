@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.21;
+our $VERSION = 1.22;
 
 
 ### Module Initialization ###
@@ -254,7 +254,7 @@ sub process_args
 }
 
 
-# Make a thread-shared copy of a complex data structure,
+# Make a thread-shared copy of a complex data structure
 # if it is not already thread-shared
 sub make_shared
 {
@@ -269,18 +269,21 @@ sub make_shared
         return ($in);
     }
 
-    return (shared_copy($in));
+    return (shared_clone($in));
+}
+
+
+# Make a copy of a complex data structure.
+# If thread-sharing, then make the copy thread-shared.
+sub shared_copy
+{
+    return (($threads::shared::threads_shared) ? shared_clone(@_) : clone(@_));
 }
 
 
 # Make a copy of a complex data structure that is thread-shared.
-sub shared_copy
+sub shared_clone
 {
-    # If not thread sharing, then make a 'regular' copy.
-    if (! $threads::shared::threads_shared) {
-        return (clone(@_));
-    }
-
     # Make copies of array, hash and scalar refs
     my $in = $_[0];
     if (my $ref_type = ref($in)) {
@@ -290,7 +293,7 @@ sub shared_copy
             my $out = &threads::shared::share([]);
             # Recursively copy and add contents
             for my $val (@$in) {
-                push(@$out, shared_copy($val));
+                push(@$out, shared_clone($val));
             }
             return ($out);
         }
@@ -301,7 +304,7 @@ sub shared_copy
             my $out = &threads::shared::share({});
             # Recursively copy and add contents
             foreach my $key (keys(%{$in})) {
-                $out->{$key} = shared_copy($in->{$key});
+                $out->{$key} = shared_clone($in->{$key});
             }
             return ($out);
         }

@@ -1,7 +1,9 @@
 use strict;
 use warnings;
 
-use Test::More 'no_plan';
+use Storable qw(thaw);
+
+use Test::More qw(no_plan);
 
 # Borg is a foreign hash-based class
 package Borg; {
@@ -76,39 +78,18 @@ package Bar; {
 }
 
 package Baz; {
-    use Object::InsideOut qw(Bar);
+    use Object::InsideOut qw(Bar Storable);
 }
 
 
 package main;
 MAIN:
 {
-    can_ok('Borg'                       => qw(get_borg set_borg));
-    ok(Foo->isa('Borg')                 => 'Foo isa Borg');
-    can_ok('Foo'                        => qw(unborg get_borg set_borg));
-    is(Foo->warn(), 'Resistance is futile' => 'Class method inheritance');
-
     my $obj = Baz->new('borg' => 'Picard');
 
-    ok($obj->isa('Foo')                 => 'isa Foo');
-    ok($obj->isa('Borg')                => 'isa Borg');
-    can_ok($obj                         => qw(get_borg set_borg unborg obj));
-    is($obj->get_borg('borg'), 'Picard' => 'get from Borg');
-
-    $obj->set_borg('borg' => '1 of 5');
-    is($obj->get_borg('borg'), '1 of 5' => 'Changed Borg');
-
-    my $obj2 = Baz->new('obj'=>$obj);
-    ok($obj2->isa('Borg')               => 'isa Borg');
-
-    my ($x) = @{$obj2->obj()};
-    is($x, $obj                         => 'Retrieved object');
-
-    #print($obj->dump(1), "\n");
-
-    $obj->unborg();
-    ok($obj->isa('Foo')                 => 'isa Foo');
-    ok(! $obj->isa('Borg')              => 'no longer a Borg');
+    my $x = $obj->freeze();
+    my $obj2 = thaw($x);
+    is($obj->dump(1), $obj2->dump(1) => 'Storable works');
 }
 
 exit(0);

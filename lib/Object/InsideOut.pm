@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.21;
+our $VERSION = 1.22;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -237,6 +237,10 @@ sub import
                 }
             }
             push(@{$class.'::ISA'}, $parent);
+
+        } elsif ($parent eq 'Storable' && exists($INC{'Storable.pm'})) {
+            # Special handling for Storable
+            push(@{$class.'::ISA'}, 'Storable');
 
         } else {
             # Inherit from foreign class
@@ -925,11 +929,12 @@ _CODE_
     undef(%HIDDEN);   # No longer needed
 
 
-    # Export certain methods to all classes
+    # Export methods
     my @EXPORT = qw(new clone set DESTROY AUTOLOAD dump
                     inherit heritage disinherit);
+    my @EXPORT2 = (@EXPORT, qw(STORABLE_freeze STORABLE_thaw));
     for my $pkg (keys(%TREE_TOP_DOWN)) {
-        for my $sym (@EXPORT) {
+        for my $sym (($pkg->$univ_isa('Storable')) ? @EXPORT2 : @EXPORT) {
             my $full_sym = $pkg.'::'.$sym;
             # Only export if method doesn't already exist
             if (! *{$full_sym}{CODE}) {
@@ -1693,7 +1698,6 @@ sub pump
 
     # Store object data
     foreach my $pkg (keys(%{$dump})) {
-        next if ($pkg eq 'CLASS');
         my $data = $dump->{$pkg};
 
         # Try to use a class-supplied pumper
@@ -1737,6 +1741,24 @@ sub pump
 
     # Done - return the object
     return ($self);
+}
+
+
+# Support for Serialization using Storable
+sub STORABLE_freeze {
+    my ($self, $cloning) = @_;
+    return $self->dump(1);
+}
+
+sub STORABLE_thaw {
+    my ($obj, $cloning, $data) = @_;
+    my $self = Object::InsideOut->pump($data);
+    $$obj = $$self;
+    if ($] >= 5.008003) {
+        Internals::SvREADONLY($$obj, 1);
+        Internals::SvREADONLY($$self, 0);
+    }
+    undef($$self);
 }
 
 
@@ -2708,7 +2730,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.21
+This document describes Object::InsideOut version 1.22
 
 =head1 SYNOPSIS
 
@@ -2786,19 +2808,19 @@ advantages over I<blessed hash> objects:
 
 =over
 
-=item Encapsulation
+=item * Encapsulation
 
 Object data is enclosed within the class's code and is accessible only through
 the class-defined interface.
 
-=item Field Name Collision Avoidance
+=item * Field Name Collision Avoidance
 
 Inheritance using I<blessed hash> classes can lead to conflicts if any classes
 use the same name for a field (i.e., hash key).  Inside-out objects are immune
 to this problem because object data is stored inside each class's package, and
 not in the object itself.
 
-=item Compile-time Name Checking
+=item * Compile-time Name Checking
 
 A common error with I<blessed hash> classes is the misspelling of field names:
 
@@ -2818,7 +2840,7 @@ additional key advantages:
 
 =over
 
-=item Speed
+=item * Speed
 
 When using arrays to store object data, Object::InsideOut objects are as
 much as 40% faster than I<blessed hash> objects for fetching and setting data,
@@ -2828,40 +2850,40 @@ hash> objects.
 For the same types of operations, Object::InsideOut objects are from 2 to 6
 times faster than Class::Std objects.
 
-=item Threads
+=item * Threads
 
 Object::InsideOut is thread safe, and thoroughly supports sharing objects
 between threads using L<threads::shared>.  Class::Std is not usable in
 threaded applications (or applications that use C<fork> under ActivePerl).
 
-=item Flexibility
+=item * Flexibility
 
 Allows control over object ID specification, accessor naming, parameter name
 matching, and more.
 
-=item Runtime Support
+=item * Runtime Support
 
 Supports classes that may be loaded at runtime (i.e., using S<C<eval { require
 ...; };>>).  This makes it usable from within L<mod_perl>, as well.  Also
 supports dynamic creation of object fields during runtime.
 
-=item Perl 5.6
+=item * Perl 5.6
 
 Usable with Perl 5.6.0 and later.  Class::Std is only usable with Perl 5.8.1
 and later.
 
-=item Exception Objects
+=item * Exception Objects
 
 As recommended in I<Perl Best Practices>, Object::InsideOut uses
 L<Exception::Class> for handling errors in an OO-compatible manner.
 
-=item Object Serialization
+=item * Object Serialization
 
 Object::InsideOut has built-in support for object dumping and reloading that
 can be accomplished in either an automated fashion or through the use of
-class-supplied subroutines.
+class-supplied subroutines.  Serialization using L<Storable> is also supported.
 
-=item Foreign Class Inheritance
+=item * Foreign Class Inheritance
 
 Object::InsideOut allows classes to inherit from foreign (i.e.,
 non-Object::InsideOut) classes, thus allowing you to sub-class other Perl
@@ -3785,7 +3807,7 @@ method should not be used with C<:Cumulative> or C<:Chained> Automethods.
 
 =over
 
-=item my $hash_ref = $obj->dump();
+=item my $array_ref = $obj->dump();
 
 =item my $string = $obj->dump(1);
 
@@ -3887,6 +3909,28 @@ would be:
 
      $data[$$obj] = $field_data->{'data'};
  }
+
+=item Storable
+
+Object::InsideOut also supports object serialization using the L<Storable>
+module.  To use this capability, add L<Storable> to the Object::InsideOut
+declaration in your package:
+
+ package My::Class; {
+     use Object::InsideOut qw(Storable);
+     ...
+ }
+
+And add C<use Storable;> in your application.  Then you can use the
+C<-E<gt>store()> and C<-E<gt>freeze()> methods to serialize your objects, and
+the C<retrieve()> and C<thaw()> subroutines to deserialize them.
+
+ package main;
+ use Storable;
+ my $obj = My::Class->new(...);
+ $obj->store('/tmp/object.dat');
+ ...
+ my $obj2 = retrieve('/tmp/object.dat');
 
 =back
 
@@ -4405,7 +4449,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.21/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.22/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
@@ -4417,6 +4461,8 @@ Inside-out Object Model:
 L<http://www.perlmonks.org/index.pl?node_id=219378>,
 L<http://www.perlmonks.org/index.pl?node_id=483162>,
 Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
+
+L<Storable>
 
 =head1 ACKNOWLEDGEMENTS
 

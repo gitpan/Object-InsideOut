@@ -1,7 +1,10 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.22 Fri Dec 09 12:55:00 2005
+	- Support object serialization using the Storable module
+
 1.21 Thu Dec 08 11:47:20 2005
-	- Minor fix to :Field declaration code
+	- Minor fix to :Field declaration handling code
 
 1.19 Thu Dec 08 10:41:10 2005
 	- Store clone of :InitArgs 'Default's if ref
