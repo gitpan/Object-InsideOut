@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.23 Mon Dec 12 10:04:30 2005
+	- Deep object cloning, and deep field cloning
+	- Handle creating shared objects when using Storable
+
 1.22 Fri Dec 09 12:55:00 2005
 	- Support object serialization using the Storable module
 

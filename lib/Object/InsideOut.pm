@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.22;
+our $VERSION = 1.23;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -274,6 +274,9 @@ sub import
 # destruction).  Object field hashes are marked with an attribute called
 # 'Field'.
 my (%NEW_FIELDS, %FIELDS);
+
+# Fields that require deep cloning
+my %DEEP_CLONE;
 
 # Field information for the dump() method
 my %DUMP_FIELDS;
@@ -1120,7 +1123,7 @@ sub CLONE
                 for my $pkg (@tree) {
                     if (my $replicate = $REPLICATORS{$pkg}) {
                         local $SIG{__DIE__} = 'OIO::trap';
-                        $replicate->($pseudo_object, $obj);
+                        $replicate->($pseudo_object, $obj, 'CLONE');
                     }
                 }
             }
@@ -1231,6 +1234,7 @@ sub new
 sub clone
 {
     my $parent = $_[0];
+    my $deep   = ($_[1]) ? 'deep' : '';   # Deep clone the object?
     my $class  = ref($parent);
 
     # Must call ->clone() as an object method
@@ -1252,18 +1256,31 @@ sub clone
     for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
         # Clone field data from the parent
         for my $fld (@{$FIELDS{$pkg}}) {
+            my $fdeep = $deep || $DEEP_CLONE{$fld};  # Deep clone the field?
             lock($fld) if ($am_sharing);
             if (ref($fld) eq 'HASH') {
-                $fld->{$$clone} = $fld->{$$parent};
+                if ($fdeep && $am_sharing) {
+                    $fld->{$$clone} = Object::InsideOut::Util::shared_clone($fld->{$$parent});
+                } elsif ($fdeep) {
+                    $fld->{$$clone} = Object::InsideOut::Util::clone($fld->{$$parent});
+                } else {
+                    $fld->{$$clone} = $fld->{$$parent};
+                }
             } else {
-                $fld->[$$clone] = $fld->[$$parent];
+                if ($fdeep && $am_sharing) {
+                    $fld->[$$clone] = Object::InsideOut::Util::shared_clone($fld->[$$parent]);
+                } elsif ($fdeep) {
+                    $fld->[$$clone] = Object::InsideOut::Util::clone($fld->[$$parent]);
+                } else {
+                    $fld->[$$clone] = $fld->[$$parent];
+                }
             }
         }
 
         # Dispatch any special replication handling
         if (my $replicate = $REPLICATORS{$pkg}) {
             local $SIG{__DIE__} = 'OIO::trap';
-            $parent->$replicate($clone);
+            $parent->$replicate($clone, $deep);
         }
     }
 
@@ -1747,17 +1764,25 @@ sub pump
 # Support for Serialization using Storable
 sub STORABLE_freeze {
     my ($self, $cloning) = @_;
-    return $self->dump(1);
+    return ($self->dump(1));
 }
 
 sub STORABLE_thaw {
     my ($obj, $cloning, $data) = @_;
+    # Recreate the object
     my $self = Object::InsideOut->pump($data);
+    # Transfer the ID to Storable's object
     $$obj = $$self;
+    # Make object shared, if applicable
+    if (is_sharing(ref($obj))) {
+        threads::shared::share($obj);
+    }
+    # Make object readonly
     if ($] >= 5.008003) {
         Internals::SvREADONLY($$obj, 1);
         Internals::SvREADONLY($$self, 0);
     }
+    # Prevent object destruction
     undef($$self);
 }
 
@@ -2247,29 +2272,56 @@ sub create_accessors : PRIVATE
     # Get info for accessors
     my ($get, $set, $type, $name, $return);
     foreach my $key (keys(%{$acc_spec})) {
+        my $key_uc = uc($key);
         my $val = $acc_spec->{$key};
+        # Standard accessors
         if ($key =~ /^st.*d/i) {
             $get = 'get_' . $val;
             $set = 'set_' . $val;
-        } elsif ($key =~ /^acc|^com|[gs]et/i) {
-            if ($key =~ /acc|com|get/i) {
+        }
+        # Get and/or set accessors
+        elsif ($key =~ /^acc|^com|^mut|[gs]et/i) {
+            # Get accessor
+            if ($key =~ /acc|com|mut|get/i) {
                 $get = $val;
             }
-            if ($key =~ /acc|com|set/i) {
+            # Set accessor
+            if ($key =~ /acc|com|mut|set/i) {
                 $set = $val;
             }
-        } elsif (uc($key) eq 'TYPE') {
+        }
+        # Deep clone the field
+        elsif ($key_uc eq 'COPY' || $key_uc eq 'CLONE') {
+            if (uc($val) eq 'DEEP') {
+                $DEEP_CLONE{$field_ref} = 1;
+            }
+            next;
+        } elsif ($key_uc eq 'DEEP') {
+            if ($val) {
+                $DEEP_CLONE{$field_ref} = 1;
+            }
+            next;
+        }
+        # Field type checking for set accessor
+        elsif ($key_uc eq 'TYPE') {
             $type = $val;
-        } elsif (uc($key) eq 'NAME') {
+        }
+        # Field name for ->dump()
+        elsif ($key_uc eq 'NAME') {
             $name = $val;
-        } elsif ($key =~ /^ret(?:urn)?$/i) {
+        }
+        # Set accessor return type
+        elsif ($key =~ /^ret(?:urn)?$/i) {
             $return = uc($val);
-        } else {
+        }
+        # Unknown parameter
+        else {
             OIO::Attribute->die(
                 'caller_level' => 3,
                 'message'      => "Can't create accessor method for package '$package'",
                 'Info'         => "Unknown accessor specifier: $key");
         }
+        # $val must have a usable value
         if (! defined($val) || $val eq '') {
             OIO::Attribute->die(
                 'caller_level' => 3,
@@ -2730,7 +2782,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.22
+This document describes Object::InsideOut version 1.23
 
 =head1 SYNOPSIS
 
@@ -3020,6 +3072,20 @@ exported by Object::InsideOut to each class:
 
  my $obj2 = $obj->clone();
 
+When called without arguments, C<-E<gt>clone()> creates a I<shallow> copy of
+the object, meaning that any complex data structures (i.e., I<refs>) stored in
+the object will be shared with its clone.
+
+Calling C<-E<gt>clone()> with a true argument:
+
+ my $obj2 = $obj->clone(1);
+
+Creates a I<deep> copy of the object such that no internal data is shared
+between the objects.
+
+I<Deep> cloning can also be controlled at the field level.  See L</"Field
+Cloning"> below for more details.
+
 =head2 Object Initialization
 
 Object initialization is accomplished through a combination of an C<:InitArgs>
@@ -3306,7 +3372,8 @@ which would be used as follows:
  my $cmt = $obj->comment();
 
 (The keyword C<Accessor> is case-insensitive, and can be abbreviated to
-C<Acc> or can be specified as C<get+set> or C<Combined> or C<Combo>.)
+C<Acc> or can be specified as C<get_set> or C<Combined> or C<Combo> or
+C<Mutator>.)
 
 =item I<Set> Accessor Return Value
 
@@ -3427,6 +3494,21 @@ C<:Field> attribute:
 
 =back
 
+=head2 Field Cloning
+
+Object cloning can be controlled at the field level such that only specified
+fields are I<deep> copied when C<-E<gt>clone()> is called without any
+arguments.  This is done by adding another specifier to the C<:Field>
+attribute:
+
+ my @data :Field('Clone' => 'deep');
+    # or
+ my @data :Field('Copy' => 'deep');
+    # or
+ my @data :Field('Deep' => 1);
+
+As usual, the keywords above are case-insensitive.
+
 =head2 Object ID
 
 By default, the ID of an object is derived from a sequence counter for the
@@ -3461,21 +3543,38 @@ details for you.
 
 In rare cases, a class may require special handling for object replication.
 It must then provide a subroutine labeled with the C<:Replicate> attribute.
-This subroutine will be sent two objects:  The parent and the clone:
+This subroutine will be sent three arguments:  The parent and the cloned
+objects, and a flag:
 
  sub _replicate :Replicate
  {
-     my ($parent, $clone) = @_;
+     my ($parent, $clone, $flag) = @_;
 
      # Special object replication processing
+     if ($clone eq 'CLONE') {
+        # Handling for thread cloning
+        ...
+     } elsif ($clone eq 'deep') {
+        # Deep copy of the parent
+        ...
+     } else {
+        # Shallow copying
+        ...
+     }
  }
 
-In the case of thread cloning, the C<$parent> object is just an un-blessed
-anonymous scalar reference that contains the ID for the object in the parent
-thread.
+In the case of thread cloning, C<$flag> will be set to C<'CLONE'>, and the
+C<$parent> object is just an un-blessed anonymous scalar reference that
+contains the ID for the object in the parent thread.
+
+When invoked via the C<-E<gt>clone()> method, C<$flag> may be either an empty
+string which denotes that a I<shallow> copy is being produced for the clone,
+or C<$flag> may be set to C<'deep'> indicating a I<deep> copy is being
+produced.
 
 The C<:Replicate> subroutine only needs to deal with the special replication
-processing:  Object::InsideOut will handle all the other details.
+processing needed by the object:  Object::InsideOut will handle all the other
+details.
 
 =head2 Object Destruction
 
@@ -4449,7 +4548,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.22/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.23/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
@@ -4458,8 +4557,9 @@ Comparison with Class::Std:
 L<http://www.cpanforum.com/posts/1326>
 
 Inside-out Object Model:
-L<http://www.perlmonks.org/index.pl?node_id=219378>,
-L<http://www.perlmonks.org/index.pl?node_id=483162>,
+L<http://www.perlmonks.org/?node_id=219378>,
+L<http://www.perlmonks.org/?node_id=483162>,
+L<http://www.perlmonks.org/?node_id=515650>,
 Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
 
 L<Storable>
