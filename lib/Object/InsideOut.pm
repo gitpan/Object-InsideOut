@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.23;
+our $VERSION = 1.24;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -237,10 +237,6 @@ sub import
                 }
             }
             push(@{$class.'::ISA'}, $parent);
-
-        } elsif ($parent eq 'Storable' && exists($INC{'Storable.pm'})) {
-            # Special handling for Storable
-            push(@{$class.'::ISA'}, 'Storable');
 
         } else {
             # Inherit from foreign class
@@ -570,15 +566,20 @@ sub _ID
     my $tree = $ID_SUBS{$class}[1];   # The object's class tree
 
     # Save deleted IDs for later reuse
-    if (@_) {
+    if (my $id = shift) {
         local $SIG{__WARN__} = sub { };   # Suppress spurious msg
         if (keys(%RECLAIMED_IDS)) {       # Perl bug workaround
-            if (! exists($RECLAIMED_IDS{$tree})) {
+            if (exists($RECLAIMED_IDS{$tree})) {
+                if (grep { $_ == $id } @{$RECLAIMED_IDS{$tree}}) {
+                    print(STDERR "ERROR: Duplicate reclaimed object ID ($id) in class tree for class $tree\n");
+                    return;
+                }
+            } else {
                 $RECLAIMED_IDS{$tree} = ($threads::shared::threads_shared)
                                             ? &threads::shared::share([])
                                             : [];
             }
-            push(@{$RECLAIMED_IDS{$tree}}, $_[0]);
+            push(@{$RECLAIMED_IDS{$tree}}, $id);
         }
         return;
     }
@@ -588,7 +589,7 @@ sub _ID
         return (shift(@{$RECLAIMED_IDS{$tree}}));
     }
 
-    # Return the next ID
+    # Return the next ID (forced to an integer)
     return (++$ID_COUNTERS{$tree});
 }
 
@@ -937,7 +938,7 @@ _CODE_
                     inherit heritage disinherit);
     my @EXPORT2 = (@EXPORT, qw(STORABLE_freeze STORABLE_thaw));
     for my $pkg (keys(%TREE_TOP_DOWN)) {
-        for my $sym (($pkg->$univ_isa('Storable')) ? @EXPORT2 : @EXPORT) {
+        for my $sym (($pkg->isa('Storable')) ? @EXPORT2 : @EXPORT) {
             my $full_sym = $pkg.'::'.$sym;
             # Only export if method doesn't already exist
             if (! *{$full_sym}{CODE}) {
@@ -1364,17 +1365,16 @@ sub DESTROY
 
             local $SIG{__WARN__} = sub { };     # Suppress spurious msg
             if (keys(%SHARED)) {                # Perl bug workaround
-
-                # Remove thread ID for this object's thread tracking list
-                lock(%SHARED);
-                my $tid = pop(@{$SHARED{$class}{$$self}});
-                while ($tid != $THREAD_ID) {
-                    unshift(@{$SHARED{$class}{$$self}}, $tid);
-                    $tid = pop(@{$SHARED{$class}{$$self}});
+                if (! exists($SHARED{$class}{$$self})) {
+                    print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $THREAD_ID twice\n");
+                    return;   # Object already deleted (shouldn't happen)
                 }
 
-                # If object is still active in other threads, then just return
-                if (@{$SHARED{$class}{$$self}}) {
+                # Remove thread ID from this object's thread tracking list
+                lock(%SHARED);
+                if (@{$SHARED{$class}{$$self}} =
+                        grep { $_ != $THREAD_ID } @{$SHARED{$class}{$$self}})
+                {
                     return;
                 }
 
@@ -1382,7 +1382,12 @@ sub DESTROY
                 delete($SHARED{$class}{$$self});
             }
 
-        } else {
+        } elsif ($threads::threads) {
+            if (! exists($OBJECTS{$class}{$$self})) {
+                print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class twice\n");
+                return;
+            }
+
             # Delete this non-thread-shared object from the thread cloning
             # registry
             delete($OBJECTS{$class}{$$self});
@@ -1450,12 +1455,21 @@ sub AUTOLOAD
         if (exists($HERITAGE{$pkg})) {
             my ($heritage, $classes) = @{$HERITAGE{$pkg}};
             if (Scalar::Util::blessed($thing)) {
-                # Check objects
-                foreach my $obj (@{$heritage->{$$thing}}) {
-                    if (my $code = $obj->can($method)) {
-                        shift;
-                        unshift(@_, $obj);
-                        goto $code;
+                if (exists($heritage->{$$thing})) {
+                    # Check objects
+                    foreach my $obj (@{$heritage->{$$thing}}) {
+                        if (my $code = $obj->can($method)) {
+                            shift;
+                            unshift(@_, $obj);
+                            goto $code;
+                        }
+                    }
+                } else {
+                    # Check classes
+                    foreach my $pkg (keys(%{$classes})) {
+                        if (my $code = $pkg->can($method)) {
+                            goto $code;
+                        }
                     }
                 }
             } else {
@@ -1879,7 +1893,9 @@ sub heritage
     }
 
     # Anything to return?
-    if (! exists($HERITAGE{$package})) {
+    if (! exists($HERITAGE{$package}) ||
+        ! exists($HERITAGE{$package}[0]->{$$self}))
+    {
         return;
     }
 
@@ -2062,22 +2078,11 @@ sub UNIVERSAL_can
                 next;
             }
 
-            # Check with heritage objects/classes
+            # Check heritage
             if (exists($HERITAGE{$package})) {
-                my ($heritage, $classes) = @{$HERITAGE{$package}};
-                if (Scalar::Util::blessed($thing)) {
-                    # Check objects
-                    foreach my $obj (@{$heritage->{$$thing}}) {
-                        if ($code = $obj->$univ_can($method)) {
-                            return ($code);
-                        }
-                    }
-                } else {
-                    # Check classes
-                    foreach my $pkg (keys(%{$classes})) {
-                        if ($code = $pkg->$univ_can($method)) {
-                            return ($code);
-                        }
+                foreach my $pkg (keys(%{$HERITAGE{$package}->[1]})) {
+                    if ($code = $pkg->$univ_can($method)) {
+                        return ($code);
                     }
                 }
             }
@@ -2116,24 +2121,12 @@ sub UNIVERSAL_isa
             return ($isa);
         }
 
-        # Next, check with heritage objects
+        # Next, check heritage
         for my $package (@{$TREE_BOTTOM_UP->{ref($thing) || $thing}}) {
-            # Check with heritage objects
             if (exists($HERITAGE{$package})) {
-                my ($heritage, $classes) = @{$HERITAGE{$package}};
-                if (Scalar::Util::blessed($thing)) {
-                    # Check objects
-                    foreach my $obj (@{$heritage->{$$thing}}) {
-                        if ($isa = $obj->$u_isa($type)) {
-                            return ($isa);
-                        }
-                    }
-                } else {
-                    # Check classes
-                    foreach my $pkg (keys(%{$classes})) {
-                        if ($isa = $pkg->$u_isa($type)) {
-                            return ($isa);
-                        }
+                foreach my $pkg (keys(%{$HERITAGE{$package}->[1]})) {
+                    if ($isa = $pkg->$u_isa($type)) {
+                        return ($isa);
                     }
                 }
             }
@@ -2782,7 +2775,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.23
+This document describes Object::InsideOut version 1.24
 
 =head1 SYNOPSIS
 
@@ -4204,9 +4197,9 @@ the Object::InsideOut declaration inside your package:
      ...
  }
 
-This allows you to access the foreign class's static methods from your own
-class.  For example, suppose C<Foreign::Class> has a class method called
-C<foo>.  With the above, you can access that method using
+This allows you to access the foreign class's static (i.e., class) methods from
+your own class.  For example, suppose C<Foreign::Class> has a class method
+called C<foo>.  With the above, you can access that method using
 C<My::Class-E<gt>foo()> instead.
 
 Multiple foreign inheritance is supported, as well:
@@ -4247,7 +4240,7 @@ you can call that method from your own objects:
 Object::InsideOut handles the dispatching of the C<-E<gt>bar()> method call
 using the internally held inherited object (in this case, C<$foreign_obj>).
 
-Multiple inheritance is supportes as well:  You can call the
+Multiple inheritance is supported, as well:  You can call the
 C<-E<gt>inherit()> method multiple times, or make just one call with all the
 objects to be inherited from.
 
@@ -4500,14 +4493,9 @@ If a I<set> accessor accepts scalars, then you can store any inside-out
 object type in it.  If its C<Type> is set to C<HASH>, then it can store any
 I<blessed hash> object.
 
-If you save an object inside another object when thread-sharing, you must
-rebless it when you get it out:
-
- my $bb = BB->new();
- my $aa = AA->new();
- $aa->save($bb);
- my $cc = $aa->get();
- bless($cc, 'BB');
+There are bugs associated with L<threads::shared> that may prevent you from
+using foreign inheritance with shared objects, or storing objects inside of
+shared objects.
 
 For Perl 5.8.1 through 5.8.4, a Perl bug produces spurious warning messages
 when threads are destroyed.  These messages are innocuous, and can be
@@ -4548,7 +4536,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.23/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.24/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
