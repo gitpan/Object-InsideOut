@@ -27,7 +27,7 @@ if ($@) {
 Module::Build->new(
     'module_name' => 'Object::InsideOut',
     'license'     => 'perl',
-    'dist_author' => 'Jerry D. Hedden <jdhedden AT 1979 DOT usna DOT com>',
+    'dist_author' => 'Jerry D. Hedden <jdhedden AT cpan DOT org>',
 
     'build_requires' => {
                             'Test::More'          => 0.50,

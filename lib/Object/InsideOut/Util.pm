@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.24;
+our $VERSION = 1.25;
 
 
 ### Module Initialization ###
@@ -272,7 +272,7 @@ sub make_shared
             # Make empty shared array ref
             $out = &threads::shared::share([]);
             # Recursively copy and add contents
-            for my $val (@$in) {
+            foreach my $val (@$in) {
                 push(@$out, make_shared($val));
             }
         }
@@ -337,7 +337,7 @@ sub shared_clone
             # Make empty shared array ref
             $out = &threads::shared::share([]);
             # Recursively copy and add contents
-            for my $val (@$in) {
+            foreach my $val (@$in) {
                 push(@$out, shared_clone($val));
             }
         }
@@ -393,7 +393,7 @@ sub clone
             # Make empty shared array ref
             $out = [];
             # Recursively copy and add contents
-            for my $val (@$in) {
+            foreach my $val (@$in) {
                 push(@$out, clone($val));
             }
         }
@@ -438,7 +438,7 @@ sub hash_re
     my $hash = $_[0];   # Hash ref to search through
     my $re   = $_[1];   # Regex to match keys against
 
-    for (keys(%{$hash})) {
+    foreach (keys(%{$hash})) {
         if (/$re/) {
             return ($hash->{$_});
         }

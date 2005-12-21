@@ -28,7 +28,7 @@ if ($@) {
 # Construct make file
 WriteMakefile(
     'NAME'          => 'Object::InsideOut',
-    'AUTHOR'        => 'Jerry D. Hedden <jdhedden AT 1979 DOT usna DOT com>',
+    'AUTHOR'        => 'Jerry D. Hedden <jdhedden AT cpan DOT org>',
     'VERSION_FROM'  => 'lib/Object/InsideOut.pm',
     'ABSTRACT_FROM' => 'lib/Object/InsideOut.pm',
     'PREREQ_PM'     => { 'Exception::Class' => 1.22,

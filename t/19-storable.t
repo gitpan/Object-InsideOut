@@ -1,7 +1,17 @@
 use strict;
 use warnings;
 
-use Storable qw(thaw);
+BEGIN {
+    eval {
+        require Storable;
+        import Storable qw(thaw);
+    };
+    if ($@) {
+        print("1..0 # Skip Storable not available\n");
+        exit(0);
+    }
+}
+
 
 use Test::More qw(no_plan);
 

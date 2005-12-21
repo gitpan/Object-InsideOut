@@ -1,5 +1,5 @@
-Object-InsideOut version 1.24
-*============================
+Object-InsideOut version 1.25
+=============================
 
 This module provides comprehensive support for implementing classes using the
 inside-out object model.
@@ -124,7 +124,7 @@ This module requires the following module available from CPAN:
 
 COPYRIGHT AND LICENCE
 
-Copyright 2005 Jerry D. Hedden <jdhedden AT 1979 DOT usna DOT com>
+Copyright 2005 Jerry D. Hedden <jdhedden AT cpan DOT org>
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.

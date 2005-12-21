@@ -1,6 +1,13 @@
 use strict;
 use warnings;
 
+BEGIN {
+    if ($] == 5.008) {
+        print("1..0 # Skip due to Perl 5.8.0 bug\n");
+        exit(0);
+    }
+}
+
 use Test::More 'no_plan';
 
 package My::Data; {
@@ -19,18 +26,20 @@ package My::Data; {
             return;
         }
 
+        my $data = \@data;      # Workaround for 5.6.X bug
+
         if ($$self == 1) {
             return (sub {
                         my $self = $_[0];
                         my $class = ref($self) || $self;
-                        return (join(' ', $$self, $class, __PACKAGE__, $name, $data[$$self]));
+                        return (join(' ', $$self, $class, __PACKAGE__, $name, $$data[$$self]));
                    }, 'CUM');
         }
 
         return (sub {
                         my $self = shift;
                         my $class = ref($self) || $self;
-                        return (@_, join(' ', $$self, $class, __PACKAGE__, $name, $data[$$self]));
+                        return (@_, join(' ', $$self, $class, __PACKAGE__, $name, $$data[$$self]));
                    }, 'CHA(BOT)');
     }
 }
@@ -52,17 +61,19 @@ package My::Info; {
             return;
         }
 
+        my $info = \@info;      # Workaround for 5.6.X bug
+
         if ($$self == 1) {
             return (sub {
                         my $self = $_[0];
                         my $class = ref($self) || $self;
-                        return (join(' ', $$self, $class, __PACKAGE__, $name, $info[$$self]));
+                        return (join(' ', $$self, $class, __PACKAGE__, $name, $$info[$$self]));
                    }, 'CUM');
         }
         return (sub {
                         my $self = shift;
                         my $class = ref($self) || $self;
-                        return (@_, join(' ', $$self, $class, __PACKAGE__, $name, $info[$$self]));
+                        return (@_, join(' ', $$self, $class, __PACKAGE__, $name, $$info[$$self]));
                    }, 'CHA(BOT)');
     }
 }
@@ -91,17 +102,19 @@ package My::Comment; {
             return;
         }
 
+        my $comment = \@comment;      # Workaround for 5.6.X bug
+
         if ($$self == 1) {
             return (sub {
                         my $self = $_[0];
                         my $class = ref($self) || $self;
-                        return (join(' ', $$self, $class, __PACKAGE__, $name, $comment[$$self]));
+                        return (join(' ', $$self, $class, __PACKAGE__, $name, $$comment[$$self]));
                    }, 'CUM');
         }
         return (sub {
                         my $self = shift;
                         my $class = ref($self) || $self;
-                        return (@_, join(' ', $$self, $class, __PACKAGE__, $name, $comment[$$self]));
+                        return (@_, join(' ', $$self, $class, __PACKAGE__, $name, $$comment[$$self]));
                    }, 'CHA(BOT)');
     }
 }

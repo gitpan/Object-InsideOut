@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.24;
+our $VERSION = 1.25;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -64,26 +64,22 @@ sub OIO::die
     my $class = shift;
     my %args  = @_;
 
-    # Get location information
-    my ($pkg, $file, $line);
-
+    # Add location info to %args
     if (exists($args{'location'})) {
         # Location specified in an array ref
-        ($pkg, $file, $line) = @{delete($args{'location'})};
+        @args{'Package', 'File', 'Line'} = @{delete($args{'location'})};
 
     } elsif (exists($args{'caller_level'})) {
         # Location specified as a caller() level
-        ($pkg, $file, $line) = caller(1 + delete($args{'caller_level'}));
+        @args{'Package', 'File', 'Line'} = caller(1 + delete($args{'caller_level'}));
 
     } else {
         # Default location
-        ($pkg, $file, $line) = caller(1);
+        @args{'Package', 'File', 'Line'} = caller(1);
     }
 
-    $class->throw(%args,
-                  'Package' => $pkg,
-                  'File'    => $file,
-                  'Line'    => $line);
+    # Throw error
+    $class->throw(%args);
 }
 
 
@@ -99,7 +95,7 @@ sub OIO::full_message
     # Add fields, if any
     my @fields = $self->Fields();
     shift(@fields) for (1..3);   # Drop location fields
-    for my $field (@fields) {
+    foreach my $field (@fields) {
         if (exists($self->{$field})) {
             $msg .= "\n$field: " . $self->{$field};
             chomp($msg);
@@ -139,6 +135,8 @@ sub OIO::trap
 ### Additional Supporting Code ###
 
 require Object::InsideOut::Util;
+
+use B;
 
 use Scalar::Util 1.10;
 
@@ -227,10 +225,10 @@ sub import
     # Create class tree
     my @tree;
     my %seen;   # Used to prevent duplicate entries in @tree
-    for my $parent (@packages) {
+    foreach my $parent (@packages) {
         if (exists($TREE_TOP_DOWN{$parent})) {
             # Inherit from Object::InsideOut class
-            for my $ancestor (@{$TREE_TOP_DOWN{$parent}}) {
+            foreach my $ancestor (@{$TREE_TOP_DOWN{$parent}}) {
                 if (! exists($seen{$ancestor})) {
                     push(@tree, $ancestor);
                     $seen{$ancestor} = undef;
@@ -245,7 +243,7 @@ sub import
             if (! exists($HERITAGE{$class})) {
                 create_heritage($class);
             }
-            my $classes = $HERITAGE{$class}->[1];
+            my $classes = $HERITAGE{$class}[1];
 
             # Add parent to inherited classes
             $classes->{$parent} = undef;
@@ -363,7 +361,7 @@ sub MODIFY_HASH_ATTRIBUTES
     my @unused_attrs;   # List of any unhandled attributes
 
     # Process attributes
-    for my $attr (@attrs) {
+    foreach my $attr (@attrs) {
         # Declaration for object field hash
         if ($attr =~ /^Field/i) {
             # Save save hash ref and accessor declarations
@@ -406,7 +404,7 @@ sub MODIFY_ARRAY_ATTRIBUTES
     my @unused_attrs;   # List of any unhandled attributes
 
     # Process attributes
-    for my $attr (@attrs) {
+    foreach my $attr (@attrs) {
         # Declaration for object field array
         if ($attr =~ /^Field/i) {
             # Save save array ref and accessor declarations
@@ -455,7 +453,7 @@ sub MODIFY_CODE_ATTRIBUTES
         $arg = ($arg) ? uc($arg) : 'HIDDEN';
 
         if ($attr eq 'ID') {
-            $ID_SUBS{$pkg} = [ $code, @{$info->[1]} ];
+            $ID_SUBS{$pkg} = [ $code, @{$$info[1]} ];
             # Process attribute 'arg' as an attribute
             push(@attrs, $arg) if $] > 5.006;
             $DO_INIT = 1;   # Flag that initialization is required
@@ -521,13 +519,13 @@ sub MODIFY_CODE_ATTRIBUTES
 
         } elsif ($attr eq 'SCALARIFY') {
             OIO::Attribute->die(
-                'location' => $info->[1],
+                'location' => $$info[1],
                 'message'  => q/:SCALARIFY not allowed/,
                 'Info'     => q/The scalar of an object is its object ID, and can't be redefined/);
 
         } elsif ($attr =~ /IFY$/) {
             # Overload (-ify) attributes
-            for my $ify_attr (keys(%OVERLOAD_TYPES)) {
+            foreach my $ify_attr (keys(%OVERLOAD_TYPES)) {
                 if ($attr eq $ify_attr) {
                     push(@{$OVERLOAD{$pkg}}, [$ify_attr, @{$info} ]);
                     next ATTR;
@@ -562,11 +560,11 @@ if ($threads::shared::threads_shared) {
 # and reclaims IDs from destroyed objects
 sub _ID
 {
-    my $class = shift;                # The object's class
+    my ($class, $id) = @_;            # The object's class and id
     my $tree = $ID_SUBS{$class}[1];   # The object's class tree
 
     # Save deleted IDs for later reuse
-    if (my $id = shift) {
+    if ($id) {
         local $SIG{__WARN__} = sub { };   # Suppress spurious msg
         if (keys(%RECLAIMED_IDS)) {       # Perl bug workaround
             if (exists($RECLAIMED_IDS{$tree})) {
@@ -601,30 +599,34 @@ sub _ID
 my %IS_SHARING;
 
 
-# Finds a subroutine's name in a package from its code ref
+# Finds a subroutine's name from its code ref
 sub sub_name : PRIVATE
 {
-    my ($pkg, $ref, $attr, $location) = @_;
-    no strict 'refs';
-    for my $name (keys(%{$pkg.'::'})) {
-        my $candidate = *{$pkg.'::'.$name}{'CODE'};
-        if ($candidate && $candidate == $ref) {
-            return $name;
-        }
+    my ($ref, $attr, $location) = @_;
+
+    my $name;
+    eval { $name = B::svref_2object($ref)->GV()->NAME(); };
+    if ($@) {
+        OIO::Attribute->die(
+            'location' => $location,
+            'message'  => "Failure finding name for subroutine with $attr attribute",
+            'Error'    => $@);
+
+    } elsif ($name eq '__ANON__') {
+        OIO::Attribute->die(
+            'location' => $location,
+            'message'  => q/Subroutine name not found/,
+            'Info'     => "Can't use anonymous subroutine for $attr attribute");
     }
 
-    # Not found
-    OIO::Attribute->die(
-        'location' => $location,
-        'message'  => q/Subroutine name not found/,
-        'Info'     => "Can't use anonymous subroutine for $attr attribute");
+    return ($name);   # Found
 }
 
 
 # Perform much of the 'magic' for this module
 sub initialize : Private
 {
-    if (%AUTOMETHODS || %CUMULATIVE || %ANTICUMULATIVE) {
+    if (%CUMULATIVE || %ANTICUMULATIVE || %AUTOMETHODS) {
         require Object::InsideOut::Results;
     }
 
@@ -634,10 +636,10 @@ sub initialize : Private
     PROPAGATE_ID_SUBS:
     {
         # Propagate ID subs through the class hierarchies
-        for my $class (keys(%TREE_TOP_DOWN)) {
+        foreach my $class (keys(%TREE_TOP_DOWN)) {
             # Find ID sub for this class somewhere in its hierarchy
             my $id_sub_pkg;
-            for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
+            foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
                 if ($ID_SUBS{$pkg}) {
                     if ($id_sub_pkg) {
                         # Verify that all the ID subs in heirarchy are the same
@@ -659,14 +661,14 @@ sub initialize : Private
 
             # If ID sub found, propagate it through the class hierarchy
             if ($id_sub_pkg) {
-                for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
+                foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
                     $ID_SUBS{$pkg} = $ID_SUBS{$id_sub_pkg};
                 }
             }
         }
 
         # Check for any classes without ID subs
-        for my $class (keys(%TREE_TOP_DOWN)) {
+        foreach my $class (keys(%TREE_TOP_DOWN)) {
             if (! exists($ID_SUBS{$class})) {
                 # Default to internal ID sub and propagate it
                 $ID_SUBS{$class} = [ \&_ID, $class, '-', '-' ];
@@ -678,12 +680,12 @@ sub initialize : Private
 
     # If needed, process any thread object sharing flags
     if (%IS_SHARING && $threads::shared::threads_shared) {
-        for my $flag_class (keys(%IS_SHARING)) {
+        foreach my $flag_class (keys(%IS_SHARING)) {
             # Find the class in any class tree
-            for my $tree (values(%TREE_TOP_DOWN)) {
+            foreach my $tree (values(%TREE_TOP_DOWN)) {
                 if (grep /^$flag_class$/, @$tree) {
                     # Check each class in the tree
-                    for my $class (@$tree) {
+                    foreach my $class (@$tree) {
                         if (exists($IS_SHARING{$class})) {
                             # Check for sharing conflicts
                             if ($IS_SHARING{$class}[0] != $IS_SHARING{$flag_class}[0]) {
@@ -733,10 +735,10 @@ sub initialize : Private
     if (%CUMULATIVE || %ANTICUMULATIVE) {
         # Get names for :CUMULATIVE methods
         my (%cum, %cum_loc);
-        for my $package (keys(%CUMULATIVE)) {
-            for my $info (@{$CUMULATIVE{$package}}) {
+        foreach my $package (keys(%CUMULATIVE)) {
+            foreach my $info (@{$CUMULATIVE{$package}}) {
                 my ($code, $location) = @{$info};
-                my $name = sub_name($package, $code, ':CUMULATIVE', $location);
+                my $name = sub_name($code, ':CUMULATIVE', $location);
                 $cum{$name}{$package} = $code;
                 $cum_loc{$name}{$package} = $location;
             }
@@ -744,14 +746,14 @@ sub initialize : Private
 
         # Get names for :CUMULATIVE(BOTTOM UP) methods
         my %anticum;
-        for my $package (keys(%ANTICUMULATIVE)) {
-            for my $info (@{$ANTICUMULATIVE{$package}}) {
+        foreach my $package (keys(%ANTICUMULATIVE)) {
+            foreach my $info (@{$ANTICUMULATIVE{$package}}) {
                 my ($code, $location) = @{$info};
-                my $name = sub_name($package, $code, ':CUMULATIVE(BOTTOM UP)', $location);
+                my $name = sub_name($code, ':CUMULATIVE(BOTTOM UP)', $location);
 
                 # Check for conflicting definitions of $name
                 if ($cum{$name}) {
-                    for my $other_package (keys(%{$cum{$name}})) {
+                    foreach my $other_package (keys(%{$cum{$name}})) {
                         if ($other_package->$univ_isa($package) ||
                             $package->$univ_isa($other_package))
                         {
@@ -773,17 +775,17 @@ sub initialize : Private
         undef(%cum_loc);
 
         # Implement :CUMULATIVE methods
-        for my $name (keys(%cum)) {
+        foreach my $name (keys(%cum)) {
             my $code = create_CUMULATIVE(\%TREE_TOP_DOWN, $cum{$name});
-            for my $package (keys(%{$cum{$name}})) {
+            foreach my $package (keys(%{$cum{$name}})) {
                 *{$package.'::'.$name} = $code;
             }
         }
 
         # Implement :CUMULATIVE(BOTTOM UP) methods
-        for my $name (keys(%anticum)) {
+        foreach my $name (keys(%anticum)) {
             my $code = create_CUMULATIVE(\%TREE_BOTTOM_UP, $anticum{$name});
-            for my $package (keys(%{$anticum{$name}})) {
+            foreach my $package (keys(%{$anticum{$name}})) {
                 *{$package.'::'.$name} = $code;
             }
         }
@@ -794,10 +796,10 @@ sub initialize : Private
     if (%CHAINED || %ANTICHAINED) {
         # Get names for :CHAINED methods
         my (%chain, %chain_loc);
-        for my $package (keys(%CHAINED)) {
-            for my $info (@{$CHAINED{$package}}) {
+        foreach my $package (keys(%CHAINED)) {
+            foreach my $info (@{$CHAINED{$package}}) {
                 my ($code, $location) = @{$info};
-                my $name = sub_name($package, $code, ':CHAINED', $location);
+                my $name = sub_name($code, ':CHAINED', $location);
                 $chain{$name}{$package} = $code;
                 $chain_loc{$name}{$package} = $location;
             }
@@ -805,14 +807,14 @@ sub initialize : Private
 
         # Get names for :CHAINED(BOTTOM UP) methods
         my %antichain;
-        for my $package (keys(%ANTICHAINED)) {
-            for my $info (@{$ANTICHAINED{$package}}) {
+        foreach my $package (keys(%ANTICHAINED)) {
+            foreach my $info (@{$ANTICHAINED{$package}}) {
                 my ($code, $location) = @{$info};
-                my $name = sub_name($package, $code, ':CHAINED(BOTTOM UP)', $location);
+                my $name = sub_name($code, ':CHAINED(BOTTOM UP)', $location);
 
                 # Check for conflicting definitions of $name
                 if ($chain{$name}) {
-                    for my $other_package (keys(%{$chain{$name}})) {
+                    foreach my $other_package (keys(%{$chain{$name}})) {
                         if ($other_package->$univ_isa($package) ||
                             $package->$univ_isa($other_package))
                         {
@@ -834,17 +836,17 @@ sub initialize : Private
         undef(%chain_loc);
 
         # Implement :CHAINED methods
-        for my $name (keys(%chain)) {
+        foreach my $name (keys(%chain)) {
             my $code = create_CHAINED(\%TREE_TOP_DOWN, $chain{$name});
-            for my $package (keys(%{$chain{$name}})) {
+            foreach my $package (keys(%{$chain{$name}})) {
                 *{$package.'::'.$name} = $code;
             }
         }
 
         # Implement :CHAINED(BOTTOM UP) methods
-        for my $name (keys(%antichain)) {
+        foreach my $name (keys(%antichain)) {
             my $code = create_CHAINED(\%TREE_BOTTOM_UP, $antichain{$name});
-            for my $package (keys(%{$antichain{$name}})) {
+            foreach my $package (keys(%{$antichain{$name}})) {
                 *{$package.'::'.$name} = $code;
             }
         }
@@ -852,10 +854,10 @@ sub initialize : Private
 
 
     # Implement overload (-ify) operators
-    for my $package (keys(%OVERLOAD)) {
-        for my $operation (@{$OVERLOAD{$package}}) {
+    foreach my $package (keys(%OVERLOAD)) {
+        foreach my $operation (@{$OVERLOAD{$package}}) {
             my ($attr, $code, $location) = @$operation;
-            my $name = sub_name($package, $code, ":$attr", $location);
+            my $name = sub_name($code, ":$attr", $location);
             {
                 my @errs;
                 local $SIG{__WARN__} = sub { push(@errs, @_); };
@@ -883,7 +885,7 @@ _CODE_
     }
     undef(%OVERLOAD);   # No longer needed
 
-    for my $package (keys(%TREE_TOP_DOWN)) {
+    foreach my $package (keys(%TREE_TOP_DOWN)) {
         # Bless an object into every class
         # This works around an obscure 'overload' bug reported against
         # Class::Std (http://rt.cpan.org/NoAuth/Bug.html?id=14048)
@@ -901,10 +903,10 @@ _CODE_
 
 
     # Implement restricted methods - only callable within hierarchy
-    for my $package (keys(%RESTRICTED)) {
-        for my $info (@{$RESTRICTED{$package}}) {
+    foreach my $package (keys(%RESTRICTED)) {
+        foreach my $info (@{$RESTRICTED{$package}}) {
             my ($code, $location) = @{$info};
-            my $name = sub_name($package, $code, ':RESTRICTED', $location);
+            my $name = sub_name($code, ':RESTRICTED', $location);
             *{$package.'::'.$name} = create_RESTRICTED($package, $name, $code);
         }
     }
@@ -912,10 +914,10 @@ _CODE_
 
 
     # Implement private methods - only callable from class itself
-    for my $package (keys(%PRIVATE)) {
-        for my $info (@{$PRIVATE{$package}}) {
+    foreach my $package (keys(%PRIVATE)) {
+        foreach my $info (@{$PRIVATE{$package}}) {
             my ($code, $location) = @{$info};
-            my $name = sub_name($package, $code, ':PRIVATE', $location);
+            my $name = sub_name($code, ':PRIVATE', $location);
             *{$package.'::'.$name} = create_PRIVATE($package, $name, $code);
         }
     }
@@ -923,10 +925,10 @@ _CODE_
 
 
     # Implement hidden methods - no longer callable by name
-    for my $package (keys(%HIDDEN)) {
-        for my $info (@{$HIDDEN{$package}}) {
+    foreach my $package (keys(%HIDDEN)) {
+        foreach my $info (@{$HIDDEN{$package}}) {
             my ($code, $location) = @{$info};
-            my $name = sub_name($package, $code, ':HIDDEN', $location);
+            my $name = sub_name($code, ':HIDDEN', $location);
             create_HIDDEN($package, $name);
         }
     }
@@ -937,8 +939,8 @@ _CODE_
     my @EXPORT = qw(new clone set DESTROY AUTOLOAD dump
                     inherit heritage disinherit);
     my @EXPORT2 = (@EXPORT, qw(STORABLE_freeze STORABLE_thaw));
-    for my $pkg (keys(%TREE_TOP_DOWN)) {
-        for my $sym (($pkg->isa('Storable')) ? @EXPORT2 : @EXPORT) {
+    foreach my $pkg (keys(%TREE_TOP_DOWN)) {
+        foreach my $sym (($pkg->isa('Storable')) ? @EXPORT2 : @EXPORT) {
             my $full_sym = $pkg.'::'.$sym;
             # Only export if method doesn't already exist
             if (! *{$full_sym}{CODE}) {
@@ -955,8 +957,8 @@ _CODE_
 # Process :FIELD declarations for shared hashes/arrays and accessors
 sub process_fields : PRIVATE
 {
-    for my $pkg (keys(%NEW_FIELDS)) {
-        for my $item (@{$NEW_FIELDS{$pkg}}) {
+    foreach my $pkg (keys(%NEW_FIELDS)) {
+        foreach my $item (@{$NEW_FIELDS{$pkg}}) {
             my ($fld, $decl) = @{$item};
 
             # Share the field, if applicable
@@ -1022,14 +1024,8 @@ sub set_sharing : PRIVATE
 # threads
 sub is_sharing : PRIVATE
 {
-    my $class = $_[0];
-
-    # If not 'use threads::shared;', return false
-    if (! $threads::shared::threads_shared) {
-        return;
-    }
-
-    return ($IS_SHARING{$class}[0]);
+    # my $class = $_[0];
+    return (($threads::shared::threads_shared) ? $IS_SHARING{$_[0]}[0] : 0);
 }
 
 
@@ -1071,15 +1067,15 @@ sub CLONE
         lock(%SHARED);
 
         # Add thread ID to every object in the thread tracking registry
-        for my $class (keys(%SHARED)) {
-            for my $oid (keys(%{$SHARED{$class}})) {
+        foreach my $class (keys(%SHARED)) {
+            foreach my $oid (keys(%{$SHARED{$class}})) {
                 push(@{$SHARED{$class}{$oid}}, $THREAD_ID);
             }
         }
     }
 
     # Process non-thread-shared objects
-    for my $class (keys(%OBJECTS)) {
+    foreach my $class (keys(%OBJECTS)) {
         # Get class tree
         my @tree = @{$TREE_TOP_DOWN{$class}};
 
@@ -1087,7 +1083,7 @@ sub CLONE
         my $id_sub = $ID_SUBS{$class}[0];
 
         # Process each object in the class
-        for my $old_id (keys(%{$OBJECTS{$class}})) {
+        foreach my $old_id (keys(%{$OBJECTS{$class}})) {
             my $obj;
             if ($id_sub == \&_ID) {
                 # Objects using internal ID sub keep their same ID
@@ -1108,9 +1104,9 @@ sub CLONE
                 Internals::SvREADONLY($$obj, 1) if ($] >= 5.008003);
 
                 # Update the keys of the field hashes/arrays with the new object ID
-                for my $pkg (@tree) {
-                    for my $fld (@{$FIELDS{$pkg}}) {
-                        $fld->{$$obj} = delete($fld->{$old_id});
+                foreach my $pkg (@tree) {
+                    foreach my $fld (@{$FIELDS{$pkg}}) {
+                        $$fld{$$obj} = delete($$fld{$old_id});
                     }
                 }
 
@@ -1121,7 +1117,7 @@ sub CLONE
             # Dispatch any special replication handling
             if (%REPLICATORS) {
                 my $pseudo_object = \do{ my $scalar = $old_id; };
-                for my $pkg (@tree) {
+                foreach my $pkg (@tree) {
                     if (my $replicate = $REPLICATORS{$pkg}) {
                         local $SIG{__DIE__} = 'OIO::trap';
                         $replicate->($pseudo_object, $obj, 'CLONE');
@@ -1134,6 +1130,36 @@ sub CLONE
 
 
 ### Object Methods ###
+
+# Helper subroutine to create a new 'bare' object
+sub _obj : PRIVATE
+{
+    my $class = shift;
+
+    # Create a new 'bare' object
+    my $self = Object::InsideOut::Util::create_object($class,
+                                                      $ID_SUBS{$class}[0]);
+
+    # Thread support
+    if (is_sharing($class)) {
+        threads::shared::share($self);
+
+        # Add thread tracking list for this thread-shared object
+        lock(%SHARED);
+        if (! exists($SHARED{$class})) {
+            $SHARED{$class} = &threads::shared::share({});
+        }
+        $SHARED{$class}{$$self} = &threads::shared::share([]);
+        push(@{$SHARED{$class}{$$self}}, $THREAD_ID);
+
+    } elsif ($threads::threads) {
+        # Add non-thread-shared object to thread cloning list
+        Scalar::Util::weaken($OBJECTS{$class}{$$self} = $self);
+    }
+
+    return($self);
+}
+
 
 # Object Constructor
 sub new
@@ -1167,22 +1193,15 @@ sub new
                 'Usage'   => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
         } else {
             # Add 'key => value' pair
-            $all_args->{$arg} = shift;
+            $$all_args{$arg} = shift;
         }
     }
 
-    # Get thread-sharing flag
-    my $am_sharing = is_sharing($class);
-
     # Create a new 'bare' object
-    my $self = Object::InsideOut::Util::create_object($class,
-                                                      $ID_SUBS{$class}[0]);
-    if ($am_sharing) {
-        threads::shared::share($self);
-    }
+    my $self = _obj($class);
 
     # Initialize object
-    for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
+    foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
         my $spec = $INIT_ARGS{$pkg};
         my $init = $INITORS{$pkg};
 
@@ -1211,21 +1230,6 @@ sub new
         }
     }
 
-    # Thread support
-    if ($am_sharing) {
-        # Add thread tracking list for this thread-shared object
-        lock(%SHARED);
-        if (! exists($SHARED{$class})) {
-            $SHARED{$class} = &threads::shared::share({});
-        }
-        $SHARED{$class}{$$self} = &threads::shared::share([]);
-        push(@{$SHARED{$class}{$$self}}, $THREAD_ID);
-
-    } elsif ($threads::threads) {
-        # Add non-thread-shared object to thread cloning list
-        Scalar::Util::weaken($OBJECTS{$class}{$$self} = $self);
-    }
-
     # Done - return object
     return ($self);
 }
@@ -1234,46 +1238,44 @@ sub new
 # Creates a copy of an object
 sub clone
 {
-    my $parent = $_[0];
-    my $deep   = ($_[1]) ? 'deep' : '';   # Deep clone the object?
-    my $class  = ref($parent);
+    my ($parent, $deep) = @_;        # Parent object and deep cloning flag
+    $deep = ($deep) ? 'deep' : '';   # Deep clone the object?
 
     # Must call ->clone() as an object method
+    my $class = Scalar::Util::blessed($parent);
     if (! $class) {
-        OIO::Method->die('message' => q/Can't call ->clone() as a class method/);
+        OIO::Method->die('message' => q/Must call ->clone() as an object method/);
     }
-
-    # Get thread-sharing flag
-    my $am_sharing = is_sharing($class);
 
     # Create a new 'bare' object
-    my $clone = Object::InsideOut::Util::create_object($class,
-                                                       $ID_SUBS{$class}[0]);
-    if ($am_sharing) {
-        threads::shared::share($clone);
-    }
+    my $clone = _obj($class);
+
+    # Flag for shared class
+    my $am_sharing = is_sharing($class);
 
     # Clone the object
-    for my $pkg (@{$TREE_TOP_DOWN{$class}}) {
+    foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
         # Clone field data from the parent
-        for my $fld (@{$FIELDS{$pkg}}) {
+        foreach my $fld (@{$FIELDS{$pkg}}) {
             my $fdeep = $deep || $DEEP_CLONE{$fld};  # Deep clone the field?
-            lock($fld) if ($am_sharing);
-            if (ref($fld) eq 'HASH') {
-                if ($fdeep && $am_sharing) {
-                    $fld->{$$clone} = Object::InsideOut::Util::shared_clone($fld->{$$parent});
-                } elsif ($fdeep) {
-                    $fld->{$$clone} = Object::InsideOut::Util::clone($fld->{$$parent});
+            {
+                lock($fld) if ($am_sharing);
+                if (ref($fld) eq 'HASH') {
+                    if ($fdeep && $am_sharing) {
+                        $$fld{$$clone} = Object::InsideOut::Util::shared_clone($$fld{$$parent});
+                    } elsif ($fdeep) {
+                        $$fld{$$clone} = Object::InsideOut::Util::clone($$fld{$$parent});
+                    } else {
+                        $$fld{$$clone} = $$fld{$$parent};
+                    }
                 } else {
-                    $fld->{$$clone} = $fld->{$$parent};
-                }
-            } else {
-                if ($fdeep && $am_sharing) {
-                    $fld->[$$clone] = Object::InsideOut::Util::shared_clone($fld->[$$parent]);
-                } elsif ($fdeep) {
-                    $fld->[$$clone] = Object::InsideOut::Util::clone($fld->[$$parent]);
-                } else {
-                    $fld->[$$clone] = $fld->[$$parent];
+                    if ($fdeep && $am_sharing) {
+                        $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
+                    } elsif ($fdeep) {
+                        $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
+                    } else {
+                        $$fld[$$clone] = $$fld[$$parent];
+                    }
                 }
             }
         }
@@ -1283,21 +1285,6 @@ sub clone
             local $SIG{__DIE__} = 'OIO::trap';
             $parent->$replicate($clone, $deep);
         }
-    }
-
-    # Thread support
-    if ($am_sharing) {
-        # Add thread tracking list for this thread-shared object
-        lock(%SHARED);
-        if (! exists($SHARED{$class})) {
-            $SHARED{$class} = &threads::shared::share({});
-        }
-        $SHARED{$class}{$$clone} = &threads::shared::share([]);
-        push(@{$SHARED{$class}{$$clone}}, $THREAD_ID);
-
-    } elsif ($threads::threads) {
-        # Add non-thread-shared object to thread cloning list
-        Scalar::Util::weaken($OBJECTS{$class}{$$clone} = $clone);
     }
 
     # Done - return clone
@@ -1325,11 +1312,11 @@ sub set
             threads::shared::_id($field))
         {
             lock($field);
-            $field->[$$self] = Object::InsideOut::Util::make_shared($data);
+            $$field[$$self] = Object::InsideOut::Util::make_shared($data);
 
         } else {
             # No sharing - just store the data
-            $field->[$$self] = $data;
+            $$field[$$self] = $data;
         }
 
     } elsif ($ref_type eq 'HASH') {
@@ -1338,11 +1325,11 @@ sub set
             threads::shared::_id($field))
         {
             lock($field);
-            $field->{$$self} = Object::InsideOut::Util::make_shared($data);
+            $$field{$$self} = Object::InsideOut::Util::make_shared($data);
 
         } else {
             # No sharing - just store the data
-            $field->{$$self} = $data;
+            $$field{$$self} = $data;
         }
 
     } else {
@@ -1356,7 +1343,7 @@ sub set
 # Object Destructor
 sub DESTROY
 {
-    my $self  = $_[0];
+    my $self  = shift;
     my $class = ref($self);
 
     if ($$self) {
@@ -1397,7 +1384,7 @@ sub DESTROY
         my $lock_field = is_sharing($class);
 
         # Destroy object
-        for my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+        foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
             # Dispatch any special destruction handling
             if (my $destroy = $DESTROYERS{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
@@ -1405,12 +1392,14 @@ sub DESTROY
             }
 
             # Delete object field data
-            for my $fld (@{$FIELDS{$pkg}}) {
-                lock($fld) if ($lock_field);
-                if (ref($fld) eq 'HASH') {
-                    delete($fld->{$$self});
-                } else {
-                    delete($fld->[$$self]);
+            foreach my $fld (@{$FIELDS{$pkg}}) {
+                {
+                    lock($fld) if ($lock_field);
+                    if (ref($fld) eq 'HASH') {
+                        delete($$fld{$$self});
+                    } else {
+                        delete($$fld[$$self]);
+                    }
                 }
             }
         }
@@ -1445,7 +1434,7 @@ sub AUTOLOAD
 
     # Find a something to handle the method call
     my ($code_type, $code_dir, %code_refs);
-    for my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+    foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
         # Skip self's class if SUPER
         if ($super && $class eq $pkg) {
             next;
@@ -1455,9 +1444,9 @@ sub AUTOLOAD
         if (exists($HERITAGE{$pkg})) {
             my ($heritage, $classes) = @{$HERITAGE{$pkg}};
             if (Scalar::Util::blessed($thing)) {
-                if (exists($heritage->{$$thing})) {
+                if (exists($$heritage{$$thing})) {
                     # Check objects
-                    foreach my $obj (@{$heritage->{$$thing}}) {
+                    foreach my $obj (@{$$heritage{$$thing}}) {
                         if (my $code = $obj->can($method)) {
                             shift;
                             unshift(@_, $obj);
@@ -1587,8 +1576,8 @@ sub dump
                     # Override get/set names, but not 'Name'
                     foreach my $name2 (keys(%{$DUMP_FIELDS{$pkg}})) {
                         my $fld_spec = $DUMP_FIELDS{$pkg}{$name2};
-                        if ($field == $fld_spec->[0]) {
-                            if ($fld_spec->[1] eq 'Name') {
+                        if ($field == $$fld_spec[0]) {
+                            if ($$fld_spec[1] eq 'Name') {
                                 next INIT_ARGS;
                             }
                             delete($DUMP_FIELDS{$pkg}{$name2});
@@ -1610,7 +1599,7 @@ sub dump
 
     # Gather data from the object's class tree
     my %dump;
-    for my $pkg (@{$TREE_TOP_DOWN{ref($self)}}) {
+    foreach my $pkg (@{$TREE_TOP_DOWN{ref($self)}}) {
         # Try to use a class-supplied dumper
         if (my $dumper = $DUMPERS{$pkg}) {
             local $SIG{__DIE__} = 'OIO::trap';
@@ -1624,26 +1613,26 @@ sub dump
             foreach my $name (keys(%{$DUMP_FIELDS{$pkg}})) {
                 my $field = $DUMP_FIELDS{$pkg}{$name}[0];
                 if (ref($field) eq 'HASH') {
-                    if (exists($field->{$$self})) {
-                        $dump{$pkg}{$name} = $field->{$$self};
+                    if (exists($$field{$$self})) {
+                        $dump{$pkg}{$name} = $$field{$$self};
                     }
                 } else {
-                    if (exists($field->[$$self])) {
-                        $dump{$pkg}{$name} = $field->[$$self];
+                    if (exists($$field[$$self])) {
+                        $dump{$pkg}{$name} = $$field[$$self];
                     }
                 }
                 @fields = grep { $_ != $field } @fields;
             }
 
             # Fields for which names are not known
-            for my $field (@fields) {
+            foreach my $field (@fields) {
                 if (ref($field) eq 'HASH') {
-                    if (exists($field->{$$self})) {
-                        $dump{$pkg}{$field} = $field->{$$self};
+                    if (exists($$field{$$self})) {
+                        $dump{$pkg}{$field} = $$field{$$self};
                     }
                 } else {
-                    if (exists($field->[$$self])) {
-                        $dump{$pkg}{$field} = $field->[$$self];
+                    if (exists($$field[$$self])) {
+                        $dump{$pkg}{$field} = $$field[$$self];
                     }
                 }
             }
@@ -1670,19 +1659,21 @@ sub dump
 # Object loader
 sub pump
 {
-    # Check usage
-    if (Scalar::Util::blessed($_[0])) {
-        OIO::Code->die(
-            'message' => '->pump() invoked as an object method',
-            'Info'    => '->pump() is a class method');
-    }
+    my $input = shift;
 
-    if ($_[0] eq __PACKAGE__) {
-        shift;    # Called as a class method
+    # Check usage
+    if ($input) {
+        if ($input eq __PACKAGE__) {
+            $input = shift;    # Called as a class method
+
+        } elsif (Scalar::Util::blessed($input)) {
+            OIO::Code->die(
+                'message' => '->pump() invoked as an object method',
+                'Info'    => '->pump() is a class method');
+        }
     }
 
     # Must have an arg
-    my $input = $_[0];
     if (! $input) {
         OIO::Args->die('message' => 'Missing argument to pump()');
     }
@@ -1717,19 +1708,12 @@ sub pump
         OIO::Args->die('message'  => 'Argument to pump() is invalid');
     }
 
-    # Get thread-sharing flag
-    my $am_sharing = is_sharing($class);
-
     # Create a new 'bare' object
-    my $self = Object::InsideOut::Util::create_object($class,
-                                                      $ID_SUBS{$class}[0]);
-    if ($am_sharing) {
-        threads::shared::share($self);
-    }
+    my $self = _obj($class);
 
     # Store object data
     foreach my $pkg (keys(%{$dump})) {
-        my $data = $dump->{$pkg};
+        my $data = $$dump{$pkg};
 
         # Try to use a class-supplied pumper
         if (my $pumper = $PUMPERS{$pkg}) {
@@ -1739,7 +1723,7 @@ sub pump
         } else {
             # Pump in the data ourselves
             foreach my $fld_name (keys(%{$data})) {
-                my $value = $data->{$fld_name};
+                my $value = $$data{$fld_name};
                 if (my $field = $DUMP_FIELDS{$pkg}{$fld_name}[0]) {
                     $self->set($field, $value);
                 } else {
@@ -1753,21 +1737,6 @@ sub pump
                 }
             }
         }
-    }
-
-    # Thread support
-    if ($am_sharing) {
-        # Add thread tracking list for this thread-shared object
-        lock(%SHARED);
-        if (! exists($SHARED{$class})) {
-            $SHARED{$class} = &threads::shared::share({});
-        }
-        $SHARED{$class}{$$self} = &threads::shared::share([]);
-        push(@{$SHARED{$class}{$$self}}, $THREAD_ID);
-
-    } elsif ($threads::threads) {
-        # Add non-thread-shared object to thread cloning list
-        Scalar::Util::weaken($OBJECTS{$class}{$$self} = $self);
     }
 
     # Done - return the object
@@ -1846,7 +1815,7 @@ sub inherit
     my ($heritage, $classes) = @{$HERITAGE{$package}};
 
     # Process args
-    my $objs = exists($heritage->{$$self}) ? $heritage->{$$self} : [];
+    my $objs = exists($$heritage{$$self}) ? $$heritage{$$self} : [];
     while (my $obj = shift(@arg_objs)) {
         # Must be an object
         my $arg_class = Scalar::Util::blessed($obj);
@@ -1862,7 +1831,7 @@ sub inherit
         # Add arg to object list
         push(@{$objs}, $obj);
         # Add arg class to classes hash
-        $classes->{$arg_class} = undef;
+        $$classes{$arg_class} = undef;
     }
     # Add objects to heritage field
     $self->set($heritage, $objs);
@@ -1894,7 +1863,7 @@ sub heritage
 
     # Anything to return?
     if (! exists($HERITAGE{$package}) ||
-        ! exists($HERITAGE{$package}[0]->{$$self}))
+        ! exists($HERITAGE{$package}[0]{$$self}))
     {
         return;
     }
@@ -1905,10 +1874,10 @@ sub heritage
         @objs = grep {
                     my $obj = $_;
                     grep { ref($obj) eq $_ } @_
-                } @{$HERITAGE{$package}[0]->{$$self}};
+                } @{$HERITAGE{$package}[0]{$$self}};
     } else {
         # Return entire list
-        @objs = @{$HERITAGE{$package}[0]->{$$self}};
+        @objs = @{$HERITAGE{$package}[0]{$$self}};
     }
 
     # Return results
@@ -1965,10 +1934,10 @@ sub disinherit
             'message' => 'Nothing to ->disinherit()',
             'Info'    => "Class '$package' is currently not inheriting from any foreign classes");
     }
-    my $heritage = $HERITAGE{$package}->[0];
+    my $heritage = $HERITAGE{$package}[0];
 
     # Get inherited objects
-    my @objs = exists($heritage->{$$self}) ? @{$heritage->{$$self}} : ();
+    my @objs = exists($$heritage{$$self}) ? @{$$heritage{$$self}} : ();
 
     # Check that object is inheriting all args
     foreach my $arg (@args) {
@@ -2013,7 +1982,7 @@ sub disinherit
         $self->set($heritage, \@new_list);
     } else {
         # No objects left
-        delete($heritage->{$$self});
+        delete($$heritage{$$self});
     }
 }
 
@@ -2072,7 +2041,7 @@ sub UNIVERSAL_can
         }
 
         # Next, check with heritage objects and Automethods
-        for my $package (@{$TREE_BOTTOM_UP->{$class}}) {
+        foreach my $package (@{$$TREE_BOTTOM_UP{$class}}) {
             # Skip self's class if SUPER
             if ($super && $class eq $package) {
                 next;
@@ -2080,7 +2049,7 @@ sub UNIVERSAL_can
 
             # Check heritage
             if (exists($HERITAGE{$package})) {
-                foreach my $pkg (keys(%{$HERITAGE{$package}->[1]})) {
+                foreach my $pkg (keys(%{$HERITAGE{$package}[1]})) {
                     if ($code = $pkg->$univ_can($method)) {
                         return ($code);
                     }
@@ -2088,7 +2057,7 @@ sub UNIVERSAL_can
             }
 
             # Check with the Automethods
-            if (my $automethod = $AUTOMETHODS->{$package}) {
+            if (my $automethod = $$AUTOMETHODS{$package}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
@@ -2122,9 +2091,9 @@ sub UNIVERSAL_isa
         }
 
         # Next, check heritage
-        for my $package (@{$TREE_BOTTOM_UP->{ref($thing) || $thing}}) {
+        foreach my $package (@{$$TREE_BOTTOM_UP{ref($thing) || $thing}}) {
             if (exists($HERITAGE{$package})) {
-                foreach my $pkg (keys(%{$HERITAGE{$package}->[1]})) {
+                foreach my $pkg (keys(%{$HERITAGE{$package}[1]})) {
                     if ($isa = $pkg->$u_isa($type)) {
                         return ($isa);
                     }
@@ -2206,7 +2175,7 @@ sub create_field
 # Add heritage field for a package
 sub create_heritage : PRIVATE
 {
-    my $package = $_[0];
+    my $package = shift;
 
     # Check if 'heritage' already exists
     if (exists($DUMP_FIELDS{$package}{'heritage'})) {
@@ -2266,7 +2235,7 @@ sub create_accessors : PRIVATE
     my ($get, $set, $type, $name, $return);
     foreach my $key (keys(%{$acc_spec})) {
         my $key_uc = uc($key);
-        my $val = $acc_spec->{$key};
+        my $val = $$acc_spec{$key};
         # Standard accessors
         if ($key =~ /^st.*d/i) {
             $get = 'get_' . $val;
@@ -2375,7 +2344,7 @@ sub create_accessors : PRIVATE
     }
 
     # Check for name conflict
-    for my $method ($get, $set) {
+    foreach my $method ($get, $set) {
         if ($method) {
             no strict 'refs';
             # Do not overwrite existing methods
@@ -2439,13 +2408,13 @@ sub create_accessors : PRIVATE
             if (ref($field_ref) eq 'HASH') {
                 $code .= <<"_COMBINATION_";
     if (\@_ == 1) {
-        return (\$field->\{\${\$_[0]}});
+        return (\$\$field\{\${\$_[0]}});
     }
 _COMBINATION_
             } else {
                 $code .= <<"_COMBINATION_";
     if (\@_ == 1) {
-        return (\$field->\[\${\$_[0]}]);
+        return (\$\$field\[\${\$_[0]}]);
     }
 _COMBINATION_
             }
@@ -2555,21 +2524,21 @@ _REF_
         # Grab 'OLD' value
         if ($return eq 'OLD') {
             if (ref($field_ref) eq 'HASH') {
-                $code .= "    my \$ret = \$field->\{\${\$_[0]}};\n";
+                $code .= "    my \$ret = \$\$field\{\${\$_[0]}};\n";
             } else {
-                $code .= "    my \$ret = \$field->\[\${\$_[0]}];\n";
+                $code .= "    my \$ret = \$\$field\[\${\$_[0]}];\n";
             }
         }
 
         # Add actual 'set' code
         if (ref($field_ref) eq 'HASH') {
             $code .= (is_sharing($package))
-                  ? "    \$field->\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n"
-                  : "    \$field->\{\${\$_[0]}} = \$arg;\n";
+                  ? "    \$\$field\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n"
+                  : "    \$\$field\{\${\$_[0]}} = \$arg;\n";
         } else {
             $code .= (is_sharing($package))
-                  ? "    \$field->\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n"
-                  : "    \$field->\[\${\$_[0]}] = \$arg;\n";
+                  ? "    \$\$field\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n"
+                  : "    \$\$field\[\${\$_[0]}] = \$arg;\n";
         }
 
         # Add code for return value
@@ -2592,13 +2561,13 @@ _REF_
         if (ref($field_ref) eq 'HASH') {
             $code .= <<"_GET_";
 *${package}::$get = sub {
-$lock    \$field->{\${\$_[0]}};
+$lock    \$\$field{\${\$_[0]}};
 };
 _GET_
         } else {
             $code .= <<"_GET_";
 *${package}::$get = sub {
-$lock    \$field->[\${\$_[0]}];
+$lock    \$\$field[\${\$_[0]}];
 };
 _GET_
         }
@@ -2637,8 +2606,8 @@ sub create_CUMULATIVE : PRIVATE
         my (@results, @classes);
 
         # Accumulate results
-        for my $pkg (@{$tree->{$class}}) {
-            if (my $code = $code_refs->{$pkg}) {
+        foreach my $pkg (@{$$tree{$class}}) {
+            if (my $code = $$code_refs{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
                 my @args = @_;
                 if (defined($list_context)) {
@@ -2687,8 +2656,8 @@ sub create_CHAINED : PRIVATE
         my @classes;
 
         # Chain results together
-        for my $pkg (@{$tree->{$class}}) {
-            if (my $code = $code_refs->{$pkg}) {
+        foreach my $pkg (@{$$tree{$class}}) {
+            if (my $code = $$code_refs{$pkg}) {
                 local $SIG{__DIE__} = 'OIO::trap';
                 @args = $thing->$code(@args);
                 push(@classes, $pkg);
@@ -2710,7 +2679,7 @@ sub create_RESTRICTED : PRIVATE
         my $caller = caller();
         # Caller must be in class hierarchy
         if ($caller->$univ_isa($package) || $package->$univ_isa($caller)) {
-            goto &{$code}
+            goto $code;
         }
         OIO::Method->die('message' => "Can't call restricted method '$package->$method' from class '$caller'");
     };
@@ -2726,7 +2695,7 @@ sub create_PRIVATE : PRIVATE
         my $caller = caller();
         # Caller must be in the package
         if ($caller eq $package) {
-            goto &{$code}
+            goto $code;
         }
         OIO::Method->die('message' => "Can't call private method '$package->$method' from class '$caller'");
     };
@@ -2775,7 +2744,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.24
+This document describes Object::InsideOut version 1.25
 
 =head1 SYNOPSIS
 
@@ -4497,6 +4466,35 @@ There are bugs associated with L<threads::shared> that may prevent you from
 using foreign inheritance with shared objects, or storing objects inside of
 shared objects.
 
+For Perl 5.6.0 through 5.8.0, a Perl bug prevents package variables (e.g.,
+object attribute arrays/hashes) from being referenced properly from subroutine
+refs returned by an C<:Automethod> subroutine.  For Perl 5.8.0 there is no
+workaround:  This bug causes Perl to core dump.  For Perl 5.6.0 through 5.6.2,
+the workaround is to create a ref to the required variable inside the
+C<:Automethod> subroutine, and use that inside the subroutine ref:
+
+ package My::Class; {
+     use Object::InsideOut;
+
+     my %data;
+
+     sub auto :Automethod
+     {
+         my $self = $_[0];
+         my $name = $_;
+
+         my $data = \%data;      # Workaround for 5.6.X bug
+
+         return sub {
+                     my $self = shift;
+                     if (! @_) {
+                         return ($$data{$name});
+                     }
+                     $$data{$name} = shift;
+                };
+     }
+ }
+
 For Perl 5.8.1 through 5.8.4, a Perl bug produces spurious warning messages
 when threads are destroyed.  These messages are innocuous, and can be
 suppressed by adding the following to your application code:
@@ -4536,7 +4534,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.24/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.25/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
@@ -4556,9 +4554,9 @@ L<Storable>
 
 Abigail S<E<lt>perl AT abigail DOT nlE<gt>> for inside-out objects in general.
 
-Damian Conway S<E<lt>DCONWAY AT cpan DOT orgE<gt>> for L<Class::Std>.
+Damian Conway S<E<lt>dconway AT cpan DOT orgE<gt>> for L<Class::Std>.
 
-David A. Golden S<E<lt>david AT dagolden DOT comE<gt>> for thread handling for
+David A. Golden S<E<lt>dagolden AT cpan DOT orgE<gt>> for thread handling for
 inside-out objects.
 
 Dan Kubb S<E<lt>dan.kubb-cpan AT autopilotmarketing DOT comE<gt>> for
@@ -4566,7 +4564,7 @@ C<:Chained> methods.
 
 =head1 AUTHOR
 
-Jerry D. Hedden, S<E<lt>jdhedden AT 1979 DOT usna DOT comE<gt>>
+Jerry D. Hedden, S<E<lt>jdhedden AT cpan DOT orgE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 
