@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.25;
+our $VERSION = 1.26;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -163,7 +163,21 @@ my %HERITAGE;
 sub import
 {
     my $self  = shift;      # Ourself (i.e., 'Object::InsideOut')
+    if (Scalar::Util::blessed($self)) {
+        OIO::Method->die('message' => q/'import' called as an object method/);
+    }
+
+    # Invoked via inheritance - ignore
+    if ($self ne __PACKAGE__) {
+        return;
+    }
+
     my $class = caller();   # The class that is using us
+    if (! $class) {
+        OIO::Code->die(
+            'message' => q/'import' invoked from 'main'/,
+            'Info'    => "Can't use 'use Object::InsideOut;' or 'import Object::InsideOut;' inside application code");
+    }
 
     no strict 'refs';
 
@@ -219,12 +233,10 @@ sub import
         }
     }
 
-    # Create calling class's @ISA array
-    push(@{$class.'::ISA'}, $self);
-
     # Create class tree
     my @tree;
     my %seen;   # Used to prevent duplicate entries in @tree
+    my $need_oio = 1;
     foreach my $parent (@packages) {
         if (exists($TREE_TOP_DOWN{$parent})) {
             # Inherit from Object::InsideOut class
@@ -235,6 +247,7 @@ sub import
                 }
             }
             push(@{$class.'::ISA'}, $parent);
+            $need_oio = 0;
 
         } else {
             # Inherit from foreign class
@@ -248,6 +261,11 @@ sub import
             # Add parent to inherited classes
             $classes->{$parent} = undef;
         }
+    }
+
+    # Add Object::InsideOut to class's @ISA array, if needed
+    if ($need_oio) {
+        push(@{$class.'::ISA'}, $self);
     }
 
     # Add calling class to tree
@@ -2744,7 +2762,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.25
+This document describes Object::InsideOut version 1.26
 
 =head1 SYNOPSIS
 
@@ -4534,7 +4552,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.25/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.26/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

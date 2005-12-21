@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.26 Wed Dec 21 13:54:26 EST 2005
+	- Suppress import() invoked via inheritance
+	- Only put 'Object::InsideOut' in base class @ISAs
+
 1.25 Wed Dec 21 09:55:17 EST 2005
 	- Use 'B' module to find subroutine names
 	- Changed author's email address

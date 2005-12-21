@@ -1,11 +1,14 @@
-package AA; {
+use strict;
+use warnings;
+
+package t::AA; {
     use Object::InsideOut;
 
     my @aa : Field({'acc'=>'aa', 'type' => 'num'});
 }
 
 
-package BB; {
+package t::BB; {
     use Object::InsideOut;
 
     my @bb : Field( { 'get' => 'bb', 'Set' => 'set_bb' } );
@@ -20,8 +23,8 @@ package BB; {
 }
 
 
-package AB; {
-    use Object::InsideOut qw(AA BB);
+package t::AB; {
+    use Object::InsideOut qw(t::AA t::BB);
 
     my @data : Field({'acc'=>'data'});
     my @info : Field('gET'=>'info_get', 'SET'=>'info_set');
