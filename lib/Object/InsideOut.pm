@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.26;
+our $VERSION = 1.27;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -185,6 +185,15 @@ sub import
     # (normally set in the app's main code)
     if (defined(${$class.'::shared'})) {
         set_sharing($class, ${$class.'::shared'}, (caller())[1..2]);
+    }
+
+    # Check for class's global 'storable' flag
+    # (normally set in the app's main code)
+    {
+        no warnings 'once';
+        if (${$class.'::storable'}) {
+            push(@_, 'Storable');
+        }
     }
 
     # Import packages and handle :SHARED flag
@@ -981,7 +990,20 @@ sub process_fields : PRIVATE
 
             # Share the field, if applicable
             if (is_sharing($pkg)) {
-                threads::shared::share($fld)
+                # Preserve any contents
+                my $contents = Object::InsideOut::Util::shared_clone($fld);
+
+                # Share the field
+                threads::shared::share($fld);
+
+                # Restore contents
+                if ($contents) {
+                    if (ref($fld) eq 'ARRAY') {
+                        @{$fld} = @{$contents};
+                    } else {
+                        %{$fld} = %{$contents};
+                    }
+                }
             }
 
             # Process any accessor declarations
@@ -2762,7 +2784,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.26
+This document describes Object::InsideOut version 1.27
 
 =head1 SYNOPSIS
 
@@ -3060,7 +3082,7 @@ Calling C<-E<gt>clone()> with a true argument:
 
  my $obj2 = $obj->clone(1);
 
-Creates a I<deep> copy of the object such that no internal data is shared
+creates a I<deep> copy of the object such that no internal data is shared
 between the objects.
 
 I<Deep> cloning can also be controlled at the field level.  See L</"Field
@@ -3992,24 +4014,39 @@ would be:
 =item Storable
 
 Object::InsideOut also supports object serialization using the L<Storable>
-module.  To use this capability, add L<Storable> to the Object::InsideOut
-declaration in your package:
+module.  There are two methods for specifying that a class can be serialized
+using L<Storable>.  The first method involves adding L<Storable> to the
+Object::InsideOut declaration in your package:
 
  package My::Class; {
      use Object::InsideOut qw(Storable);
      ...
  }
 
-And add C<use Storable;> in your application.  Then you can use the
+and adding C<use Storable;> in your application.  Then you can use the
 C<-E<gt>store()> and C<-E<gt>freeze()> methods to serialize your objects, and
 the C<retrieve()> and C<thaw()> subroutines to deserialize them.
 
  package main;
  use Storable;
+ use My::Class;
+
  my $obj = My::Class->new(...);
  $obj->store('/tmp/object.dat');
  ...
  my $obj2 = retrieve('/tmp/object.dat');
+
+The other method of specifying L<Storable> serialization involves setting a
+C<::storable> variable (inside a C<BEGIN> block) for the class prior to its
+use:
+
+ package main;
+ use Storable;
+
+ BEGIN {
+     $My::Class::storable = 1;
+ }
+ use My::Class;
 
 =back
 
@@ -4309,9 +4346,9 @@ name.
 
 =head1 THREAD SUPPORT
 
-For Perl 5.8.0 and later, this module fully supports L<threads> (i.e., is
-thread safe).  For Perl 5.8.1 and later, this module supports the sharing of
-Object::InsideOut objects between threads using L<threads::shared>.
+For Perl 5.8.1 and later, this module fully supports L<threads> (i.e., is
+thread safe), and supports the sharing of Object::InsideOut objects between
+threads using L<threads::shared>.
 
 To use Object::InsideOut in a threaded application, you must put S<C<use
 threads;>> at the beginning of the application.  (The use of S<C<require
@@ -4328,13 +4365,15 @@ threads;>> alone).
 
 To enable the sharing of objects between threads, you must specify which
 classes will be involved with thread object sharing.  There are two methods
-for doing this.  The first involves setting a C<::shared> variable for the
-class prior to its use:
+for doing this.  The first involves setting a C<::shared> variable (inside
+a C<BEGIN> block) for the class prior to its use:
 
  use threads;
  use threads::shared;
 
- $My::Class::shared = 1;
+ BEGIN {
+     $My::Class::shared = 1;
+ }
  use My::Class;
 
 The other method is for a class to add a C<:SHARED> flag to its S<C<use
@@ -4524,7 +4563,7 @@ suppressed by adding the following to your application code:
      };
 
 It is known that thread support is broken in ActiveState Perl 5.8.4 on
-Windows.  (It is not know which other version of ActivePerl may be affected.)
+Windows.  (It is not known which other version of ActivePerl may be affected.)
 The best solution is to upgrade your version of ActivePerl.  Barring that, you
 can tell CPAN to I<force> the installation of Object::InsideOut, and use it in
 non-threaded applications.
@@ -4552,7 +4591,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.26/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.27/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

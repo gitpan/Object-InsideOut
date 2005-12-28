@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.27 Wed Dec 28 08:57:06 EST 2005
+	- Added '::storable' flag
+
 1.26 Wed Dec 21 13:54:26 EST 2005
 	- Suppress import() invoked via inheritance
 	- Only put 'Object::InsideOut' in base class @ISAs
