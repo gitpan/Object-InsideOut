@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.27;
+our $VERSION = 1.28;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -19,7 +19,7 @@ use Exception::Class (
     'OIO' => {
         'description' => 'Generic Object::InsideOut exception',
         # First 3 fields must be:  'Package', 'File', 'Line'
-        'fields' => ['Package', 'File', 'Line', 'Error'],
+        'fields' => ['Error'],
     },
 
     'OIO::Code' => {
@@ -57,6 +57,9 @@ use Exception::Class (
     },
 );
 
+# Turn on stack trace by default
+OIO->Trace(1);
+
 
 # A 'throw' method that adds location information to the exception object
 sub OIO::die
@@ -64,22 +67,45 @@ sub OIO::die
     my $class = shift;
     my %args  = @_;
 
-    # Add location info to %args
-    if (exists($args{'location'})) {
-        # Location specified in an array ref
-        @args{'Package', 'File', 'Line'} = @{delete($args{'location'})};
+    # Report on ourself?
+    my $report_self = delete($args{'self'});
 
-    } elsif (exists($args{'caller_level'})) {
-        # Location specified as a caller() level
-        @args{'Package', 'File', 'Line'} = caller(1 + delete($args{'caller_level'}));
+    # Ignore ourself in stack trace, unless told not to
+    if (! $report_self) {
+        my @ignore = (__PACKAGE__);
+        if (exists($args{'ignore_package'})) {
+            if (ref($args{'ignore_package'})) {
+                push(@ignore, @{$args{'ignore_package'}});
+            } else {
+                push(@ignore, $args{'ignore_package'});
+            }
+        }
+        $args{'ignore_package'} = \@ignore;
+    }
 
-    } else {
-        # Default location
-        @args{'Package', 'File', 'Line'} = caller(1);
+    # Remove any location information
+    my $location = delete($args{'location'});
+
+    # Create exception object
+    my $e = $class->new(%args);
+
+    # Override location information, if applicable
+    if ($location) {
+        $e->{'package'} = $$location[0];
+        $e->{'file'}    = $$location[1];
+        $e->{'line'}    = $$location[2];
+    }
+
+    # If reporting on ourself, then correct location info
+    elsif ($report_self) {
+        my $frame = $e->trace->frame(1);
+        $e->{'package'} = $frame->package;
+        $e->{'line'}    = $frame->line;
+        $e->{'file'}    = $frame->filename;
     }
 
     # Throw error
-    $class->throw(%args);
+    $e->throw(%args);
 }
 
 
@@ -94,7 +120,6 @@ sub OIO::full_message
 
     # Add fields, if any
     my @fields = $self->Fields();
-    shift(@fields) for (1..3);   # Drop location fields
     foreach my $field (@fields) {
         if (exists($self->{$field})) {
             $msg .= "\n$field: " . $self->{$field};
@@ -103,11 +128,9 @@ sub OIO::full_message
     }
 
     # Add location
-    if (defined($self->{'Package'})) {
-        $msg .= "\nPackage: " . $self->{'Package'}
-              . "\nFile: "    . $self->{'File'}
-              . "\nLine: "    . $self->{'Line'};
-    }
+    $msg .= "\nPackage: " . $self->{'package'}
+          . "\nFile: "    . $self->{'file'}
+          . "\nLine: "    . $self->{'line'};
 
     return ($msg . "\n");
 }
@@ -122,13 +145,11 @@ sub OIO::trap
         $_[0]->rethrow();
     }
 
-    # Turn on stack trace
-    OIO->Trace(1);
-
     # Package the error into an object
     OIO->die(
-        'message' => 'Trapped uncaught error',
-        'Error'   => join('', @_));
+        'location' => [ caller() ],
+        'message'  => 'Trapped uncaught error',
+        'Error'    => join('', @_));
 }
 
 
@@ -139,13 +160,16 @@ require Object::InsideOut::Util;
 use B;
 
 use Scalar::Util 1.10;
-
-BEGIN {
-    # Verify we have 'weaken'
-    if (! Scalar::Util->can('weaken')) {
-        OIO::Code->die(
-            'message' => q/Cannot use 'pure perl' version of Scalar::Util - 'weaken' missing/,
-            'Info'    => q/Upgrade your version of Scalar::Util/);
+{
+    no warnings 'void';
+    BEGIN {
+        # Verify we have 'weaken'
+        if (! Scalar::Util->can('weaken')) {
+            OIO->Trace(1);
+            OIO::Code->die(
+                'message' => q/Cannot use 'pure perl' version of Scalar::Util - 'weaken' missing/,
+                'Info'    => q/Upgrade your version of Scalar::Util/);
+        }
     }
 }
 
@@ -173,7 +197,7 @@ sub import
     }
 
     my $class = caller();   # The class that is using us
-    if (! $class) {
+    if (! $class || $class eq 'main') {
         OIO::Code->die(
             'message' => q/'import' invoked from 'main'/,
             'Info'    => "Can't use 'use Object::InsideOut;' or 'import Object::InsideOut;' inside application code");
@@ -202,7 +226,7 @@ sub import
         next if (! $pkg);    # Ignore empty strings and such
 
         # Handle thread object sharing flag
-        if ($pkg =~ /^:(?:NOT?_?|!)?SHAR/i) {
+        if ($pkg =~ /^:(NOT?_?|!)?SHAR/i) {
             my $sharing = (defined($1)) ? 0 : 1;
             set_sharing($class, $sharing, (caller())[1..2]);
             next;
@@ -230,8 +254,7 @@ sub import
         if (ref($_[0])) {
             my $imports = shift;
             if (ref($imports) ne 'ARRAY') {
-                OIO::Code->die(
-                    'message' => "Arguments to '$pkg' must be contained within an array reference");
+                OIO::Code->die('message' => "Arguments to '$pkg' must be contained within an array reference");
             }
             eval { import $pkg @{$imports}; };
             if ($@) {
@@ -546,9 +569,9 @@ sub MODIFY_CODE_ATTRIBUTES
 
         } elsif ($attr eq 'SCALARIFY') {
             OIO::Attribute->die(
-                'location' => $$info[1],
-                'message'  => q/:SCALARIFY not allowed/,
-                'Info'     => q/The scalar of an object is its object ID, and can't be redefined/);
+                'message' => q/:SCALARIFY not allowed/,
+                'Info'    => q/The scalar of an object is its object ID, and can't be redefined/,
+                'ignore_package' => 'attributes');
 
         } elsif ($attr =~ /IFY$/) {
             # Overload (-ify) attributes
@@ -627,7 +650,7 @@ my %IS_SHARING;
 
 
 # Finds a subroutine's name from its code ref
-sub sub_name : PRIVATE
+sub sub_name :Private
 {
     my ($ref, $attr, $location) = @_;
 
@@ -651,7 +674,7 @@ sub sub_name : PRIVATE
 
 
 # Perform much of the 'magic' for this module
-sub initialize : Private
+sub initialize :Private
 {
     if (%CUMULATIVE || %ANTICUMULATIVE || %AUTOMETHODS) {
         require Object::InsideOut::Results;
@@ -674,11 +697,10 @@ sub initialize : Private
                             ($ID_SUBS{$pkg}[1] ne $ID_SUBS{$id_sub_pkg}[1]))
                         {
                             my ($p,    $file,  $line)  = @{$ID_SUBS{$pkg}}[1..3];
-                            my ($pkg2, $file2, $line2) = @{$ID_SUBS{$id_sub_pkg}[1..3]};
+                            my ($pkg2, $file2, $line2) = @{$ID_SUBS{$id_sub_pkg}}[1..3];
                             OIO::Attribute->die(
-                                'caller_level' => 2,
-                                'message'      => "Multiple :ID subs defined within hierarchy for '$class'",
-                                'Info'         => ":ID subs in class '$pkg' (file '$file', line $line), and class '$pkg2' (file '$file2' line $line2)");
+                                'message' => "Multiple :ID subs defined within hierarchy for '$class'",
+                                'Info'    => ":ID subs in class '$pkg' (file '$file', line $line), and class '$pkg2' (file '$file2' line $line2)");
                         }
                     } else {
                         $id_sub_pkg = $pkg;
@@ -731,7 +753,7 @@ sub initialize : Private
                                 OIO::Code->die(
                                     'location' => \@loc,
                                     'message'  => "Can't combine thread-sharing classes ($pkg1) with non-sharing classes ($pkg2) in the same class tree",
-                                    'Info'     => "Class '$pkg2' was declared as non-sharing in '$file' line $line");
+                                    'Info'     => "Class '$pkg1' was declared as sharing (file '$loc[1]' line $loc[2]), but class '$pkg2' was declared as non-sharing (file '$file' line $line)");
                             }
                         } else {
                             # Add the sharing flag to this class
@@ -882,32 +904,26 @@ sub initialize : Private
 
     # Implement overload (-ify) operators
     foreach my $package (keys(%OVERLOAD)) {
+        # Generate code string
+        my $code = "package $package;\nuse overload (\n";
         foreach my $operation (@{$OVERLOAD{$package}}) {
-            my ($attr, $code, $location) = @$operation;
-            my $name = sub_name($code, ":$attr", $location);
-            {
-                my @errs;
-                local $SIG{__WARN__} = sub { push(@errs, @_); };
+            my ($attr, $ref, $location) = @$operation;
+            my $name = sub_name($ref, ":$attr", $location);
+            $code .= sprintf('q/%s/ => sub { $_[0]->%s() },', $OVERLOAD_TYPES{$attr}, $name) . "\n";
+        }
+        $code .= q/'fallback' => 1);/;
 
-                my $code = sprintf(<<'_CODE_', $package, $OVERLOAD_TYPES{$attr}, $name);
-package %s;
-    use overload (
-    q/%s/ => sub { $_[0]->%s() },
-    'fallback' => 1
-);
-_CODE_
-                eval $code;
-
-                if ($@ || @errs) {
-                    my ($err) = split(/ at /, $@ || join(" | ", @errs));
-                    my ($pkg, $file, $line) = @{$location};
-                    OIO::Internal->die(
-                        'location' => [ __PACKAGE__, __FILE__, __LINE__ ],
-                        'message'  => "Failure overloading :$attr for class '$pkg' (file '$file' line $line)",
-                        'Error'    => $err,
-                        'Code'     => $code);
-                }
-            }
+        # Eval the code string
+        my @errs;
+        local $SIG{__WARN__} = sub { push(@errs, @_); };
+        eval $code;
+        if ($@ || @errs) {
+            my ($err) = split(/ at /, $@ || join(" | ", @errs));
+            OIO::Internal->die(
+                'message'  => "Failure creating overloads for class '$package'",
+                'Error'    => $err,
+                'Code'     => $code,
+                'self'     => 1);
         }
     }
     undef(%OVERLOAD);   # No longer needed
@@ -965,12 +981,22 @@ _CODE_
     # Export methods
     my @EXPORT = qw(new clone set DESTROY AUTOLOAD dump
                     inherit heritage disinherit);
-    my @EXPORT2 = (@EXPORT, qw(STORABLE_freeze STORABLE_thaw));
+    my @EXPORT2 = qw(STORABLE_freeze STORABLE_thaw);
     foreach my $pkg (keys(%TREE_TOP_DOWN)) {
-        foreach my $sym (($pkg->isa('Storable')) ? @EXPORT2 : @EXPORT) {
+        EXPORT:
+        foreach my $sym (@EXPORT, ($pkg->isa('Storable')) ? @EXPORT2 : ()) {
             my $full_sym = $pkg.'::'.$sym;
-            # Only export if method doesn't already exist
+            # Only export if method doesn't already exist,
+            # and not overridden in a parent class
             if (! *{$full_sym}{CODE}) {
+                foreach my $class (@{$TREE_BOTTOM_UP{$pkg}}) {
+                    my $class_sym = $class.'::'.$sym;
+                    if (*{$class_sym}{CODE} &&
+                        (*{$class_sym}{CODE} != \&{$sym}))
+                    {
+                        next EXPORT;
+                    }
+                }
                 *{$full_sym} = \&{$sym};
             }
         }
@@ -982,7 +1008,7 @@ _CODE_
 
 
 # Process :FIELD declarations for shared hashes/arrays and accessors
-sub process_fields : PRIVATE
+sub process_fields :Private
 {
     foreach my $pkg (keys(%NEW_FIELDS)) {
         foreach my $item (@{$NEW_FIELDS{$pkg}}) {
@@ -1034,7 +1060,7 @@ sub process_fields : PRIVATE
 # threads
 #my %IS_SHARING;   # Declared above
 
-sub set_sharing : PRIVATE
+sub set_sharing :Private
 {
     my ($class, $sharing, $file, $line) = @_;
     $sharing = ($sharing) ? 1 : 0;
@@ -1052,7 +1078,7 @@ sub set_sharing : PRIVATE
             OIO::Code->die(
                 'location' => \@loc,
                 'message'  => "Can't combine thread-sharing and non-sharing instances of a class in the same application",
-                'Info'     => "Class '$class' was declared as non-sharing in '$file' line $line");
+                'Info'     => "Class '$class' was declared as sharing in '$file' line $line, but was declared as non-sharing in '$nfile' line $nline");
         }
     } else {
         $IS_SHARING{$class} = [ $sharing, $file, $line ];
@@ -1062,10 +1088,12 @@ sub set_sharing : PRIVATE
 
 # Internal subroutine that determines if a class's objects are shared between
 # threads
-sub is_sharing : PRIVATE
+sub is_sharing :Private
 {
-    # my $class = $_[0];
-    return (($threads::shared::threads_shared) ? $IS_SHARING{$_[0]}[0] : 0);
+    my $class = $_[0];
+    return ($threads::shared::threads_shared
+                && exists($IS_SHARING{$class})
+                && $IS_SHARING{$class}[0]);
 }
 
 
@@ -1172,7 +1200,7 @@ sub CLONE
 ### Object Methods ###
 
 # Helper subroutine to create a new 'bare' object
-sub _obj : PRIVATE
+sub _obj :Private
 {
     my $class = shift;
 
@@ -1225,12 +1253,12 @@ sub new
             @{$all_args}{keys(%{$arg})} = values(%{$arg});
         } elsif (ref($arg)) {
             OIO::Args->die(
-                'message' => "Bad initializer: @{[ref($arg)]} ref not allowed",
-                'Usage'   => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
+                'message'  => "Bad initializer: @{[ref($arg)]} ref not allowed",
+                'Usage'    => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
         } elsif (! @_) {
             OIO::Args->die(
-                'message' => "Bad initializer: Missing value for key '$arg'",
-                'Usage'   => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
+                'message'  => "Bad initializer: Missing value for key '$arg'",
+                'Usage'    => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
         } else {
             # Add 'key => value' pair
             $$all_args{$arg} = shift;
@@ -1284,7 +1312,7 @@ sub clone
     # Must call ->clone() as an object method
     my $class = Scalar::Util::blessed($parent);
     if (! $class) {
-        OIO::Method->die('message' => q/Must call ->clone() as an object method/);
+        OIO::Method->die('message'  => q/Must call ->clone() as an object method/);
     }
 
     # Create a new 'bare' object
@@ -1340,8 +1368,8 @@ sub set
     # Check usage
     if (! defined($field)) {
         OIO::Args->die(
-            'message' => 'Missing field argument',
-            'Usage'   => '$obj->set($field_ref, $data)');
+            'message'  => 'Missing field argument',
+            'Usage'    => '$obj->set($field_ref, $data)');
     }
 
     # Handle data according to field type
@@ -1772,7 +1800,8 @@ sub pump
                             'message' => "Unnamed field encounted in class '$pkg'",
                             'Arg'     => "$fld_name => $value");
                     } else {
-                        OIO::Args->die('message' => "Unknown field name for class '$pkg': $fld_name");
+                        OIO::Args->die(
+                            'message' => "Unknown field name for class '$pkg': $fld_name");
                     }
                 }
             }
@@ -1819,8 +1848,8 @@ sub inherit
     my $obj_class = Scalar::Util::blessed($self);
     if (! $obj_class) {
         OIO::Code->die(
-            'message' => '->inherit() invoked as a class method',
-            'Info'    => '->inherit() is an object method');
+            'message'  => '->inherit() invoked as a class method',
+            'Info'     => '->inherit() is an object method');
     }
 
     # Inheritance takes place in caller's package
@@ -1829,8 +1858,8 @@ sub inherit
     # Restrict usage to inside class hierarchy
     if (! $obj_class->$univ_isa($package)) {
         OIO::Code->die(
-            'message' => '->inherit() not called within class hierarchy',
-            'Info'    => '->inherit() is a restricted method');
+            'message'  => '->inherit() not called within class hierarchy',
+            'Info'     => '->inherit() is a restricted method');
     }
 
     # Flatten arg list
@@ -1845,7 +1874,7 @@ sub inherit
 
     # Must be called with at least one arg
     if (! @arg_objs) {
-        OIO::Args->die('message' => q/Missing arg(s) to '->inherit()'/);
+        OIO::Args->die('message'  => q/Missing arg(s) to '->inherit()'/);
     }
 
     # Get 'heritage' field and 'classes' hash
@@ -1860,13 +1889,13 @@ sub inherit
         # Must be an object
         my $arg_class = Scalar::Util::blessed($obj);
         if (! $arg_class) {
-            OIO::Args->die('message' => q/Arg to '->inherit()' is not an object/);
+            OIO::Args->die('message'  => q/Arg to '->inherit()' is not an object/);
         }
         # Must not be in class hierarchy
         if ($obj_class->$univ_isa($arg_class) ||
             $arg_class->$univ_isa($obj_class))
         {
-            OIO::Args->die('message' => q/Args to '->inherit()' cannot be within class hierarchy/);
+            OIO::Args->die('message'  => q/Args to '->inherit()' cannot be within class hierarchy/);
         }
         # Add arg to object list
         push(@{$objs}, $obj);
@@ -1887,8 +1916,8 @@ sub heritage
     my $obj_class = Scalar::Util::blessed($self);
     if (! $obj_class) {
         OIO::Code->die(
-            'message' => '->inherit() invoked as a class method',
-            'Info'    => '->inherit() is an object method');
+            'message'  => '->inherit() invoked as a class method',
+            'Info'     => '->inherit() is an object method');
     }
 
     # Inheritance takes place in caller's package
@@ -1897,15 +1926,15 @@ sub heritage
     # Restrict usage to inside class hierarchy
     if (! $obj_class->$univ_isa($package)) {
         OIO::Code->die(
-            'message' => '->inherit() not called within class hierarchy',
-            'Info'    => '->inherit() is a restricted method');
+            'message'  => '->inherit() not called within class hierarchy',
+            'Info'     => '->inherit() is a restricted method');
     }
 
     # Anything to return?
     if (! exists($HERITAGE{$package}) ||
         ! exists($HERITAGE{$package}[0]{$$self}))
     {
-        return;
+        return (undef);
     }
 
     my @objs;
@@ -1939,8 +1968,8 @@ sub disinherit
     my $class = Scalar::Util::blessed($self);
     if (! $class) {
         OIO::Code->die(
-            'message' => '->disinherit() invoked as a class method',
-            'Info'    => '->disinherit() is an object method');
+            'message'  => '->disinherit() invoked as a class method',
+            'Info'     => '->disinherit() is an object method');
     }
 
     # Disinheritance takes place in caller's package
@@ -1949,8 +1978,8 @@ sub disinherit
     # Restrict usage to inside class hierarchy
     if (! $class->$univ_isa($package)) {
         OIO::Code->die(
-            'message' => '->disinherit() not called within class hierarchy',
-            'Info'    => '->disinherit() is a restricted method');
+            'message'  => '->disinherit() not called within class hierarchy',
+            'Info'     => '->disinherit() is a restricted method');
     }
 
     # Flatten arg list
@@ -1971,8 +2000,8 @@ sub disinherit
     # Get 'heritage' field
     if (! exists($HERITAGE{$package})) {
         OIO::Code->die(
-            'message' => 'Nothing to ->disinherit()',
-            'Info'    => "Class '$package' is currently not inheriting from any foreign classes");
+            'message'  => 'Nothing to ->disinherit()',
+            'Info'     => "Class '$package' is currently not inheriting from any foreign classes");
     }
     my $heritage = $HERITAGE{$package}[0];
 
@@ -1986,15 +2015,15 @@ sub disinherit
             if (! grep { $_ == $arg } @objs) {
                 my $arg_class = ref($arg);
                 OIO::Args->die(
-                    'message' => 'Cannot ->disinherit()',
-                    'Info'    => "Object is not inheriting from an object of class '$arg_class' inside class '$class'");
+                    'message'  => 'Cannot ->disinherit()',
+                    'Info'     => "Object is not inheriting from an object of class '$arg_class' inside class '$class'");
             }
         } else {
             # Arg is a class
             if (! grep { ref($_) eq $arg } @objs) {
                 OIO::Args->die(
-                    'message' => 'Cannot ->disinherit()',
-                    'Info'    => "Object is not inheriting from an object of class '$arg' inside class '$class'");
+                    'message'  => 'Cannot ->disinherit()',
+                    'Info'     => "Object is not inheriting from an object of class '$arg' inside class '$class'");
             }
         }
     }
@@ -2159,17 +2188,15 @@ sub create_field
     # Verify valid class
     if (! $class->$univ_isa(__PACKAGE__)) {
         OIO::Args->die(
-            'caller_level' => 1,
-            'message'      => 'Not an Object::InsideOut class',
-            'Arg'          => $class);
+            'message' => 'Not an Object::InsideOut class',
+            'Arg'     => $class);
     }
 
     # Check for valid field
     if ($field !~ /^\s*[@%]\s*[a-zA-Z_]\w*\s*$/) {
         OIO::Args->die(
-            'caller_level' => 1,
-            'message'      => 'Not an array or hash declaration',
-            'Arg'          => $field);
+            'message' => 'Not an array or hash declaration',
+            'Arg'     => $field);
     }
 
     # Tidy up attribute
@@ -2184,9 +2211,8 @@ sub create_field
     }
     if (! $attr) {
         OIO::Args->die(
-            'caller_level' => 1,
-            'message'      => 'Missing accessor generation parameters',
-            'Usage'        => 'See POD for correct usage');
+            'message' => 'Missing accessor generation parameters',
+            'Usage'   => 'See POD for correct usage');
     }
 
     # Create the declaration
@@ -2201,10 +2227,9 @@ sub create_field
     if ($@ || @errs) {
         my ($err) = split(/ at /, $@ || join(" | ", @errs));
         OIO::Code->die(
-            'caller_level' => 1,
-            'message'      => 'Failure creating field',
-            'Error'        => $err,
-            'Code'         => $code);
+            'message' => 'Failure creating field',
+            'Error'   => $err,
+            'Code'    => $code);
     }
 
     # Process the declaration
@@ -2213,16 +2238,15 @@ sub create_field
 
 
 # Add heritage field for a package
-sub create_heritage : PRIVATE
+sub create_heritage :Private
 {
     my $package = shift;
 
     # Check if 'heritage' already exists
     if (exists($DUMP_FIELDS{$package}{'heritage'})) {
         OIO::Attribute->die(
-            'caller_level' => 1,
-            'message'      => "Can't inherit into '$package'",
-            'Info'         => "'heritage' already specified for another field using '$DUMP_FIELDS{$package}{'heritage'}[1]'");
+            'message' => "Can't inherit into '$package'",
+            'Info'    => "'heritage' already specified for another field using '$DUMP_FIELDS{$package}{'heritage'}[1]'");
     }
 
     # Create the heritage field
@@ -2245,7 +2269,7 @@ sub create_heritage : PRIVATE
 
 
 # Creates object data accessors for classes
-sub create_accessors : PRIVATE
+sub create_accessors :Private
 {
     my ($package, $field_ref, $decl) = @_;
 
@@ -2264,10 +2288,9 @@ sub create_accessors : PRIVATE
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
             OIO::Attribute->die(
-                'caller_level' => 3,
-                'message'      => "Malformed attribute in package '$package'",
-                'Error'        => $err,
-                'Attribute'    => "Field( $decl )");
+                'message'   => "Malformed attribute in package '$package'",
+                'Error'     => $err,
+                'Attribute' => "Field( $decl )");
         }
     }
 
@@ -2319,16 +2342,14 @@ sub create_accessors : PRIVATE
         # Unknown parameter
         else {
             OIO::Attribute->die(
-                'caller_level' => 3,
-                'message'      => "Can't create accessor method for package '$package'",
-                'Info'         => "Unknown accessor specifier: $key");
+                'message' => "Can't create accessor method for package '$package'",
+                'Info'    => "Unknown accessor specifier: $key");
         }
         # $val must have a usable value
         if (! defined($val) || $val eq '') {
             OIO::Attribute->die(
-                'caller_level' => 3,
-                'message'      => "Invalid '$key' entry in :Field attribute",
-                'Attribute'    => "Field( $decl )");
+                'message'   => "Invalid '$key' entry in :Field attribute",
+                'Attribute' => "Field( $decl )");
         }
     }
 
@@ -2338,10 +2359,9 @@ sub create_accessors : PRIVATE
             $field_ref != $DUMP_FIELDS{$package}{$name}[0])
         {
             OIO::Attribute->die(
-                'caller_level' => 3,
-                'message'      => "Can't create accessor method for package '$package'",
-                'Info'         => "'$name' already specified for another field using '$DUMP_FIELDS{$package}{$name}[1]'",
-                'Attribute'    => "Field( $decl )");
+                'message'   => "Can't create accessor method for package '$package'",
+                'Info'      => "'$name' already specified for another field using '$DUMP_FIELDS{$package}{$name}[1]'",
+                'Attribute' => "Field( $decl )");
         }
         $DUMP_FIELDS{$package}{$name} = [ $field_ref, 'Name' ];
         # Done if only 'Name' present
@@ -2354,10 +2374,9 @@ sub create_accessors : PRIVATE
             $field_ref != $DUMP_FIELDS{$package}{$get}[0])
         {
             OIO::Attribute->die(
-                'caller_level' => 3,
-                'message'      => "Can't create accessor method for package '$package'",
-                'Info'         => "'$get' already specified for another field using '$DUMP_FIELDS{$package}{$get}[1]'",
-                'Attribute'    => "Field( $decl )");
+                'message'   => "Can't create accessor method for package '$package'",
+                'Info'      => "'$get' already specified for another field using '$DUMP_FIELDS{$package}{$get}[1]'",
+                'Attribute' => "Field( $decl )");
         }
         $DUMP_FIELDS{$package}{$get} = [ $field_ref, 'Get' ];
 
@@ -2366,10 +2385,9 @@ sub create_accessors : PRIVATE
             $field_ref != $DUMP_FIELDS{$package}{$set}[0])
         {
             OIO::Attribute->die(
-                'caller_level' => 3,
-                'message'      => "Can't create accessor method for package '$package'",
-                'Info'         => "'$set' already specified for another field using '$DUMP_FIELDS{$package}{$set}[1]'",
-                'Attribute'    => "Field( $decl )");
+                'message'   => "Can't create accessor method for package '$package'",
+                'Info'      => "'$set' already specified for another field using '$DUMP_FIELDS{$package}{$set}[1]'",
+                'Attribute' => "Field( $decl )");
         }
         $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
     }
@@ -2377,10 +2395,9 @@ sub create_accessors : PRIVATE
     # If 'TYPE' and/or 'RETURN', need 'SET', too
     if (($type || $return) && ! $set) {
         OIO::Attribute->die(
-            'caller_level' => 3,
-            'message'      => "Can't create accessor method for package '$package'",
-            'Info'         => "No set accessor specified to go with 'TYPE'/'RETURN' keyword",
-            'Attribute'    => "Field( $decl )");
+            'message'   => "Can't create accessor method for package '$package'",
+            'Info'      => "No set accessor specified to go with 'TYPE'/'RETURN' keyword",
+            'Attribute' => "Field( $decl )");
     }
 
     # Check for name conflict
@@ -2390,10 +2407,9 @@ sub create_accessors : PRIVATE
             # Do not overwrite existing methods
             if (*{$package.'::'.$method}{CODE}) {
                 OIO::Attribute->die(
-                    'caller_level' => 3,
-                    'message'      => q/Can't create accessor method/,
-                    'Info'         => "Method '$method' already exists in class '$package'",
-                    'Attribute'    => "Field( $decl )");
+                    'message'   => q/Can't create accessor method/,
+                    'Info'      => "Method '$method' already exists in class '$package'",
+                    'Attribute' => "Field( $decl )");
             }
         }
     }
@@ -2403,10 +2419,9 @@ sub create_accessors : PRIVATE
         $type = 'NONE';
     } elsif (!$type) {
         OIO::Attribute->die(
-            'caller_level' => 3,
-            'message'      => q/Can't create accessor method/,
-            'Info'         => q/Invalid setting for 'TYPE'/,
-            'Attribute'    => "Field( $decl )");
+            'message'   => q/Can't create accessor method/,
+            'Info'      => q/Invalid setting for 'TYPE'/,
+            'Attribute' => "Field( $decl )");
     } elsif ($type =~ /^num(?:ber|eric)?/i) {
         $type = 'NUMERIC';
     } elsif (uc($type) eq 'LIST' || uc($type) eq 'ARRAY') {
@@ -2424,10 +2439,9 @@ sub create_accessors : PRIVATE
         $return = 'SELF';
     } else {
         OIO::Attribute->die(
-            'caller_level' => 3,
-            'message'      => q/Can't create accessor method/,
-            'Info'         => "Invalid setting for 'RETURN': $return",
-            'Attribute'    => "Field( $decl )");
+            'message'   => q/Can't create accessor method/,
+            'Info'      => "Invalid setting for 'RETURN': $return",
+            'Attribute' => "Field( $decl )");
     }
 
     # Code to be eval'ed into subroutines
@@ -2465,7 +2479,9 @@ _COMBINATION_
         else {
             $code .= <<"_CHECK_ARGS_";
     if (\@_ < 2) {
-        OIO::Args->die('message' => q/Missing arg(s) to '$package->$set'/);
+        OIO::Args->die(
+            'message'  => q/Missing arg(s) to '$package->$set'/,
+            'location' => [ caller() ]);
     }
 _CHECK_ARGS_
         }
@@ -2474,10 +2490,9 @@ _CHECK_ARGS_
         if (ref($type)) {
             if (ref($type) ne 'CODE') {
                 OIO::Attribute->die(
-                    'caller_level' => 3,
-                    'message'      => q/Can't create accessor method/,
-                    'Info'         => q/'Type' must be a 'string' or code ref/,
-                    'Attribute'    => "Field( $decl )");
+                    'message'   => q/Can't create accessor method/,
+                    'Info'      => q/'Type' must be a 'string' or code ref/,
+                    'Attribute' => "Field( $decl )");
             }
 
             $code .= <<"_CODE_";
@@ -2492,7 +2507,8 @@ _CHECK_ARGS_
     }
     if (! \$ok) {
         OIO::Args->die(
-            'message' => "Argument to '$package->$set' failed type check: \$arg");
+            'message'  => "Argument to '$package->$set' failed type check: \$arg",
+            'location' => [ caller() ]);
     }
 _CODE_
 
@@ -2506,8 +2522,9 @@ _CODE_
     my \$arg;
     if (! Scalar::Util::looks_like_number(\$arg = \$_[1])) {
         OIO::Args->die(
-            'message' => "Bad argument: \$arg",
-            'Usage'   => q/Argument to '$package->$set' must be numeric/);
+            'message'  => "Bad argument: \$arg",
+            'Usage'    => q/Argument to '$package->$set' must be numeric/,
+            'location' => [ caller() ]);
     }
 _NUMERIC_
 
@@ -2532,8 +2549,9 @@ _ARRAY_
         \$arg = \$_[1];
     } elsif (\@_ % 2 == 0) {
         OIO::Args->die(
-            'message' => q/Odd number of arguments: Can't create hash ref/,
-            'Usage'   => q/'$package->$set' requires a hash ref or an even number of args (to make a hash ref)/);
+            'message'  => q/Odd number of arguments: Can't create hash ref/,
+            'Usage'    => q/'$package->$set' requires a hash ref or an even number of args (to make a hash ref)/,
+            'location' => [ caller() ]);
     } else {
         my \@args = \@_;
         shift(\@args);
@@ -2555,8 +2573,9 @@ _HASH_
     my \$arg;
     if (! Object::InsideOut::Util::is_it(\$arg = \$_[1], '$type')) {
         OIO::Args->die(
-            'message' => q/Bad argument: Wrong type/,
-            'Usage'   => q/Argument to '$package->$set' must be of type '$type'/);
+            'message'  => q/Bad argument: Wrong type/,
+            'Usage'    => q/Argument to '$package->$set' must be of type '$type'/,
+            'location' => [ caller() ]);
     }
 _REF_
         }
@@ -2623,18 +2642,18 @@ _GET_
     if ($@ || @errs) {
         my ($err) = split(/ at /, $@ || join(" | ", @errs));
         OIO::Internal->die(
-            'location'    => [ __PACKAGE__, __FILE__, __LINE__ ],
             'message'     => "Failure creating accessor for class '$package'",
             'Error'       => $err,
             'Declaration' => $decl,
-            'Code'        => $code);
+            'Code'        => $code,
+            'self'        => 1);
     }
 }
 
 
 # Returns a closure back to initialize() that is used to setup CUMULATIVE
 # and CUMULATIVE(BOTTOM UP) methods for a particular method name.
-sub create_CUMULATIVE : PRIVATE
+sub create_CUMULATIVE :Private
 {
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
@@ -2682,7 +2701,7 @@ sub create_CUMULATIVE : PRIVATE
 
 # Returns a closure back to initialize() that is used to setup CHAINED
 # and CHAINED(BOTTOM UP) methods for a particular method name.
-sub create_CHAINED : PRIVATE
+sub create_CHAINED :Private
 {
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
@@ -2712,7 +2731,7 @@ sub create_CHAINED : PRIVATE
 
 # Returns a 'wrapper' closure back to initialize() that restricts a method
 # to being only callable from within its class hierarchy
-sub create_RESTRICTED : PRIVATE
+sub create_RESTRICTED :Private
 {
     my ($package, $method, $code) = @_;
     return sub {
@@ -2721,14 +2740,16 @@ sub create_RESTRICTED : PRIVATE
         if ($caller->$univ_isa($package) || $package->$univ_isa($caller)) {
             goto $code;
         }
-        OIO::Method->die('message' => "Can't call restricted method '$package->$method' from class '$caller'");
+        OIO::Method->die(
+            'message'  => "Can't call restricted method '$package->$method' from class '$caller'",
+            'location' => [ caller() ]);
     };
 }
 
 
 # Returns a 'wrapper' closure back to initialize() that makes a method
 # private (i.e., only callable from within its own class).
-sub create_PRIVATE : PRIVATE
+sub create_PRIVATE :Private
 {
     my ($package, $method, $code) = @_;
     return sub {
@@ -2737,21 +2758,25 @@ sub create_PRIVATE : PRIVATE
         if ($caller eq $package) {
             goto $code;
         }
-        OIO::Method->die('message' => "Can't call private method '$package->$method' from class '$caller'");
+        OIO::Method->die(
+            'message' => "Can't call private method '$package->$method' from class '$caller'",
+            'location' => [ caller() ]);
     };
 }
 
 
 # Redefines a subroutine to make it uncallable - with the original code ref
 # stored elsewhere, of course.
-sub create_HIDDEN : PRIVATE
+sub create_HIDDEN :Private
 {
     my ($package, $method) = @_;
 
     # Create new code that hides the original method
     my $code = <<"_CODE_";
 sub ${package}::$method {
-    OIO::Method->die('message' => q/Can't call hidden method '$package->$method'/);
+    OIO::Method->die(
+        'message'  => q/Can't call hidden method '$package->$method'/,
+        'location' => [ caller() ]);
 }
 _CODE_
 
@@ -2765,10 +2790,10 @@ _CODE_
     if ($@ || @errs) {
         my ($err) = split(/ at /, $@ || join(" | ", @errs));
         OIO::Internal->die(
-            'location' => [ __PACKAGE__, __FILE__, __LINE__ ],
             'message'  => "Failure hiding '$package->$method'",
             'Error'    => $err,
-            'Code'     => $code);
+            'Code'     => $code,
+            'self'     => 1);
     }
 }
 
@@ -2784,7 +2809,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.27
+This document describes Object::InsideOut version 1.28
 
 =head1 SYNOPSIS
 
@@ -3949,6 +3974,11 @@ of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
 When called with a I<true> argument, C<-E<gt>dump()> returns a string version
 of the I<Perl> representation using L<Data::Dumper>.
 
+Note that using L<Data::Dumper> directly on an inside-out object will not
+produce the desired results (it'll just output the contents of the scalar
+ref).  Also, if inside-out objects are stored inside other structures, a dump
+of those structures will not contain the contents of the object's fields.
+
 In the event of a method naming conflict, the C<-E<gt>dump()> method can be
 called using its fully-qualified name:
 
@@ -4591,7 +4621,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.27/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.28/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
@@ -4625,7 +4655,7 @@ Jerry D. Hedden, S<E<lt>jdhedden AT cpan DOT orgE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2005 Jerry D. Hedden. All rights reserved.
+Copyright 2005, 2006 Jerry D. Hedden. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.

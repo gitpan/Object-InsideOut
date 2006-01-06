@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.27;
+our $VERSION = 1.28;
 
 
 ### Module Initialization ###
@@ -39,7 +39,8 @@ sub import
         } else {
             OIO::Code->die(
                 'message' => "Symbol '$sym' is not exported by Object::InsideOut::Util",
-                'Info'    => 'Exportable symbols: ' . join(' ', keys(%EXPORT_OK)));
+                'Info'    => 'Exportable symbols: ' . join(' ', keys(%EXPORT_OK)),
+                'ignore_package' => __PACKAGE__);
         }
     }
 }
@@ -68,7 +69,8 @@ sub create_object
             # Complain if something other than code ref
             OIO::Args->die(
                 'message' => q/2nd argument to create_object() is not a code ref or scalar/,
-                'Usage'   => 'create_object($class, $scalar) or create_object($class, $code_ref, ...)');
+                'Usage'   => 'create_object($class, $scalar) or create_object($class, $code_ref, ...)',
+                'ignore_package' => __PACKAGE__);
         }
 
     } else {
@@ -102,7 +104,8 @@ sub process_args
     if ((ref($spec) ne 'HASH') || (ref($args) ne 'HASH')) {
         OIO::Args->die(
             'message' => q/Last 2 args to process_args() must be hash refs/,
-            'Usage'   => q/process_args($object, $spec_hash_ref, $arg_hash_ref) or process_args($class, $object, $spec_hash_ref, $arg_hash_ref)/);
+            'Usage'   => q/process_args($object, $spec_hash_ref, $arg_hash_ref) or process_args($class, $object, $spec_hash_ref, $arg_hash_ref)/,
+            'ignore_package' => __PACKAGE__);
     }
 
     # Extract/build arg-matching regexs from the specifiers
@@ -143,9 +146,9 @@ sub process_args
             $args = $args->{$class};
             if (ref($args) ne 'HASH') {
                 OIO::Args->die(
-                    'caller_level' => 1,
-                    'message'      => "Bad class initializer for '$class'",
-                    'Usage'        => q/Class initializers must be a hash ref/);
+                    'message' => "Bad class initializer for '$class'",
+                    'Usage'   => q/Class initializers must be a hash ref/,
+                    'ignore_package' => __PACKAGE__);
             }
             # Loop back to process class-specific arguments
             redo EXTRACT;
@@ -172,8 +175,8 @@ sub process_args
             # Complain if mandatory
             if (hash_re($spec, qr/^MANDATORY$/i)) {
                 OIO::Args->die(
-                    'caller_level' => 1,
-                    'message'      => "Missing mandatory initializer '$key' for class '$class'");
+                    'message' => "Missing mandatory initializer '$key' for class '$class'",
+                    'ignore_package' => __PACKAGE__);
             }
 
             # Assign default value
@@ -192,9 +195,9 @@ sub process_args
             if (ref($type)) {
                 if (ref($type) ne 'CODE') {
                     OIO::Code->die(
-                        'caller_level' => 1,
-                        'message'      => q/Can't validate argument/,
-                        'Info'         => "'Type' is not a code ref or string for initializer '$key' for class '$class'");
+                        'message' => q/Can't validate argument/,
+                        'Info'    => "'Type' is not a code ref or string for initializer '$key' for class '$class'",
+                        'ignore_package' => __PACKAGE__);
                 }
 
                 my ($ok, @errs);
@@ -203,14 +206,14 @@ sub process_args
                 if ($@ || @errs) {
                     my ($err) = split(/ at /, $@ || join(" | ", @errs));
                     OIO::Code->die(
-                        'caller_level' => 1,
-                        'message'      => "Problem with type check routine for initializer '$key' for class '$class",
-                        'Error'        => $err);
+                        'message' => "Problem with type check routine for initializer '$key' for class '$class",
+                        'Error'   => $err,
+                        'ignore_package' => __PACKAGE__);
                 }
                 if (! $ok) {
                     OIO::Args->die(
-                        'caller_level' => 1,
-                        'message'      => "Initializer '$key' for class '$class' failed type check: $found{$key}");
+                        'message' => "Initializer '$key' for class '$class' failed type check: $found{$key}",
+                        'ignore_package' => __PACKAGE__);
                 }
             }
 
@@ -218,9 +221,9 @@ sub process_args
             elsif ($type =~ /^num/i) {
                 if (! Scalar::Util::looks_like_number($found{$key})) {
                 OIO::Args->die(
-                    'caller_level' => 1,
-                    'message'      => "Bad value for initializer '$key': $found{$key}",
-                    'Usage'        => "Initializer '$key' for class '$class' must be a number");
+                    'message' => "Bad value for initializer '$key': $found{$key}",
+                    'Usage'   => "Initializer '$key' for class '$class' must be a number",
+                    'ignore_package' => __PACKAGE__);
                 }
             }
 
@@ -235,9 +238,9 @@ sub process_args
             # Exact spelling and case required
             elsif (! is_it($found{$key}, $type)) {
                 OIO::Args->die(
-                    'caller_level' => 1,
-                    'message'      => "Bad value for initializer '$key': $found{$key}",
-                    'Usage'        => "Initializer '$key' for class '$class' must be an object or ref of type '$type'");
+                    'message' => "Bad value for initializer '$key': $found{$key}",
+                    'Usage'   => "Initializer '$key' for class '$class' must be an object or ref of type '$type'",
+                    'ignore_package' => __PACKAGE__);
             }
         }
 
@@ -443,7 +446,7 @@ sub hash_re
             return ($hash->{$_});
         }
     }
-    return;
+    return (undef);
 }
 
 

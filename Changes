@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.28 Fri Jan  6 16:01:41 EST 2006
+	- Exported methods don't override parents' methods
+	- Internal: Removed 'caller_level' in ->die()
+
 1.27 Wed Dec 28 08:57:06 EST 2005
 	- Added '::storable' flag
 

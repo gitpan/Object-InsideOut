@@ -3,40 +3,40 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 1.27;
+our $VERSION = 1.28;
 
 use Object::InsideOut;
 
-my @VALUES  : Field;
-my @CLASSES : Field;
-my @HASHES  : Field;
+my @VALUES  :Field;
+my @CLASSES :Field;
+my @HASHES  :Field;
 
-my %init_args : InitArgs = (
+my %init_args :InitArgs = (
     'VALUES'  => { 'FIELD' => \@VALUES  },
     'CLASSES' => { 'FIELD' => \@CLASSES }
 );
 
-sub as_string : STRINGIFY
+sub as_string :Stringify
 {
     return (join('', grep { defined $_ } @{$VALUES[${$_[0]}]}));
 }
 
-sub count : NUMERIFY
+sub count :Numerify
 {
     return (scalar(@{$VALUES[${$_[0]}]}));
 }
 
-sub have_any : BOOLIFY
+sub have_any :Boolify
 {
     return (@{$VALUES[${$_[0]}]} > 0);
 }
 
-sub values : ARRAYIFY
+sub values :Arrayify
 {
     return ($VALUES[${$_[0]}]);
 }
 
-sub as_hash : HASHIFY
+sub as_hash :Hashify
 {
     my $self = $_[0];
 
