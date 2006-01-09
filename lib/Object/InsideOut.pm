@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.28;
+our $VERSION = 1.29;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2295,7 +2295,7 @@ sub create_accessors :Private
     }
 
     # Get info for accessors
-    my ($get, $set, $type, $name, $return);
+    my ($get, $set, $type, $name, $return, $private, $restricted);
     foreach my $key (keys(%{$acc_spec})) {
         my $key_uc = uc($key);
         my $val = $$acc_spec{$key};
@@ -2338,6 +2338,19 @@ sub create_accessors :Private
         # Set accessor return type
         elsif ($key =~ /^ret(?:urn)?$/i) {
             $return = uc($val);
+        }
+        # Set accessor permission
+        elsif ($key =~ /^perm|^priv|^restrict/i) {
+            if ($key =~ /^perm/i) {
+                $key = $val;
+                $val = 1;
+            }
+            if ($key =~ /^priv/i) {
+                $private = $val;
+            }
+            if ($key =~ /^restrict/i) {
+                $restricted = $val;
+            }
         }
         # Unknown parameter
         else {
@@ -2451,6 +2464,27 @@ sub create_accessors :Private
     if (defined($set)) {
         # Begin with subroutine declaration in the appropriate package
         $code .= "*${package}::$set = sub {\n";
+
+        # Check accessor permission
+        if ($private) {
+            $code .= <<"_PRIVATE_";
+    my \$caller = caller();
+    if (\$caller ne '$package') {
+        OIO::Method->die(
+            'message' => "Can't call private method '$package->$set' from class '\$caller'",
+            'location' => [ caller() ]);
+    }
+_PRIVATE_
+        } elsif ($restricted) {
+            $code .= <<"_RESTRICTED_";
+    my \$caller = caller();
+    if (! \$caller->isa('$package') && ! $package->isa(\$caller)) {
+        OIO::Method->die(
+            'message'  => "Can't call restricted method '$package->$set' from class '\$caller'",
+            'location' => [ caller() ]);
+    }
+_RESTRICTED_
+        }
 
         # Lock the field if sharing
         if (is_sharing($package)) {
@@ -2613,6 +2647,27 @@ _REF_
 
     # Create 'get' accessor
     if (defined($get)) {
+        # Check accessor permission
+        if ($private) {
+            $code .= <<"_PRIVATE_";
+    my \$caller = caller();
+    if (\$caller ne '$package') {
+        OIO::Method->die(
+            'message' => "Can't call private method '$package->$get' from class '\$caller'",
+            'location' => [ caller() ]);
+    }
+_PRIVATE_
+        } elsif ($restricted) {
+            $code .= <<"_RESTRICTED_";
+    my \$caller = caller();
+    if (! \$caller->isa('$package') && ! $package->isa(\$caller)) {
+        OIO::Method->die(
+            'message'  => "Can't call restricted method '$package->$get' from class '\$caller'",
+            'location' => [ caller() ]);
+    }
+_RESTRICTED_
+        }
+
         # Set up locking code
         my $lock = (is_sharing($package)) ? "    lock(\$field);\n" : '';
 
@@ -2740,9 +2795,7 @@ sub create_RESTRICTED :Private
         if ($caller->$univ_isa($package) || $package->$univ_isa($caller)) {
             goto $code;
         }
-        OIO::Method->die(
-            'message'  => "Can't call restricted method '$package->$method' from class '$caller'",
-            'location' => [ caller() ]);
+        OIO::Method->die('message'  => "Can't call restricted method '$package->$method' from class '$caller'");
     };
 }
 
@@ -2758,9 +2811,7 @@ sub create_PRIVATE :Private
         if ($caller eq $package) {
             goto $code;
         }
-        OIO::Method->die(
-            'message' => "Can't call private method '$package->$method' from class '$caller'",
-            'location' => [ caller() ]);
+        OIO::Method->die('message' => "Can't call private method '$package->$method' from class '$caller'");
     };
 }
 
@@ -2774,9 +2825,7 @@ sub create_HIDDEN :Private
     # Create new code that hides the original method
     my $code = <<"_CODE_";
 sub ${package}::$method {
-    OIO::Method->die(
-        'message'  => q/Can't call hidden method '$package->$method'/,
-        'location' => [ caller() ]);
+    OIO::Method->die('message'  => q/Can't call hidden method '$package->$method'/);
 }
 _CODE_
 
@@ -2809,7 +2858,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.28
+This document describes Object::InsideOut version 1.29
 
 =head1 SYNOPSIS
 
@@ -4133,6 +4182,37 @@ method's class.
 Without the above attributes, most methods have I<public> access.  If desired,
 you may explicitly label them with the C<:Public> attribute.
 
+You can also specify access permissions on L<automatically generated
+accessors|/"Automatic Accessor Generation">:
+
+ my @data     :Field('Standard' => 'data', 'Permission' => 'private');
+ my @info     :Field('Set' => 'set_info',  'Perm'       => 'restricted');
+ my @internal :Field('Acc' => 'internal',  'Private'    => 1);
+ my @state    :Field('Get' => 'state',     'Restricted' => 1);
+
+Such permissions apply to both of the I<get> and I<set> accessors created on a
+field.  If different permissions are required on an accessor pair, then you'll
+have to create the accessors yourself, using the C<:Restricted> and
+C<:Private> attributes when applicable:
+
+ # Create a private set method on the 'foo' field
+ my @foo :Field('Set' => 'set_foo', 'Priv' => 1);
+
+ # Read access on the 'foo' field is restricted
+ sub get_foo :Restrict
+ {
+     return ($foo[${$_[0]}]);
+ }
+
+ # Create a restricted set method on the 'bar' field
+ my %bar :Field('Set' => 'set_bar', 'Perm' => 'restrict');
+
+ # Read access on the 'foo' field is public
+ sub get_bar
+ {
+     return ($bar{${$_[0]}});
+ }
+
 =head2 Hidden Methods
 
 For subroutines marked with the following attributes:
@@ -4621,7 +4701,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.28/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.29/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

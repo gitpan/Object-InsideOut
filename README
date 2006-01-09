@@ -1,4 +1,4 @@
-Object-InsideOut version 1.28
+Object-InsideOut version 1.29
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -124,7 +124,7 @@ This module requires the following module available from CPAN:
 
 COPYRIGHT AND LICENCE
 
-Copyright 2005 Jerry D. Hedden <jdhedden AT cpan DOT org>
+Copyright 2005, 2006 Jerry D. Hedden <jdhedden AT cpan DOT org>
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.

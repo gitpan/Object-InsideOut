@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.29 Mon Jan  9 09:29:54 EST 2006
+	- Added 'private' and 'restricted' acessors
+
 1.28 Fri Jan  6 16:01:41 EST 2006
 	- Exported methods don't override parents' methods
 	- Internal: Removed 'caller_level' in ->die()
