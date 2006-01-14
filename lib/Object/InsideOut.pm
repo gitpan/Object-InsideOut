@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.29;
+our $VERSION = 1.31;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -234,15 +234,17 @@ sub import
 
         # Load the package, if needed
         if (! $class->$univ_isa($pkg)) {
-            my @parts = split(/::/, $pkg);
-            my $part2 = pop(@parts) . '::';
-            my $part1 = join('::', @parts) . '::';
-            if (! exists(${$part1}{$part2})) {
+            # If no package symbols, then load it
+            if (! grep { $_ !~ /::$/ } keys(%{$pkg.'::'})) {
                 eval "require $pkg";
                 if ($@) {
                     OIO::Code->die(
                         'message' => "Failure loading package '$pkg'",
                         'Error'   => $@);
+                }
+                # Empty packages make no sense
+                if (! grep { $_ !~ /::$/ } keys(%{$pkg.'::'})) {
+                    OIO::Code->die('message' => "Package '$pkg' is empty");
                 }
             }
 
@@ -2858,7 +2860,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.29
+This document describes Object::InsideOut version 1.31
 
 =head1 SYNOPSIS
 
@@ -2925,9 +2927,10 @@ inside-out object model.
 
 This module implements inside-out objects as anonymous scalar references that
 are blessed into a class with the scalar containing the ID for the object
-(usually a sequence number).  Object data (i.e., fields) are stored within the
-class's package in either arrays indexed by the object's ID, or hashes keyed
-to the object's ID.
+(usually a sequence number).  For Perl 5.8.3 and later, the scalar reference
+is set as B<readonly> to prevent I<accidental> modifications to the ID.
+Object data (i.e., fields) are stored within the class's package in either
+arrays indexed by the object's ID, or hashes keyed to the object's ID.
 
 The virtues of the inside-out object model over the I<blessed hash> object
 model have been extolled in detail elsewhere.  See the informational links
@@ -3368,6 +3371,15 @@ work will be taken care of for you.
 (In the above, I<Regex> may be I<Regexp> or just I<Re>, and I<Default> may be
 I<Defaults> or I<Def>.  They and the other specifier keys are
 case-insensitive, as well.)
+
+=head2 Getting Data
+
+In class code, data can be fetched directly from an object's field array
+(hash) using the object's ID:
+
+ $data = $field[$$self];
+     # or
+ $data = $field{$$self};
 
 =head2 Setting Data
 
@@ -4629,6 +4641,17 @@ If a I<set> accessor accepts scalars, then you can store any inside-out
 object type in it.  If its C<Type> is set to C<HASH>, then it can store any
 I<blessed hash> object.
 
+It is possible to I<hack together> a I<fake> Object::InsideOut object, and so
+gain access to another object's data:
+
+ my $fake = bless(\do{my $scalar}, 'Some::Class');
+ $$fake = 86;   # ID of another object
+ my $stolen = $fake->get_data();
+
+Why anyone would try to do this is unknown.  How this could be used for any
+sort of malicious exploitation is also unknown.  However, if preventing this
+sort of I<security> issue a requirement, then do not use Object::InsideOut.
+
 There are bugs associated with L<threads::shared> that may prevent you from
 using foreign inheritance with shared objects, or storing objects inside of
 shared objects.
@@ -4701,7 +4724,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.29/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.31/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

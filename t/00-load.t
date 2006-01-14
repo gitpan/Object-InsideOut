@@ -11,8 +11,8 @@ package My::Class; {
 
 package main;
 
-if (Object::InsideOut->VERSION) {
-    diag('Testing Object::InsideOut ' . Object::InsideOut->VERSION);
+if ($Object::InsideOut::VERSION) {
+    diag('Testing Object::InsideOut ' . $Object::InsideOut::VERSION);
 }
 
 # EOF

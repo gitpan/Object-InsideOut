@@ -35,6 +35,10 @@ t/18-inherit.t
 t/19-storable.t
 t/20-clone.t
 t/21-import.t
+t/22-import.t
 t/A.pm
 t/B.pm
+t/Parent.pm
+t/ErrorParent.pm
+t/EmptyParent.pm
 META.yml                                 Module meta-data (added by MakeMaker)

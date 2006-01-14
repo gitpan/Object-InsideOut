@@ -1,5 +1,10 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.31 Sat Jan 14 04:33:22 EST 2006
+	- Fix to module importation bug (#17055)
+	- Documented that Object::InsideOut objects are 'readonly'
+	- Documented direct data fetching in class code
+
 1.29 Mon Jan  9 09:29:54 EST 2006
 	- Added 'private' and 'restricted' acessors
 
