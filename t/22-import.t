@@ -5,7 +5,7 @@ use Test::More 'no_plan';
 
 package t::ErrorParent::Child; {
     eval "use Object::InsideOut qw(t::ErrorParent);";
-    Test::More::ok($@, 'Correctly fails on syntax error in parent' );
+    Test::More::ok($@, 'Correctly fails on syntax error in parent');
 }
 
 package t::Child; {
@@ -20,23 +20,23 @@ package t::Missing::Child; {
 
 package t::Child2; {
     eval 'use Object::InsideOut qw(t::EmptyParent);';
-    Test::More::ok($@, 'Correctly fails on empty parent' );
+    Test::More::ok($@, 'Correctly fails on empty parent');
 }
 
 package t::EmptyParent::Child; {
     eval 'use Object::InsideOut qw(t::EmptyParent);';
-    Test::More::ok($@, 'Correctly fails on empty parent' );
+    Test::More::ok($@, 'Correctly fails on empty parent');
 }
 
 package t::IntEmptyParent;
 package t::IntChild; {
     eval 'use Object::InsideOut qw(t::IntEmptyParent);';
-    Test::More::ok($@, 'Correctly fails on empty parent' );
+    Test::More::ok($@, 'Correctly fails on empty parent');
 }
 
 package t::IntEmptyParent::Child; {
     eval 'use Object::InsideOut qw(t::IntEmptyParent);';
-    Test::More::ok($@, 'Correctly fails on empty parent' );
+    Test::More::ok($@, 'Correctly fails on empty parent');
 }
 
 

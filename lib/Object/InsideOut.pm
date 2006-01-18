@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.31;
+our $VERSION = 1.32;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -442,6 +442,13 @@ sub MODIFY_HASH_ATTRIBUTES
         }
     }
 
+    # If using Attribute::Handlers, send it any unused attributes
+    if (@unused_attrs &&
+        Attribute::Handlers::UNIVERSAL->can('MODIFY_HASH_ATTRIBUTES'))
+    {
+        return (Attribute::Handlers::UNIVERSAL::MODIFY_HASH_ATTRIBUTES($pkg, $hash, @unused_attrs));
+    }
+
     # Return any unused attributes
     return (@unused_attrs);
 }
@@ -477,6 +484,13 @@ sub MODIFY_ARRAY_ATTRIBUTES
         else {
             push(@unused_attrs, $attr);
         }
+    }
+
+    # If using Attribute::Handlers, send it any unused attributes
+    if (@unused_attrs &&
+        Attribute::Handlers::UNIVERSAL->can('MODIFY_ARRAY_ATTRIBUTES'))
+    {
+        return (Attribute::Handlers::UNIVERSAL::MODIFY_ARRAY_ATTRIBUTES($pkg, $array, @unused_attrs));
     }
 
     # Return any unused attributes
@@ -591,6 +605,13 @@ sub MODIFY_CODE_ATTRIBUTES
         }
     }
 
+    # If using Attribute::Handlers, send it any unused attributes
+    if (@unused_attrs &&
+        Attribute::Handlers::UNIVERSAL->can('MODIFY_CODE_ATTRIBUTES'))
+    {
+        return (Attribute::Handlers::UNIVERSAL::MODIFY_CODE_ATTRIBUTES($pkg, $code, @unused_attrs));
+    }
+
     # Return any unused attributes
     return (@unused_attrs);
 }
@@ -685,8 +706,10 @@ sub initialize :Private
     no warnings 'redefine';
     no strict 'refs';
 
-    PROPAGATE_ID_SUBS:
-    {
+    my $reapply;
+    do {
+        $reapply = 0;
+
         # Propagate ID subs through the class hierarchies
         foreach my $class (keys(%TREE_TOP_DOWN)) {
             # Find ID sub for this class somewhere in its hierarchy
@@ -713,20 +736,26 @@ sub initialize :Private
             # If ID sub found, propagate it through the class hierarchy
             if ($id_sub_pkg) {
                 foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
-                    $ID_SUBS{$pkg} = $ID_SUBS{$id_sub_pkg};
+                    if (! exists($ID_SUBS{$pkg})) {
+                        $ID_SUBS{$pkg} = $ID_SUBS{$id_sub_pkg};
+                        $reapply = 1;
+                    }
                 }
             }
         }
 
         # Check for any classes without ID subs
-        foreach my $class (keys(%TREE_TOP_DOWN)) {
-            if (! exists($ID_SUBS{$class})) {
-                # Default to internal ID sub and propagate it
-                $ID_SUBS{$class} = [ \&_ID, $class, '-', '-' ];
-                redo PROPAGATE_ID_SUBS;
+        if (! $reapply) {
+            foreach my $class (keys(%TREE_TOP_DOWN)) {
+                if (! exists($ID_SUBS{$class})) {
+                    # Default to internal ID sub and propagate it
+                    $ID_SUBS{$class} = [ \&_ID, $class, '-', '-' ];
+                    $reapply = 1;
+                    last;
+                }
             }
         }
-    }
+    } while ($reapply);
 
 
     # If needed, process any thread object sharing flags
@@ -2860,7 +2889,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.31
+This document describes Object::InsideOut version 1.32
 
 =head1 SYNOPSIS
 
@@ -2877,7 +2906,7 @@ This document describes Object::InsideOut version 1.31
              'Mandatory' => 1,
              'Type'      => 'NUMERIC',
          },
-     )
+     );
 
      # Handle class specific args as part of ->new()
      sub init :Init
@@ -4724,7 +4753,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.31/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.32/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

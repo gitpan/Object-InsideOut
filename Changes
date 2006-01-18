@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.32 Wed Jan 18 13:36:31 EST 2006
+	- Compatible with Attribute::Handlers
+
 1.31 Sat Jan 14 04:33:22 EST 2006
 	- Fix to module importation bug (#17055)
 	- Documented that Object::InsideOut objects are 'readonly'
