@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.32;
+our $VERSION = 1.33;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -186,13 +186,19 @@ my %HERITAGE;
 # Doesn't export anything - just builds class trees and stores sharing flags
 sub import
 {
-    my $self  = shift;      # Ourself (i.e., 'Object::InsideOut')
+    my $self = shift;      # Ourself (i.e., 'Object::InsideOut')
     if (Scalar::Util::blessed($self)) {
         OIO::Method->die('message' => q/'import' called as an object method/);
     }
 
     # Invoked via inheritance - ignore
     if ($self ne __PACKAGE__) {
+        if (Exporter->can('import')) {
+            my $lvl = $Exporter::ExportLevel;
+            $Exporter::ExportLevel = (caller() eq __PACKAGE__) ? 3 : 1;
+            $self->Exporter::import(@_);
+            $Exporter::ExportLevel = $lvl;
+        }
         return;
     }
 
@@ -258,7 +264,7 @@ sub import
             if (ref($imports) ne 'ARRAY') {
                 OIO::Code->die('message' => "Arguments to '$pkg' must be contained within an array reference");
             }
-            eval { import $pkg @{$imports}; };
+            eval { $pkg->import(@{$imports}); };
             if ($@) {
                 OIO::Code->die(
                     'message' => "Failure running 'import' on package '$pkg'",
@@ -2889,7 +2895,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.32
+This document describes Object::InsideOut version 1.33
 
 =head1 SYNOPSIS
 
@@ -3080,8 +3086,9 @@ parent module(s), calls their C<import> functions, and sets up the sub-class's
 @ISA array.  Therefore, you must not S<C<use base ...>> yourself, or try to
 set up C<@ISA> arrays.
 
-If a parent class takes parameters, enclose them in an array ref (mandatory)
-following the name of the parent class:
+If a parent class takes parameters (e.g., symbols to be exported via
+L<Exporter|/"USAGE WITH C<Exporter>">), enclose them in an array ref
+(mandatory) following the name of the parent class:
 
  package My::Project {
      use Object::InsideOut 'My::Class'      => [ 'param1', 'param2' ],
@@ -4610,6 +4617,42 @@ Here is a complete example with thread object sharing enabled:
  # I.e., this shows that the object was indeed shared between threads
  print(join(', ', @{$obj->data()}), "\n");       # "bar, baz, zooks"
 
+=head1 USAGE WITH C<Exporter>
+
+It is possible to use L<Exporter> to export functions from one inside-out
+object class to another:
+
+ use strict;
+ use warnings;
+
+ package Foo; {
+     use Object::InsideOut 'Exporter';
+     BEGIN {
+         our @EXPORT_OK = qw(foo_name);
+     }
+
+     sub foo_name
+     {
+         return (__PACKAGE__);
+     }
+ }
+
+ package Bar; {
+     use Object::InsideOut 'Foo' => [ qw(foo_name) ];
+
+     sub get_foo_name
+     {
+         return (foo_name());
+     }
+ }
+
+ package main;
+
+ print("Bar got Foo's name as '", Bar::get_foo_name(), "'\n");
+
+Note that the C<BEGIN> block is needed to ensure that the L<Exporter> symbol
+arrays (in this case C<@EXPORT_OK>) get populated properly.
+
 =head1 USAGE WITH C<require> AND C<mod_perl>
 
 Object::InsideOut usage under L<mod_perl> and with runtime-loaded classes is
@@ -4753,7 +4796,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.32/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.33/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

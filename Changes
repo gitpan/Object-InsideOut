@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.33 Wed Jan 18 23:24:43 EST 2006
+	- Compatible with Exporter - example in POD
+
 1.32 Wed Jan 18 13:36:31 EST 2006
 	- Compatible with Attribute::Handlers
 
