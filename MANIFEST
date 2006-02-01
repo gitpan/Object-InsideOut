@@ -5,7 +5,14 @@ Makefile.PL
 Build.PL
 lib/Object/InsideOut.pm
 lib/Object/InsideOut/Util.pm
-lib/Object/InsideOut/Results.pm
+lib/Object/InsideOut/Cumulative.pm
+lib/Object/InsideOut/Chained.pm
+lib/Object/InsideOut/Overload.pm
+lib/Object/InsideOut/Universal.pm
+lib/Object/InsideOut/Dump.pm
+lib/Object/InsideOut/Foreign.pm
+lib/Object/InsideOut/Dynamic.pm
+lib/Object/InsideOut/Autoload.pm
 t/00-load.t
 t/01-basic.t
 t/01a-basic.t

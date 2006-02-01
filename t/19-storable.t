@@ -92,6 +92,13 @@ package Baz; {
 }
 
 
+package Mat; {
+    use Object::InsideOut qw(Storable);
+    my @bom :Field( Standard => 'bom', Name => 'bom' );
+}
+
+
+
 package main;
 MAIN:
 {
@@ -100,6 +107,14 @@ MAIN:
     my $x = $obj->freeze();
     my $obj2 = thaw($x);
     is($obj->dump(1), $obj2->dump(1) => 'Storable works');
+
+    # Test circular reference case
+    my $f1 = Mat->new();
+    $f1->set_bom($f1);
+    is($f1->get_bom(), $f1      => 'Stored object');
+
+    my $f2 = thaw($f1->freeze());
+    is($f2->get_bom(), $f2      => 'Freeze+Thaw');
 }
 
 exit(0);

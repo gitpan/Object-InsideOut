@@ -1,5 +1,12 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.34 Wed Feb  1 17:28:09 EST 2006
+	- Insure proper 'import' for 'threads::shared' in Util.pm
+	- Fix for Storable bug (courtesy of Matthijs Bomhoff)
+	- Delayed loading for various OIO features
+	- Added singleton class example to POD
+	- Documented 'use base' cases in POD
+
 1.33 Wed Jan 18 23:24:43 EST 2006
 	- Compatible with Exporter - example in POD
 

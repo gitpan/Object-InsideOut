@@ -5,15 +5,20 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.33;
+our $VERSION = 1.34;
 
 
 ### Module Initialization ###
 
-# 1. Install our own 'no-op' version of Internals::SvREADONLY for Perl < 5.8
 BEGIN {
+    # 1. Install our own 'no-op' version of Internals::SvREADONLY for Perl < 5.8
     if (! Internals->can('SvREADONLY')) {
         *Internals::SvREADONLY = sub (\$;$) { return; };
+    }
+
+    # Import 'share' and 'bless' if threads::shared
+    if ($threads::shared::threads_shared) {
+        import threads::shared;
     }
 }
 
@@ -273,7 +278,7 @@ sub make_shared
         # Copy an array ref
         if ($ref_type eq 'ARRAY') {
             # Make empty shared array ref
-            $out = &threads::shared::share([]);
+            $out = &share([]);
             # Recursively copy and add contents
             foreach my $val (@$in) {
                 push(@$out, make_shared($val));
@@ -283,7 +288,7 @@ sub make_shared
         # Copy a hash ref
         elsif ($ref_type eq 'HASH') {
             # Make empty shared hash ref
-            $out = &threads::shared::share({});
+            $out = &share({});
             # Recursively copy and add contents
             foreach my $key (keys(%{$in})) {
                 $out->{$key} = make_shared($in->{$key});
@@ -293,7 +298,7 @@ sub make_shared
         # Copy a scalar ref
         elsif ($ref_type eq 'SCALAR') {
             $out = \do{ my $scalar = $$in; };
-            threads::shared::share($out);
+            share($out);
         }
     }
 
@@ -338,7 +343,7 @@ sub shared_clone
         # Copy an array ref
         if ($ref_type eq 'ARRAY') {
             # Make empty shared array ref
-            $out = &threads::shared::share([]);
+            $out = &share([]);
             # Recursively copy and add contents
             foreach my $val (@$in) {
                 push(@$out, shared_clone($val));
@@ -348,7 +353,7 @@ sub shared_clone
         # Copy a hash ref
         elsif ($ref_type eq 'HASH') {
             # Make empty shared hash ref
-            $out = &threads::shared::share({});
+            $out = &share({});
             # Recursively copy and add contents
             foreach my $key (keys(%{$in})) {
                 $out->{$key} = shared_clone($in->{$key});
@@ -358,7 +363,7 @@ sub shared_clone
         # Copy a scalar ref
         elsif ($ref_type eq 'SCALAR') {
             $out = \do{ my $scalar = $$in; };
-            threads::shared::share($out);
+            share($out);
         }
     }
 
