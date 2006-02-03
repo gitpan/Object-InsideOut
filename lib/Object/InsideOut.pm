@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.34;
+our $VERSION = 1.35;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2091,7 +2091,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.34
+This document describes Object::InsideOut version 1.35
 
 =head1 SYNOPSIS
 
@@ -4048,6 +4048,9 @@ suppressed by adding the following to your application code:
          }
      };
 
+For Perl 5.8.4 and 5.8.5, the L</"Storable"> feature does not work due to a
+Perl bug.  Use Object::InsideOut v1.33 if needed.
+
 It is known that thread support is broken in ActiveState Perl 5.8.4 on
 Windows.  (It is not known which other version of ActivePerl may be affected.)
 The best solution is to upgrade your version of ActivePerl.  Barring that, you
@@ -4077,7 +4080,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.34/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.35/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

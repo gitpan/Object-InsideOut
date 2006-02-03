@@ -48,6 +48,7 @@ sub AUTOLOAD
                         # Check classes
                         foreach my $pkg (keys(%{$classes})) {
                             if (my $code = $pkg->can($method)) {
+                                @_ = @_;   # Perl 5.8.5 bug workaround
                                 goto $code;
                             }
                         }
@@ -132,6 +133,7 @@ sub AUTOLOAD
                     }
 
                     # Just a one-shot - execute it
+                    @_ = @_;   # Perl 5.8.5 bug workaround
                     goto $code;
                 }
             }
@@ -142,6 +144,7 @@ sub AUTOLOAD
             my $code = ($code_type eq ':Cumulative')
                             ? create_CUMULATIVE($tree, \%code_refs)
                             : create_CHAINED($tree, \%code_refs);
+            @_ = @_;   # Perl 5.8.5 bug workaround
             goto $code;
         }
 

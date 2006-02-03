@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.35 Fri Feb  3 11:59:38 EST 2006
+	- Workaround for Perl 5.8.4/5.8.5 bug
+
 1.34 Wed Feb  1 17:28:09 EST 2006
 	- Insure proper 'import' for 'threads::shared' in Util.pm
 	- Fix for Storable bug (courtesy of Matthijs Bomhoff)

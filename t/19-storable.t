@@ -2,6 +2,11 @@ use strict;
 use warnings;
 
 BEGIN {
+    if ($] == 5.008004 || $] == 5.008005) {
+        my $z = ($] == 5.008004) ? 4 : 5;
+        print("1..0 # Skip due to Perl 5.8.$z bug\n");
+        exit(0);
+    }
     eval {
         require Storable;
         import Storable qw(thaw);
