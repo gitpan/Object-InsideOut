@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.36 Wed Feb  8 11:43:14 EST 2006
+	- Support 'weakened' fields
+
 1.35 Fri Feb  3 11:59:38 EST 2006
 	- Workaround for Perl 5.8.4/5.8.5 bug
 

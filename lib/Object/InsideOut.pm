@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.35;
+our $VERSION = 1.36;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -327,6 +327,9 @@ my (%NEW_FIELDS, %FIELDS);
 
 # Fields that require deep cloning
 my %DEEP_CLONE;
+
+# Fields that store weakened refs
+my %WEAK;
 
 # Field information for the dump() method
 my %DUMP_FIELDS;
@@ -1022,10 +1025,21 @@ sub CLONE
                 # Lock the object again
                 Internals::SvREADONLY($$obj, 1) if ($] >= 5.008003);
 
-                # Update the keys of the field hashes/arrays with the new object ID
+                # Update the keys of the field arrays/hashes
+                # with the new object ID
                 foreach my $pkg (@tree) {
                     foreach my $fld (@{$FIELDS{$pkg}}) {
-                        $$fld{$$obj} = delete($$fld{$old_id});
+                        if (ref($fld) eq 'ARRAY') {
+                            $$fld[$$obj] = delete($$fld[$old_id]);
+                            if ($WEAK{$fld}) {
+                                Scalar::Util::weaken($$fld[$$obj]);
+                            }
+                        } else {
+                            $$fld{$$obj} = delete($$fld{$old_id});
+                            if ($WEAK{$fld}) {
+                                Scalar::Util::weaken($$fld{$$obj});
+                            }
+                        }
                     }
                 }
 
@@ -1210,7 +1224,18 @@ sub clone
             my $fdeep = $deep || $DEEP_CLONE{$fld};  # Deep clone the field?
             {
                 lock($fld) if ($am_sharing);
-                if (ref($fld) eq 'HASH') {
+                if (ref($fld) eq 'ARRAY') {
+                    if ($fdeep && $am_sharing) {
+                        $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
+                    } elsif ($fdeep) {
+                        $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
+                    } else {
+                        $$fld[$$clone] = $$fld[$$parent];
+                    }
+                    if ($WEAK{$fld}) {
+                        Scalar::Util::weaken($$fld[$$clone]);
+                    }
+                } else {
                     if ($fdeep && $am_sharing) {
                         $$fld{$$clone} = Object::InsideOut::Util::shared_clone($$fld{$$parent});
                     } elsif ($fdeep) {
@@ -1218,13 +1243,8 @@ sub clone
                     } else {
                         $$fld{$$clone} = $$fld{$$parent};
                     }
-                } else {
-                    if ($fdeep && $am_sharing) {
-                        $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
-                    } elsif ($fdeep) {
-                        $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
-                    } else {
-                        $$fld[$$clone] = $$fld[$$parent];
+                    if ($WEAK{$fld}) {
+                        Scalar::Util::weaken($$fld{$$clone});
                     }
                 }
             }
@@ -1253,39 +1273,47 @@ sub set
             'message'  => 'Missing field argument',
             'Usage'    => '$obj->set($field_ref, $data)');
     }
-
-    # Handle data according to field type
-    my $ref_type = ref($field);
-    if ($ref_type eq 'ARRAY') {
-        # Handle sharing
-        if ($threads::shared::threads_shared &&
-            threads::shared::_id($field))
-        {
-            lock($field);
-            $$field[$$self] = Object::InsideOut::Util::make_shared($data);
-
-        } else {
-            # No sharing - just store the data
-            $$field[$$self] = $data;
-        }
-
-    } elsif ($ref_type eq 'HASH') {
-        # Handle sharing
-        if ($threads::shared::threads_shared &&
-            threads::shared::_id($field))
-        {
-            lock($field);
-            $$field{$$self} = Object::InsideOut::Util::make_shared($data);
-
-        } else {
-            # No sharing - just store the data
-            $$field{$$self} = $data;
-        }
-
-    } else {
+    my $fld_type = ref($field);
+    if (! $fld_type || ($fld_type ne 'ARRAY' && $fld_type ne 'HASH')) {
         OIO::Args->die(
             'message' => 'Invalid field argument',
             'Usage'   => '$obj->set($field_ref, $data)');
+    }
+
+    # Check data
+    if ($WEAK{$field} && ! ref($data)) {
+        OIO::Args->die(
+            'message'  => "Bad argument: $data",
+            'Usage'    => q/Argument to specified field must be a reference/);
+    }
+
+    # Handle sharing
+    if ($threads::shared::threads_shared &&
+        threads::shared::_id($field))
+    {
+        lock($field);
+        if ($fld_type eq 'ARRAY') {
+            $$field[$$self] = Object::InsideOut::Util::make_shared($data);
+        } else {
+            $$field{$$self} = Object::InsideOut::Util::make_shared($data);
+        }
+
+    } else {
+        # No sharing - just store the data
+        if ($fld_type eq 'ARRAY') {
+            $$field[$$self] = $data;
+        } else {
+            $$field{$$self} = $data;
+        }
+    }
+
+    # Weaken data, if required
+    if ($WEAK{$field}) {
+        if ($fld_type eq 'ARRAY') {
+            Scalar::Util::weaken($$field[$$self]);
+        } else {
+            Scalar::Util::weaken($$field{$$self});
+        }
     }
 }
 
@@ -1459,6 +1487,13 @@ sub create_accessors :Private
         } elsif ($key_uc eq 'DEEP') {
             if ($val) {
                 $DEEP_CLONE{$field_ref} = 1;
+            }
+            next;
+        }
+        # Store weakened refs
+        elsif ($key_uc =~ /^WEAK/) {
+            if ($val) {
+                $WEAK{$field_ref} = 1;
             }
             next;
         }
@@ -1682,8 +1717,21 @@ _CHECK_ARGS_
 _CODE_
 
         } elsif ($type eq 'NONE') {
-            # No data type check required
-            $code .= "    my \$arg = \$_[1];\n";
+            # For 'weak' fields, the data must be a ref
+            if ($WEAK{$field_ref}) {
+                $code .= <<"_WEAK_";
+    my \$arg;
+    if (! ref(\$arg = \$_[1])) {
+        OIO::Args->die(
+            'message'  => "Bad argument: \$arg",
+            'Usage'    => q/Argument to '$package->$set' must be a reference/,
+            'location' => [ caller() ]);
+    }
+_WEAK_
+            } else {
+                # No data type check required
+                $code .= "    my \$arg = \$_[1];\n";
+            }
 
         } elsif ($type eq 'NUMERIC') {
             # One numeric argument
@@ -1763,11 +1811,18 @@ _REF_
             $code .= (is_sharing($package))
                   ? "    \$\$field\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n"
                   : "    \$\$field\{\${\$_[0]}} = \$arg;\n";
+            if ($WEAK{$field_ref}) {
+                $code .= "    Scalar::Util::weaken(\$\$field\{\${\$_[0]}});\n";
+            }
         } else {
             $code .= (is_sharing($package))
                   ? "    \$\$field\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n"
                   : "    \$\$field\[\${\$_[0]}] = \$arg;\n";
+            if ($WEAK{$field_ref}) {
+                $code .= "    Scalar::Util::weaken(\$\$field\[\${\$_[0]}]);\n";
+            }
         }
+
 
         # Add code for return value
         if ($return eq 'SELF') {
@@ -2091,7 +2146,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.35
+This document describes Object::InsideOut version 1.36
 
 =head1 SYNOPSIS
 
@@ -2813,6 +2868,24 @@ C<:Field> attribute:
  my @level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
 
 =back
+
+=head2 I<Weak> Fields
+
+Frequently, it is useful to store L<weaken|Scalar::Util/"weaken REF">ed
+references to data or objects in a field.  Such a field can be declared as
+C<weak> so that data (i.e., references) set via automatically generated
+accessors, C<:InitArgs>, the C<-E<gt>set()> method, etc., will automatically
+be L<weaken|Scalar::Util/"weaken REF">ed after being stored in the field
+array/hash.
+
+ my @data :Field('Weak' => 1);
+
+NOTE: If data in a I<weak> field is set directly (i.e., the C<-E<gt>set()>
+method is not used), then L<weaken()|Scalar::Util/"weaken REF"> must be
+invoked on the stored reference afterwards:
+
+ $field[$$self] = $data;
+ Scalar::Util::weaken($field[$$self]);
 
 =head2 Field Cloning
 
@@ -4080,7 +4153,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.35/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.36/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>

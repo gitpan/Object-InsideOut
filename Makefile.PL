@@ -15,7 +15,7 @@ if ($@) {
     $Scalar::Util::VERSION = 1.10;
 } elsif (! Scalar::Util->can('weaken')) {
     # Pure Perl version only
-    if ($Scalar::Util::VERSION < 1.10) {
+    if ($Scalar::Util::VERSION lt '1.10') {
         # Require minimum version
         $Scalar::Util::VERSION = 1.10;
     } else {
@@ -38,9 +38,9 @@ WriteMakefile(
                          'Data::Dumper'     => 0,
                          'Scalar::Util'     => $Scalar::Util::VERSION,
                        },
-    ((ExtUtils::MakeMaker->VERSION() < 6.25) ?
+    ((ExtUtils::MakeMaker->VERSION() lt '6.25') ?
         ('PL_FILES' => { })            : ()),
-    ((ExtUtils::MakeMaker->VERSION() > 6.30) ?
+    ((ExtUtils::MakeMaker->VERSION() gt '6.30') ?
         ('LICENSE'  => 'perl')         : ()),
 );
 
