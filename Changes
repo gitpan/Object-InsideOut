@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.37 Wed Feb 15 13:58:15 EST 2006
+	- Parameter preprocessing (courtesy of Berkan Eskikaya)
+
 1.36 Wed Feb  8 11:43:14 EST 2006
 	- Support 'weakened' fields
 

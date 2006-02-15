@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.36;
+our $VERSION = 1.37;
 
 
 ### Module Initialization ###
@@ -101,7 +101,7 @@ sub process_args
 {
     # First arg may optionally be a class name.  Otherwise, use caller().
     my $class = (ref($_[0])) ? caller() : shift;
-    my $self  = shift;   # Object begin initialized with args
+    my $self  = shift;   # Object being initialized with args
     my $spec  = shift;   # Hash ref of arg specifiers
     my $args  = shift;   # Hash ref of args
 
@@ -163,9 +163,9 @@ sub process_args
     # Check on what we've found
     CHECK:
     foreach my $key (keys(%{$spec})) {
-        my $spec = $spec->{$key};
+        my $spec_item = $spec->{$key};
         # No specs to check
-        if (ref($spec) ne 'HASH') {
+        if (ref($spec_item) ne 'HASH') {
             # The specifier entry was just 'key => regex'.  If 'key' is not in
             # the args, the we need to remove the 'undef' entry in the found
             # args hash.
@@ -175,17 +175,38 @@ sub process_args
             next CHECK;
         }
 
+        # Preprocess the argument
+        if (defined(my $pre = hash_re($spec_item, qr/^PRE/i))) {
+            if (ref($pre) ne 'CODE') {
+                OIO::Code->die(
+                    'message' => q/Can't handle argument/,
+                    'Info'    => "'Preprocess' is not a code ref for initializer '$key' for class '$class'",
+                    'ignore_package' => __PACKAGE__);
+            }
+
+            my (@errs);
+            local $SIG{__WARN__} = sub { push(@errs, @_); };
+            eval { $found{$key} = $pre->($class, $key, $spec_item, $self, $found{$key}) };
+            if ($@ || @errs) {
+                my ($err) = split(/ at /, $@ || join(" | ", @errs));
+                OIO::Code->die(
+                    'message' => "Problem with preprocess routine for initializer '$key' for class '$class",
+                    'Error'   => $err,
+                    'ignore_package' => __PACKAGE__);
+            }
+        }
+
         # Handle args not found
         if (! defined($found{$key})) {
             # Complain if mandatory
-            if (hash_re($spec, qr/^MANDATORY$/i)) {
+            if (hash_re($spec_item, qr/^MANDATORY$/i)) {
                 OIO::Args->die(
                     'message' => "Missing mandatory initializer '$key' for class '$class'",
                     'ignore_package' => __PACKAGE__);
             }
 
             # Assign default value
-            $found{$key} = clone(hash_re($spec, qr/^DEF(?:AULTs?)?$/i));
+            $found{$key} = clone(hash_re($spec_item, qr/^DEF(?:AULTs?)?$/i));
 
             # If no default, then remove it from the found args hash
             if (! defined($found{$key})) {
@@ -195,7 +216,7 @@ sub process_args
         }
 
         # Check for correct type
-        if (defined(my $type = hash_re($spec, qr/^TYPE$/i))) {
+        if (defined(my $type = hash_re($spec_item, qr/^TYPE$/i))) {
             # Custom type checking
             if (ref($type)) {
                 if (ref($type) ne 'CODE') {
@@ -252,7 +273,7 @@ sub process_args
         # If the destination field is specified, then put it in, and remove it
         # from the found args hash.  If thread-sharing, then make sure the
         # value is thread-shared.
-        if (defined(my $field = hash_re($spec, qr/^FIELD$/i))) {
+        if (defined(my $field = hash_re($spec_item, qr/^FIELD$/i))) {
             $self->set($field, delete($found{$key}));
         }
     }

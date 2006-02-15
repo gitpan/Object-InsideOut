@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.36;
+our $VERSION = 1.37;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2146,7 +2146,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.36
+This document describes Object::InsideOut version 1.37
 
 =head1 SYNOPSIS
 
@@ -2520,6 +2520,10 @@ for the key is found in the arguments sent to the C<-E<gt>new()> method, then
 S<C<'DATA' =E<gt> value>> will be included in the argument hash ref sent to
 the C<:Init> labeled subroutine.
 
+=over
+
+=item Parameter Name Matching
+
 Rather than counting on exact matches, regular expressions can be used to
 specify the parameter:
 
@@ -2533,8 +2537,18 @@ Param, Parm, param, parm, and so on.  If a match is found, then S<C<'Param'
 hash key is substituted for the original argument key.  This eliminates the
 need for any parameter key pattern matching within the C<:Init> subroutine.
 
-With more complex parameter specifications, the syntax changes.  Mandatory
-parameters are declared as follows:
+If additional parameter specifications (described below) are used, the syntax
+changes, and the regular expression is moved inside a hash ref:
+
+ my %init_args :InitArgs = (
+     'Param' => {
+         'Regex' => qr/^PARA?M$/i,
+     },
+ );
+
+=item Mandatory Parameters
+
+Mandatory parameters are declared as follows:
 
  my %init_args :InitArgs = (
      # Mandatory parameter requiring exact matching
@@ -2551,6 +2565,8 @@ parameters are declared as follows:
 If a mandatory parameter is missing from the argument list to C<new>, an error
 is generated.
 
+=item Default Values
+
 For optional parameters, defaults can be specified:
 
  my %init_args :InitArgs = (
@@ -2559,6 +2575,8 @@ For optional parameters, defaults can be specified:
          'Default' => 3,
      },
  );
+
+=item Type Checking
 
 The parameter's type can also be specified:
 
@@ -2586,7 +2604,8 @@ array ref.
 
 =item A class name
 
-The parameter's type must be of the specified class.  For example,
+The parameter's type must be of the specified class, or one of its
+sub-classes (i.e., type checking is done using C<-E<gt>isa()>).  For example,
 C<My::Class>.
 
 =item Other reference type
@@ -2599,7 +2618,7 @@ The parameter's type must be of the specified reference type
 The first two types above are case-insensitive (e.g., 'NUMERIC', 'Numeric',
 'numeric', etc.); the last two are case-sensitive.
 
-The C<Type> keyword can also be paired with a code reference to provide custom
+The C<Type> keyword may also be paired with a code reference to provide custom
 type checking.  The code ref can either be in the form of an anonymous
 subroutine, or it can be derived from a (publicly accessible) subroutine.  The
 result of executing the code ref on the initializer should be a boolean value.
@@ -2631,8 +2650,11 @@ result of executing the code ref on the initializer should be a boolean value.
      );
  }
 
+=item Automatic Processing
+
 You can specify automatic processing for a parameter's value such that it is
-placed directly info a field hash and not sent to the C<:Init> subroutine:
+placed directly into a field array/hash, and not sent to the C<:Init>
+subroutine:
 
  my @hosts :Field;
 
@@ -2651,13 +2673,95 @@ placed directly info a field hash and not sent to the C<:Init> subroutine:
 
 In this case, when the host parameter is found, it is automatically put into
 the C<@hosts> array, and a S<C<'HOSTS' =E<gt> value>> pair is B<not> sent to
-the C<:Init> subroutine.  In fact, if you specify fields for all your
-parameters, then you don't even need to have an C<:Init> subroutine!  All the
+the C<:Init> subroutine. In fact, if you specify fields for all your
+parameters, then you don't even need to have an C<:Init> subroutine! All the
 work will be taken care of for you.
 
-(In the above, I<Regex> may be I<Regexp> or just I<Re>, and I<Default> may be
-I<Defaults> or I<Def>.  They and the other specifier keys are
-case-insensitive, as well.)
+=item Parameter Preprocessing
+
+You can specify a subroutine for a parameter that will be called on that
+parameter prior to any of the other parameter actions described above being
+taken:
+
+ package My::Class; {
+     use Object::InsideOut;
+
+     my @data :Field;
+
+     my %init_args :InitArgs = (
+         'DATA' => {
+             'Preprocess' => \&my_preproc,
+             'Field'      => \@data,
+             'Type'       => 'Numeric',
+             'Default'    => 99,
+         },
+     );
+
+     sub my_preproc
+     {
+         my ($class, $param, $spec, $obj, $value) = @_;
+
+         # Preform parameter preprocessing
+         ...
+
+         # Return result
+         return ...;
+     }
+ }
+
+As the above illustrates, the parameter preprocessing subroutine is sent five
+arguments:
+
+=over
+
+=item * The name of the class associated with the parameter
+
+This would be C<My::Class> in the example above.
+
+=item * The name of the parameter
+
+This would be C<DATA> in the example above.
+
+=item * A hash ref of the parameter's specifiers
+
+The hash ref paired to the C<DATA> key in the C<:InitArgs> hash.
+
+=item * The object being initialized
+
+=item * The parameter's value
+
+This is the value assigned to the parameter in the C<-E<gt>new()> method's
+argument list.  If the parameter was not provided to C<-E<gt>new()>, then
+C<undef> will sent.
+
+=back
+
+The return value of the preprocessing subroutine will then be assigned to the
+parameter.
+
+Be careful about what types of data the preprocessing subroutine tries to make
+use of C<external> to the arguments supplied.  For instance, because the order
+of parameter processing is not specified, the preprocessing subroutine cannot
+rely on whether or not some other parameter is set.  Such processing would
+need to be done in the C<:Init> subroutine.  It can, however, make use of
+object data set by classes I<higher up> in the class hierarchy.  (That is why
+the object is provided as one of the arguments.)
+
+Possible uses for parameter preprocessing include:
+
+=over
+
+=item * Overriding the supplied value (or even deleting it by returning C<undef>)
+
+=item * Providing a dynamically-determined default value
+
+=back
+
+=back
+
+(In the above, I<Regex> may be I<Regexp> or just I<Re>, I<Default> may be
+I<Defaults> or I<Def>, and I<Preprocess> may be I<Preproc> or I<Pre>.  They
+and the other specifier keys are case-insensitive, as well.)
 
 =head2 Getting Data
 
@@ -2818,7 +2922,8 @@ also be specified as C<Hashref>.
 
 =item A class name
 
-The accessor will only accept a value of the specified class.  For example,
+The accessor will only accept a value of the specified class, or one of its
+sub-classes (i.e., type checking is done using C<-E<gt>isa()>).  For example,
 C<My::Class>.
 
 =item Other reference type
@@ -4153,7 +4258,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.36/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.37/lib/Object/InsideOut.pm>
 
 The Rationale for Object::InsideOut:
 L<http://www.cpanforum.com/posts/1316>
