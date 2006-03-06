@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.37;
+our $VERSION = 1.38;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -1837,6 +1837,8 @@ _REF_
 
     # Create 'get' accessor
     if (defined($get)) {
+        $code .= "*${package}::$get = sub {\n";
+
         # Check accessor permission
         if ($private) {
             $code .= <<"_PRIVATE_";
@@ -1864,13 +1866,11 @@ _RESTRICTED_
         # Build subroutine text
         if (ref($field_ref) eq 'HASH') {
             $code .= <<"_GET_";
-*${package}::$get = sub {
 $lock    \$\$field{\${\$_[0]}};
 };
 _GET_
         } else {
             $code .= <<"_GET_";
-*${package}::$get = sub {
 $lock    \$\$field[\${\$_[0]}];
 };
 _GET_
@@ -2146,7 +2146,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.37
+This document describes Object::InsideOut version 1.38
 
 =head1 SYNOPSIS
 
@@ -2252,8 +2252,8 @@ S<C<perl -c>>.
 
 =back
 
-This module offers all the capabilities of L<Class::Std> with the following
-additional key advantages:
+This module offers all the capabilities of other inside-out object modules
+with the following additional key advantages:
 
 =over
 
@@ -2264,14 +2264,10 @@ much as 40% faster than I<blessed hash> objects for fetching and setting data,
 and even with hashes they are still several percent faster than I<blessed
 hash> objects.
 
-For the same types of operations, Object::InsideOut objects are from 2 to 6
-times faster than Class::Std objects.
-
 =item * Threads
 
 Object::InsideOut is thread safe, and thoroughly supports sharing objects
-between threads using L<threads::shared>.  Class::Std is not usable in
-threaded applications (or applications that use C<fork> under ActivePerl).
+between threads using L<threads::shared>.
 
 =item * Flexibility
 
@@ -2280,14 +2276,13 @@ matching, and more.
 
 =item * Runtime Support
 
-Supports classes that may be loaded at runtime (i.e., using S<C<eval { require
-...; };>>).  This makes it usable from within L<mod_perl>, as well.  Also
-supports dynamic creation of object fields during runtime.
+Supports classes that may be loaded at runtime (i.e., using
+S<C<eval { require ...; };>>).  This makes it usable from within L<mod_perl>,
+as well.  Also supports dynamic creation of object fields during runtime.
 
-=item * Perl 5.6
+=item * Perl 5.6 and 5.8
 
-Usable with Perl 5.6.0 and later.  Class::Std is only usable with Perl 5.8.1
-and later.
+Tested on Perl v5.6.0 through v5.6.2, v5.8.0 through v5.8.8, and v5.9.3.
 
 =item * Exception Objects
 
@@ -2938,8 +2933,8 @@ etc.), except for the last two.
 
 The C<Type> keyword can also be paired with a code reference to provide custom
 type checking.  The code ref can either be in the form of an anonymous
-subroutine, or a full-qualified subroutine name.  The result of executing the
-code ref on the input argument(s) should be a boolean value.
+subroutine, or a fully-qualified subroutine name.  The result of executing the
+code ref on the input argument should be a boolean value.
 
  package My::Class; {
      use Object::InsideOut;
@@ -3193,13 +3188,6 @@ attribute (or S<C<:Cumulative(top down)>>), and propagate from the I<top down>
 through the class hierarchy (i.e., from the base classes down through the
 child classes).  If tagged with S<C<:Cumulative(bottom up)>>, they will
 propagated from the object's class upwards through the parent classes.
-
-Note that this directionality is the reverse of Class::Std which defaults to
-bottom up, and uses S<I<BASE FIRST>> to mean from the base classes downward
-through the children.  (I eschewed the use of the term S<I<BASE FIRST>>
-because I felt it was ambiguous:  I<base> could refer to the base classes at
-the top of the hierarchy, or the child classes at the base (i.e., bottom) of
-the hierarchy.)
 
 =head2 Chained Methods
 
@@ -4258,13 +4246,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.37/lib/Object/InsideOut.pm>
-
-The Rationale for Object::InsideOut:
-L<http://www.cpanforum.com/posts/1316>
-
-Comparison with Class::Std:
-L<http://www.cpanforum.com/posts/1326>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.38/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

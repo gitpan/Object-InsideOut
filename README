@@ -1,4 +1,4 @@
-Object-InsideOut version 1.37
+Object-InsideOut version 1.38
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -40,8 +40,8 @@ are checked by the Perl compiler such that any typos are easily caught using
 "perl -c".
 
 
-This module offers all the capabilities of Class::Std with the following
-additional key advantages:
+This module offers all the capabilities of other inside-out object modules
+with the following additional key advantages:
 
 * Speed
 
@@ -50,14 +50,10 @@ much as 40% faster than 'blessed hash' objects for fetching and setting data,
 and even with hashes they are still several percent faster than 'blessed hash'
 objects.
 
-For the same types of operations, Object::InsideOut objects are from 2 to 6
-times faster than Class::Std objects.
-
 * Threads
 
 Object::InsideOut is thread safe, and thoroughly supports sharing objects
-between threads using threads::shared.  Class::Std is not usable in threaded
-applications (or applications that use 'fork' under ActiverPerl).
+between threads using threads::shared.
 
 * Flexibility
 
@@ -72,8 +68,7 @@ dynamic creation of object fields during runtime.
 
 * Perl 5.6
 
-Usable with Perl 5.6.0 and later.  Class::Std is only usable with Perl 5.8.1
-and later.
+Tested on Perl v5.6.0 through v5.6.2, v5.8.0 through v5.8.8, and v5.9.3.
 
 * Exception Objects
 

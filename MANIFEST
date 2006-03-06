@@ -45,6 +45,7 @@ t/21-import.t
 t/22-import.t
 t/23-weak.t
 t/24-preproc.t
+t/25-access.t
 t/A.pm
 t/B.pm
 t/Parent.pm

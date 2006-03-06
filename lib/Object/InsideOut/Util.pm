@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.37;
+our $VERSION = 1.38;
 
 
 ### Module Initialization ###
@@ -186,7 +186,10 @@ sub process_args
 
             my (@errs);
             local $SIG{__WARN__} = sub { push(@errs, @_); };
-            eval { $found{$key} = $pre->($class, $key, $spec_item, $self, $found{$key}) };
+            eval {
+                local $SIG{'__DIE__'};
+                $found{$key} = $pre->($class, $key, $spec_item, $self, $found{$key})
+            };
             if ($@ || @errs) {
                 my ($err) = split(/ at /, $@ || join(" | ", @errs));
                 OIO::Code->die(
@@ -228,7 +231,10 @@ sub process_args
 
                 my ($ok, @errs);
                 local $SIG{__WARN__} = sub { push(@errs, @_); };
-                eval { $ok = $type->($found{$key}) };
+                eval {
+                    local $SIG{'__DIE__'};
+                    $ok = $type->($found{$key})
+                };
                 if ($@ || @errs) {
                     my ($err) = split(/ at /, $@ || join(" | ", @errs));
                     OIO::Code->die(
