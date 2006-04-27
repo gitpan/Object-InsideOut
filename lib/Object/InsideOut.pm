@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.39;
+our $VERSION = 1.41;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2146,7 +2146,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.39
+This document describes Object::InsideOut version 1.41
 
 =head1 SYNOPSIS
 
@@ -2438,18 +2438,23 @@ exported by Object::InsideOut to each class:
  my $obj2 = $obj->clone();
 
 When called without arguments, C<-E<gt>clone()> creates a I<shallow> copy of
-the object, meaning that any complex data structures (i.e., I<refs>) stored in
-the object will be shared with its clone.
+the object, meaning that any complex data structures (i.e., array, hash or
+scalar refs) stored in the object will be shared with its clone.
 
 Calling C<-E<gt>clone()> with a true argument:
 
  my $obj2 = $obj->clone(1);
 
-creates a I<deep> copy of the object such that no internal data is shared
-between the objects.
+creates a I<deep> copy of the object such that internally held array, hash
+or scalar refs are I<replicated> and stored in the newly created clone.
 
 I<Deep> cloning can also be controlled at the field level.  See L</"Field
 Cloning"> below for more details.
+
+Note that cloning does not clone internally held objects.  For example, if
+C<$foo> contains a reference to C<$bar>, a clone of C<$foo> will also contain
+a reference to C<$bar>; not a clone of C<$bar>.  If such behavior is needed,
+it must be provided using a L<:Replicate|/"Object Replication"> subroutine.
 
 =head2 Object Initialization
 
@@ -4247,7 +4252,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.39/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.41/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

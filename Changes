@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.41 Thu Apr 27 11:53:01 EDT 2006
+	- Documented that cloning does not clone internally held objects
+
 1.39 Thu Apr 27 11:11:01 EDT 2006
 	- Fixed bug whereby cloning was duplicating objects
 
