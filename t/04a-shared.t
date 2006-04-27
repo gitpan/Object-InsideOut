@@ -12,8 +12,8 @@ BEGIN {
         exit(0);
     }
 
-    if ($^O eq 'Win32' && $] == 5.008004) {
-        print("1..0 # Skip Thread support not working for ActivePerl 5.8.4\n");
+    if ($^O eq 'MSWin32' && $] == 5.008001) {
+        print("1..0 # Skip threads::shared not working for ActivePerl 5.8.1\n");
         exit(0);
     }
 }
@@ -63,7 +63,7 @@ MAIN:
                             $obj2->x(99);
                             $obj2->y(3-1);
 
-                            is_deeply($obj->x(), [ 1, 2, 3], 'Thread class data');
+                            is_deeply($obj->x(), [1, 2, 3], 'Thread class data');
                             is($obj2->x(), 99, 'Thread subclass data');
                             is($obj2->y(), 2, 'Thread subclass data');
 
@@ -71,7 +71,7 @@ MAIN:
                         }
                     )->join();
 
-    is_deeply($obj->x(), [ 1, 2, 3], 'Thread class data');
+    is_deeply($obj->x(), [1, 2, 3], 'Thread class data');
     is($obj2->x(), 99, 'Thread subclass data');
     is($obj2->y(), 2, 'Thread subclass data');
 }

@@ -11,11 +11,6 @@ BEGIN {
         print("1..0 # Skip Thread support not working for Perl 5.8.0\n");
         exit(0);
     }
-
-    if ($^O eq 'Win32' && $] == 5.008004) {
-        print("1..0 # Skip Thread support not working for ActivePerl 5.8.4\n");
-        exit(0);
-    }
 }
 
 

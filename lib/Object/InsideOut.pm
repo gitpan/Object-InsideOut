@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.38;
+our $VERSION = 1.39;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -2146,7 +2146,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.38
+This document describes Object::InsideOut version 1.39
 
 =head1 SYNOPSIS
 
@@ -2246,9 +2246,13 @@ A common error with I<blessed hash> classes is the misspelling of field names:
 As there is no compile-time checking on hash keys, such errors do not usually
 manifest themselves until runtime.
 
-With inside-out objects, data is accessed using methods, the names of which
-are checked by the Perl compiler such that any typos are easily caught using
-S<C<perl -c>>.
+With inside-out objects, I<text> hash keys are not used for accessing field
+data.  Field names and the data index (i.e., $$self) are checked by the Perl
+compiler such that any typos are easily caught using S<C<perl -c>>.
+
+ $coment[$$self] = $value;    # Causes a compile-time error
+    # or with hash-based fields
+ $comment{$$slef} = $value;   # Also causes a compile-time error
 
 =back
 
@@ -4214,14 +4218,11 @@ suppressed by adding the following to your application code:
          }
      };
 
+A better solution would be to upgrade L<threads> and L<threads::shared> from
+CPAN, especially if you encounter other problems associated with threads.
+
 For Perl 5.8.4 and 5.8.5, the L</"Storable"> feature does not work due to a
 Perl bug.  Use Object::InsideOut v1.33 if needed.
-
-It is known that thread support is broken in ActiveState Perl 5.8.4 on
-Windows.  (It is not known which other version of ActivePerl may be affected.)
-The best solution is to upgrade your version of ActivePerl.  Barring that, you
-can tell CPAN to I<force> the installation of Object::InsideOut, and use it in
-non-threaded applications.
 
 View existing bug reports at, and submit any new bugs, problems, patches, etc.
 to: L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
@@ -4246,7 +4247,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.38/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.39/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.39 Thu Apr 27 11:11:01 EDT 2006
+	- Fixed bug whereby cloning was duplicating objects
+
 1.38 Sun Mar  5 21:39:00 EST 2006
 	- Bug fix for standard accessors with private permissions
 

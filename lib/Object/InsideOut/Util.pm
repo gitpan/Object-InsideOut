@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.38;
+our $VERSION = 1.39;
 
 
 ### Module Initialization ###
@@ -366,7 +366,7 @@ sub shared_clone
 
     # Make copies of array, hash and scalar refs
     my $out;
-    if (my $ref_type = Scalar::Util::reftype($in)) {
+    if (my $ref_type = ref($in)) {
         # Copy an array ref
         if ($ref_type eq 'ARRAY') {
             # Make empty shared array ref
@@ -400,10 +400,6 @@ sub shared_clone
         if (Internals::SvREADONLY($in)) {
             Internals::SvREADONLY($out, 1);
         }
-        # Return blessed copy, if applicable
-        if (my $class = Scalar::Util::blessed($in)) {
-            return (bless($out, $class));
-        }
         # Return clone
         return ($out);
     }
@@ -422,7 +418,7 @@ sub clone
 
     # Make copies of array, hash and scalar refs
     my $out;
-    if (my $ref_type = Scalar::Util::reftype($in)) {
+    if (my $ref_type = ref($in)) {
         # Copy an array ref
         if ($ref_type eq 'ARRAY') {
             # Make empty shared array ref
@@ -454,10 +450,6 @@ sub clone
         # Clone READONLY flag
         if (Internals::SvREADONLY($in)) {
             Internals::SvREADONLY($out, 1);
-        }
-        # Return blessed copy, if applicable
-        if (my $class = Scalar::Util::blessed($in)) {
-            return (bless($out, $class));
         }
         return ($out);
     }
