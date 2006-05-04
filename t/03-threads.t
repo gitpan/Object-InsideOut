@@ -53,11 +53,11 @@ MAIN:
                             is($obj2->x(), 9, 'Thread subclass data');
                             is($obj2->y(), 3, 'Thread subclass data');
 
-                            $obj->x([ 1, 2, 3]);
+                            $obj->x([1, 2, 3]);
                             $obj2->x(99);
                             $obj2->y(3-1);
 
-                            is_deeply($obj->x(), [ 1, 2, 3], 'Thread class data');
+                            is_deeply($obj->x(), [1, 2, 3], 'Thread class data');
                             is($obj2->x(), 99, 'Thread subclass data');
                             is($obj2->y(), 2, 'Thread subclass data');
 

@@ -49,6 +49,11 @@ package AB; {
 }
 
 
+package foo; {
+    use Object::InsideOut;
+}
+
+
 package main;
 
 MAIN:
@@ -89,6 +94,17 @@ MAIN:
     is($obj->info_get(), '',        '->info_get() eq ' . $obj->info_get());
     $obj->info_set('test');
     is($obj->info_get(), 'test',    'Set: ->info_get() eq ' . $obj->info_get());
+
+    # Test that IDs are being reclaimed
+    my $id;
+    {
+        my $x = foo->new();
+        $id = $$x;
+    }
+    for (1..10) {
+        my $x = foo->new();
+        is($$x, $id, 'ID reclaimed');
+    }
 }
 
 exit(0);

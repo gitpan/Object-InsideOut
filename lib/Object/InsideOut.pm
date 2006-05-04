@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.41;
+our $VERSION = 1.42;
 
 my $DO_INIT = 1;   # Flag for running package initialization routine
 
@@ -172,6 +172,16 @@ use Scalar::Util 1.10;
         }
     }
 }
+
+
+### Forward declarations ###
+
+# ID of currently executing thread
+my $THREAD_ID = 0;
+
+# Contains flags as to whether or not a class is sharing objects between
+# threads
+my %IS_SHARING;
 
 
 ### Class Tree Building (via 'import()') ###
@@ -612,7 +622,7 @@ sub MODIFY_CODE_ATTRIBUTES
 
 ### Array-based Object Support ###
 
-# Object ID counters - one for each class tree
+# Object ID counters - one for each class tree possibly per thread
 my %ID_COUNTERS;
 # Reclaimed object IDs
 my %RECLAIMED_IDS;
@@ -622,6 +632,9 @@ if ($threads::shared::threads_shared) {
     threads::shared::share(%RECLAIMED_IDS);
 }
 
+# Must have a least one key due to 'Perl bug workaround' below
+$RECLAIMED_IDS{'::'} = undef;
+
 # Supplies an ID for an object being created in a class tree
 # and reclaims IDs from destroyed objects
 sub _ID
@@ -629,41 +642,52 @@ sub _ID
     my ($class, $id) = @_;            # The object's class and id
     my $tree = $ID_SUBS{$class}[1];   # The object's class tree
 
+    # If class is sharing, then all ID tracking is done as though in thread 0,
+    # else tracking is done per thread
+    my $thread_id = (is_sharing($class)) ? 0 : $THREAD_ID;
+
     # Save deleted IDs for later reuse
     if ($id) {
         local $SIG{__WARN__} = sub { };   # Suppress spurious msg
         if (keys(%RECLAIMED_IDS)) {       # Perl bug workaround
-            if (exists($RECLAIMED_IDS{$tree})) {
-                if (grep { $_ == $id } @{$RECLAIMED_IDS{$tree}}) {
-                    print(STDERR "ERROR: Duplicate reclaimed object ID ($id) in class tree for class $tree\n");
-                    return;
-                }
-            } else {
+            if (! exists($RECLAIMED_IDS{$tree})) {
                 $RECLAIMED_IDS{$tree} = ($threads::shared::threads_shared)
                                             ? &threads::shared::share([])
                                             : [];
             }
-            push(@{$RECLAIMED_IDS{$tree}}, $id);
+            if (! exists($RECLAIMED_IDS{$tree}[$thread_id])) {
+                $RECLAIMED_IDS{$tree}[$thread_id] = ($threads::shared::threads_shared)
+                                                        ? &threads::shared::share([])
+                                                        : [];
+
+            } elsif (grep { $_ == $id } @{$RECLAIMED_IDS{$tree}[$thread_id]}) {
+                print(STDERR "ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
+                return;
+            }
+            push(@{$RECLAIMED_IDS{$tree}[$thread_id]}, $id);
         }
         return;
     }
 
     # Use a reclaimed ID if available
-    if (exists($RECLAIMED_IDS{$tree}) && @{$RECLAIMED_IDS{$tree}}) {
-        return (shift(@{$RECLAIMED_IDS{$tree}}));
+    if (exists($RECLAIMED_IDS{$tree}) &&
+        exists($RECLAIMED_IDS{$tree}[$thread_id]) &&
+        @{$RECLAIMED_IDS{$tree}[$thread_id]})
+    {
+        return (shift(@{$RECLAIMED_IDS{$tree}[$thread_id]}));
     }
 
-    # Return the next ID (forced to an integer)
-    return (++$ID_COUNTERS{$tree});
+    # Return the next ID
+    if (! exists($ID_COUNTERS{$tree})) {
+        $ID_COUNTERS{$tree} = ($threads::shared::threads_shared)
+                                    ? &threads::shared::share([])
+                                    : [];
+    }
+    return (++$ID_COUNTERS{$tree}[$thread_id]);
 }
 
 
 ### Initialization Handling ###
-
-# Forward declaration of thread object sharing flag hash
-# (Used in initialize() below)
-my %IS_SHARING;
-
 
 # Finds a subroutine's name from its code ref
 sub sub_name :Private
@@ -965,7 +989,7 @@ if ($threads::shared::threads_shared) {
 }
 
 # Thread ID is used to keep CLONE from executing more than once
-my $THREAD_ID = 0;
+#my $THREAD_ID = 0;   # Declared above
 
 
 # Called after thread is cloned
@@ -1222,30 +1246,28 @@ sub clone
         # Clone field data from the parent
         foreach my $fld (@{$FIELDS{$pkg}}) {
             my $fdeep = $deep || $DEEP_CLONE{$fld};  # Deep clone the field?
-            {
-                lock($fld) if ($am_sharing);
-                if (ref($fld) eq 'ARRAY') {
-                    if ($fdeep && $am_sharing) {
-                        $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
-                    } elsif ($fdeep) {
-                        $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
-                    } else {
-                        $$fld[$$clone] = $$fld[$$parent];
-                    }
-                    if ($WEAK{$fld}) {
-                        Scalar::Util::weaken($$fld[$$clone]);
-                    }
+            lock($fld) if ($am_sharing);
+            if (ref($fld) eq 'ARRAY') {
+                if ($fdeep && $am_sharing) {
+                    $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
+                } elsif ($fdeep) {
+                    $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
                 } else {
-                    if ($fdeep && $am_sharing) {
-                        $$fld{$$clone} = Object::InsideOut::Util::shared_clone($$fld{$$parent});
-                    } elsif ($fdeep) {
-                        $$fld{$$clone} = Object::InsideOut::Util::clone($$fld{$$parent});
-                    } else {
-                        $$fld{$$clone} = $$fld{$$parent};
-                    }
-                    if ($WEAK{$fld}) {
-                        Scalar::Util::weaken($$fld{$$clone});
-                    }
+                    $$fld[$$clone] = $$fld[$$parent];
+                }
+                if ($WEAK{$fld}) {
+                    Scalar::Util::weaken($$fld[$$clone]);
+                }
+            } else {
+                if ($fdeep && $am_sharing) {
+                    $$fld{$$clone} = Object::InsideOut::Util::shared_clone($$fld{$$parent});
+                } elsif ($fdeep) {
+                    $$fld{$$clone} = Object::InsideOut::Util::clone($$fld{$$parent});
+                } else {
+                    $$fld{$$clone} = $$fld{$$parent};
+                }
+                if ($WEAK{$fld}) {
+                    Scalar::Util::weaken($$fld{$$clone});
                 }
             }
         }
@@ -1325,7 +1347,8 @@ sub DESTROY
     my $class = ref($self);
 
     if ($$self) {
-        if (is_sharing($class)) {
+        my $is_sharing = is_sharing($class);
+        if ($is_sharing) {
             # Thread-shared object
 
             local $SIG{__WARN__} = sub { };     # Suppress spurious msg
@@ -1358,9 +1381,6 @@ sub DESTROY
             delete($OBJECTS{$class}{$$self});
         }
 
-        # If sharing, then must lock object field hashes/arrays when updating
-        my $lock_field = is_sharing($class);
-
         # Destroy object
         foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
             # Dispatch any special destruction handling
@@ -1371,13 +1391,12 @@ sub DESTROY
 
             # Delete object field data
             foreach my $fld (@{$FIELDS{$pkg}}) {
-                {
-                    lock($fld) if ($lock_field);
-                    if (ref($fld) eq 'HASH') {
-                        delete($$fld{$$self});
-                    } else {
-                        delete($$fld[$$self]);
-                    }
+                # If sharing, then must lock object field
+                lock($fld) if ($is_sharing);
+                if (ref($fld) eq 'HASH') {
+                    delete($$fld{$$self});
+                } else {
+                    delete($$fld[$$self]);
                 }
             }
         }
@@ -2146,7 +2165,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.41
+This document describes Object::InsideOut version 1.42
 
 =head1 SYNOPSIS
 
@@ -4252,7 +4271,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.41/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.42/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

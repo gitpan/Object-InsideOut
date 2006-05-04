@@ -33,7 +33,7 @@ MAIN:
 
     eval { $obj = t::BB->new('bB' => 'baz'); };
     ok(! $@, '->new() ' . $@);
-    is($$obj, 3,                    'Object ID: ' . $$obj);
+    is($$obj, 1,                    'Object ID: ' . $$obj);
     is($obj->bb, 'baz',             'Init: ' . $obj->bb);
     is($obj->set_bb('foo'), 'foo',  'Set ->set_bb()');
     is($obj->bb, 'foo',             'Get ->bb() eq ' . $obj->bb);
@@ -41,7 +41,7 @@ MAIN:
     eval { $obj = t::AB->new(); };
     can_ok($obj, qw(aa bb set_bb data info_get info_set));
     ok(! $@, '->new() ' . $@);
-    is($$obj, 4,                    'Object ID: ' . $$obj);
+    is($$obj, 2,                    'Object ID: ' . $$obj);
     is($obj->bb, 'def',             'Default: ' . $obj->bb);
     is($obj->set_bb('foo'), 'foo',  'Set ->set_bb()');
     is($obj->bb, 'foo',             'Get ->bb() eq ' . $obj->bb);
