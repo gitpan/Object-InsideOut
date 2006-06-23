@@ -1,5 +1,10 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.43 Fri Jun 23 12:56:29 EDT 2006
+	- Moved exception code to Exception.pm
+	- Versioned all .pm files
+	- Caution against returning objects from threads
+
 1.42 Thu May  4 11:26:15 EDT 2006
 	- Fixed object ID reclamation
 

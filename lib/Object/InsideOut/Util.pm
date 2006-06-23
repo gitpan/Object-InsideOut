@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.42;
+our $VERSION = 1.43;
 
 
 ### Module Initialization ###
@@ -487,6 +487,3 @@ sub is_it
 }  # End of package's lexical scope
 
 1;
-
-__END__
-

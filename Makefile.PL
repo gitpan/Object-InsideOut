@@ -14,7 +14,14 @@ if ($@) {
     # Not found - require minimum version
     $Scalar::Util::VERSION = 1.10;
 } elsif (! Scalar::Util->can('weaken')) {
-    # Pure Perl version only
+    # Scalar::Util is 'pure Perl' version
+    if ($Scalar::Util::VERSION eq '1.18') {
+        die <<_NO_WEAKEN_;
+You must reinstall Scalar::Util in order to install Object::InsideOut
+because the currently installed Scalar::Util is a 'pure perl' version
+that is missing the 'weaken()' function.
+_NO_WEAKEN_
+    }
     if ($Scalar::Util::VERSION lt '1.10') {
         # Require minimum version
         $Scalar::Util::VERSION = 1.10;
@@ -55,11 +62,22 @@ vcheck:
 	@echo "Version is $(VERSION)"
 	@if ! head -3 Changes | tail -1 | grep ^$(VERSION) >/dev/null; then echo "Version error in Changes"; fi
 	@if ! head -1 README | grep $(VERSION)$ >/dev/null; then echo "Version error in README"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in lib/Object/InsideOut.pm"; fi
-	@if ! grep "version $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in POD of lib/Object/InsideOut.pm"; fi
-	@if ! grep "Object-InsideOut-$(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in Anno link in lib/Object/InsideOut.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
+	@if ! grep "Exception $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
+	@if ! grep "Util $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
+	@if ! grep "version $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in POD of InsideOut.pm"; fi
+	@if ! grep "Object-InsideOut-$(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in Anno link in InsideOut.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Chained.pm >/dev/null; then echo "Version error in Chained.pm"; fi
+	@if ! grep "InsideOut $(VERSION)" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Dump.pm >/dev/null; then echo "Version error in Dump.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Dynamic.pm >/dev/null; then echo "Version error in Dynamic.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Exception.pm >/dev/null; then echo "Version error in Exception.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Foreign.pm >/dev/null; then echo "Version error in Foreign.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Overload.pm >/dev/null; then echo "Version error in Overload.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Universal.pm >/dev/null; then echo "Version error in Universal.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Util.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Util.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Cumulative.pm"; fi
 
 chmod:
 	@$(CHMOD) 644 Build.PL `cat MANIFEST`

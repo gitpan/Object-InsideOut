@@ -121,4 +121,6 @@ sub install_UNIVERSAL
 
 }  # End of package's lexical scope
 
-1;
+
+# Ensure correct versioning
+($Object::InsideOut::VERSION == 1.43) or die("Version mismatch\n");
