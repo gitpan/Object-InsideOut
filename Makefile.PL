@@ -67,15 +67,24 @@ vcheck:
 	@if ! grep "Util $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
 	@if ! grep "version $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in POD of InsideOut.pm"; fi
 	@if ! grep "Object-InsideOut-$(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in Anno link in InsideOut.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Chained.pm >/dev/null; then echo "Version error in Chained.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Chained.pm >/dev/null; then echo "Version error in Chained.pm"; fi
 	@if ! grep "InsideOut $(VERSION)" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
+	@if ! grep 'our $$VERSION = $(VERSION)' lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
+	@if ! grep 'my $$VERSION = $(VERSION)' lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Dump.pm >/dev/null; then echo "Version error in Dump.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Dump.pm >/dev/null; then echo "Version error in Dump.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Dynamic.pm >/dev/null; then echo "Version error in Dynamic.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Dynamic.pm >/dev/null; then echo "Version error in Dynamic.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Exception.pm >/dev/null; then echo "Version error in Exception.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Foreign.pm >/dev/null; then echo "Version error in Foreign.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Foreign.pm >/dev/null; then echo "Version error in Foreign.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Overload.pm >/dev/null; then echo "Version error in Overload.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Overload.pm >/dev/null; then echo "Version error in Overload.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Universal.pm >/dev/null; then echo "Version error in Universal.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Universal.pm >/dev/null; then echo "Version error in Universal.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Util.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Util.pm"; fi
 

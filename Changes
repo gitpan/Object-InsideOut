@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.44 Fri Jun 23 13:57:15 EDT 2006
+	- Fix file versioning for PAUSE
+
 1.43 Fri Jun 23 12:56:29 EDT 2006
 	- Moved exception code to Exception.pm
 	- Versioned all .pm files

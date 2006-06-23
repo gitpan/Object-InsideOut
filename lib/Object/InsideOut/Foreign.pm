@@ -273,4 +273,5 @@ sub inherit
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 1.43) or die("Version mismatch\n");
+my $VERSION = 1.44;
+($Object::InsideOut::VERSION == 1.44) or die("Version mismatch\n");
