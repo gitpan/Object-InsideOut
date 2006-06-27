@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.44;
+our $VERSION = 1.45;
 
-use Object::InsideOut::Exception 1.44;
-use Object::InsideOut::Util 1.44 ();
+use Object::InsideOut::Exception 1.45;
+use Object::InsideOut::Util 1.45 ();
 
 use B;
 
@@ -221,6 +221,12 @@ my %INIT_ARGS;
 # default.
 my %INITORS;
 
+# Allow a single pre-initialization subroutine per class that is called as
+# part of initializing newly created objects.  The pre-initialization
+# subroutine is marked with an attribute called 'PreInit', and is :HIDDEN
+# during initialization by default.
+my %PREINITORS;
+
 # Allow a single data replication subroutine per class that is called when
 # objects are cloned.  The data replication subroutine is marked with an
 # attribute called 'Replicate', and is :HIDDEN during initialization by
@@ -388,6 +394,11 @@ sub MODIFY_CODE_ATTRIBUTES
             # Process attribute 'arg' as an attribute
             push(@attrs, $arg) if $] > 5.006;
             $DO_INIT = 1;   # Flag that initialization is required
+
+        } elsif ($attr eq 'PREINIT') {
+            $PREINITORS{$pkg} = $code;
+            # Process attribute 'arg' as an attribute
+            push(@attrs, $arg) if $] > 5.006;
 
         } elsif ($attr eq 'INIT') {
             $INITORS{$pkg} = $code;
@@ -1044,6 +1055,15 @@ sub new
 
     # Create a new 'bare' object
     my $self = _obj($class);
+
+    # Execute pre-initialization subroutines
+    foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+        my $preinit = $PREINITORS{$pkg};
+        if ($preinit) {
+            local $SIG{__DIE__} = 'OIO::trap';
+            $self->$preinit($all_args);
+        }
+    }
 
     # Initialize object
     foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
@@ -2022,7 +2042,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.44
+This document describes Object::InsideOut version 1.45
 
 =head1 SYNOPSIS
 
@@ -2642,6 +2662,43 @@ Possible uses for parameter preprocessing include:
 (In the above, I<Regex> may be I<Regexp> or just I<Re>, I<Default> may be
 I<Defaults> or I<Def>, and I<Preprocess> may be I<Preproc> or I<Pre>.  They
 and the other specifier keys are case-insensitive, as well.)
+
+=head2 Object Pre-Initialization
+
+Occassionally, a subclass may need to send a parameter to a parent class as
+part of object initialization.  This can be accomplished by supplying a
+C<:PreInit> labeled subroutine in the subclass.  These subroutines, if found,
+are called in order from the bottom of the class heirarchy upwards.
+
+The subroutine should expect two arguments:  The newly created
+(un-initialized) object (i.e., C<$self>), and a hash ref of all the arguments
+from the C<-E<gt>new()> method call, including any additional arguments added
+by other C<:PreInit> subroutines.  The hash ref will not be exactly as
+supplied to C<-E<gt>new()>, but will be I<flattened> into a single hash ref.
+For example,
+
+ my $obj = My::Class->new(
+     'param_X' => 'value_X',
+     {
+         'param_A' => 'value_A',
+         'param_B' => 'value_B',
+     },
+     'My::Class' => { 'param' => 'value' },
+ );
+
+would produce
+
+ {
+     'param_X' => 'value_X',
+     'param_A' => 'value_A',
+     'param_B' => 'value_B',
+     'My::Class' => { 'param' => 'value' }
+ }
+
+as the hash ref to the C<:PreInit> subroutine.
+
+The C<:PreInit> subroutine may then add, modify or even remove any parameters
+from the hash ref as needed for its purposes.
 
 =head2 Getting Data
 
@@ -3571,7 +3628,7 @@ Then you could do things like:
 
 For a boolean context, you would supply:
 
- sub as_string :Boolify
+ sub as_bool :Boolify
  {
      my $self = $_[0];
      my $true_or_false = ...;
@@ -4139,7 +4196,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.44/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.45/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
