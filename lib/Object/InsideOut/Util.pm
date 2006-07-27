@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.45;
+our $VERSION = 1.46;
 
 
 ### Module Initialization ###
@@ -470,7 +470,7 @@ sub hash_re
             return ($hash->{$_});
         }
     }
-    return (undef);
+    return;
 }
 
 

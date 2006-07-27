@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.46 Thu Jul 27 16:56:35 EDT 2006
+	- Fix masking of $@ by 'eval's in :DESTROY subroutines
+	- Documented limitation with namespace 'DB'
+
 1.45 Tue Jun 27 14:09:44 EDT 2006
 	- Added :PreInit subroutines
 

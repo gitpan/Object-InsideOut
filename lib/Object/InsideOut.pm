@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.45;
+our $VERSION = 1.46;
 
-use Object::InsideOut::Exception 1.45;
-use Object::InsideOut::Util 1.45 ();
+use Object::InsideOut::Exception 1.46;
+use Object::InsideOut::Util 1.46 ();
 
 use B;
 
@@ -1224,69 +1224,89 @@ sub DESTROY
     my $class = ref($self);
 
     if ($$self) {
-        my $is_sharing = is_sharing($class);
-        if ($is_sharing) {
-            # Thread-shared object
+        # Grab any error coming into this routine
+        my $err = $@;
 
-            local $SIG{__WARN__} = sub { };     # Suppress spurious msg
-            if (keys(%SHARED)) {                # Perl bug workaround
-                if (! exists($SHARED{$class}{$$self})) {
-                    print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $THREAD_ID twice\n");
-                    return;   # Object already deleted (shouldn't happen)
+        eval {
+            my $is_sharing = is_sharing($class);
+            if ($is_sharing) {
+                # Thread-shared object
+
+                local $SIG{__WARN__} = sub { };     # Suppress spurious msg
+                if (keys(%SHARED)) {                # Perl bug workaround
+                    if (! exists($SHARED{$class}{$$self})) {
+                        print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $THREAD_ID twice\n");
+                        return;   # Object already deleted (shouldn't happen)
+                    }
+
+                    # Remove thread ID from this object's thread tracking list
+                    lock(%SHARED);
+                    if (@{$SHARED{$class}{$$self}} =
+                            grep { $_ != $THREAD_ID } @{$SHARED{$class}{$$self}})
+                    {
+                        return;
+                    }
+
+                    # Delete the object from the thread tracking registry
+                    delete($SHARED{$class}{$$self});
                 }
 
-                # Remove thread ID from this object's thread tracking list
-                lock(%SHARED);
-                if (@{$SHARED{$class}{$$self}} =
-                        grep { $_ != $THREAD_ID } @{$SHARED{$class}{$$self}})
-                {
+            } elsif ($threads::threads) {
+                if (! exists($OBJECTS{$class}{$$self})) {
+                    print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class twice\n");
                     return;
                 }
 
-                # Delete the object from the thread tracking registry
-                delete($SHARED{$class}{$$self});
+                # Delete this non-thread-shared object from the thread cloning
+                # registry
+                delete($OBJECTS{$class}{$$self});
             }
 
-        } elsif ($threads::threads) {
-            if (! exists($OBJECTS{$class}{$$self})) {
-                print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class twice\n");
-                return;
-            }
+            # Destroy object
+            my $dest_err;
+            foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+                # Dispatch any special destruction handling
+                if (my $destroy = $DESTROYERS{$pkg}) {
+                    eval {
+                        local $SIG{__DIE__} = 'OIO::trap';
+                        $self->$destroy();
+                    };
+                    $dest_err = OIO::combine($dest_err, $@);
+                }
 
-            # Delete this non-thread-shared object from the thread cloning
-            # registry
-            delete($OBJECTS{$class}{$$self});
-        }
-
-        # Destroy object
-        foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
-            # Dispatch any special destruction handling
-            if (my $destroy = $DESTROYERS{$pkg}) {
-                local $SIG{__DIE__} = 'OIO::trap';
-                $self->$destroy();
-            }
-
-            # Delete object field data
-            foreach my $fld (@{$FIELDS{$pkg}}) {
-                # If sharing, then must lock object field
-                lock($fld) if ($is_sharing);
-                if (ref($fld) eq 'HASH') {
-                    delete($$fld{$$self});
-                } else {
-                    delete($$fld[$$self]);
+                # Delete object field data
+                foreach my $fld (@{$FIELDS{$pkg}}) {
+                    # If sharing, then must lock object field
+                    lock($fld) if ($is_sharing);
+                    if (ref($fld) eq 'HASH') {
+                        delete($$fld{$$self});
+                    } else {
+                        delete($$fld[$$self]);
+                    }
                 }
             }
-        }
 
-        # Reclaim the object ID if applicable
-        if ($ID_SUBS{$class}[0] == \&_ID) {
-            _ID($class, $$self);
-        }
+            # Reclaim the object ID if applicable
+            if ($ID_SUBS{$class}[0] == \&_ID) {
+                _ID($class, $$self);
+            }
 
-        # Unlock the object
-        Internals::SvREADONLY($$self, 0) if ($] >= 5.008003);
-        # Erase the object ID - just in case
-        $$self = undef;
+            # Unlock the object
+            Internals::SvREADONLY($$self, 0) if ($] >= 5.008003);
+            # Erase the object ID - just in case
+            $$self = undef;
+
+            # Propagate any errors
+            if ($dest_err) {
+                die($dest_err);
+            }
+        };
+
+        # Propagate any errors
+        if ($err || $@) {
+            $@ = OIO::combine($err, $@);
+            die("$@") if (! $err);
+        }
     }
 }
 
@@ -2042,7 +2062,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.45
+This document describes Object::InsideOut version 1.46
 
 =head1 SYNOPSIS
 
@@ -3262,8 +3282,8 @@ labeled with the C<:Automethod> attribute.  The C<:Automethod> subroutine
 will be called with the object and the arguments in the original method call
 (the same as for C<AUTOLOAD>).  The C<:Automethod> subroutine should return
 either a subroutine reference that implements the requested method's
-functionality, or else C<undef> to indicate that it doesn't know how to handle
-the request.
+functionality, or else just end with C<return;> to indicate that it doesn't
+know how to handle the request.
 
 Using its own C<AUTOLOAD> subroutine (which is exported to every class),
 Object::InsideOut walks through the class tree, calling each C<:Automethod>
@@ -3502,7 +3522,7 @@ Here's a more elaborate example used in inside an C<:Automethod>:
  package My::Class; {
      use Object::InsideOut;
 
-     sub auto :Automethod
+     sub _automethod :Automethod
      {
          my $self = $_[0];
          my $class = ref($self) || $self;
@@ -3572,6 +3592,8 @@ For subroutines marked with the following attributes:
 =over
 
 =item :ID
+
+=item :PreInit
 
 =item :Init
 
@@ -4173,6 +4195,17 @@ CPAN, especially if you encounter other problems associated with threads.
 For Perl 5.8.4 and 5.8.5, the L</"Storable"> feature does not work due to a
 Perl bug.  Use Object::InsideOut v1.33 if needed.
 
+L<Devel::StackTrace> (used by L<Exception::Class>) makes use of the I<DB>
+namespace.  As a consequence, Object::InsideOut thinks that C<package DB> is
+already loaded.  Therefore, if you create a class called I<DB> that is
+sub-classed by other packages, you may need to C<require> it as follows:
+
+ package DB::Sub; {
+     require DB;
+     use Object::InsideOut qw(DB);
+     ...
+ }
+
 View existing bug reports at, and submit any new bugs, problems, patches, etc.
 to: L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
 
@@ -4196,7 +4229,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.45/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.46/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

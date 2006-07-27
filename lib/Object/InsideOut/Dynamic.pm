@@ -55,7 +55,7 @@ sub create_field
         my $code = "package $class; my $field :Field$attr;";
         eval $code;
         if (my $e = Exception::Class::Base->caught()) {
-            $e->rethrow();
+            die($e);
         }
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
@@ -79,5 +79,5 @@ sub create_field
 
 
 # Ensure correct versioning
-my $VERSION = 1.45;
-($Object::InsideOut::VERSION == 1.45) or die("Version mismatch\n");
+my $VERSION = 1.46;
+($Object::InsideOut::VERSION == 1.46) or die("Version mismatch\n");
