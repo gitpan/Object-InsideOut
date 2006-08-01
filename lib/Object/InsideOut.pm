@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.46;
+our $VERSION = 1.47;
 
-use Object::InsideOut::Exception 1.46;
-use Object::InsideOut::Util 1.46 ();
+use Object::InsideOut::Exception 1.47;
+use Object::InsideOut::Util 1.47 ();
 
 use B;
 
@@ -39,6 +39,12 @@ my $THREAD_ID = 0;
 # Contains flags as to whether or not a class is sharing objects between
 # threads
 my %IS_SHARING;
+
+# Workaround for Perl's "in cleanup" bug
+my $TERMINATING = 0;
+END {
+    $TERMINATING = 1;
+}
 
 
 ### Class Tree Building (via 'import()') ###
@@ -500,13 +506,12 @@ if ($threads::shared::threads_shared) {
     threads::shared::share(%RECLAIMED_IDS);
 }
 
-# Must have a least one key due to 'Perl bug workaround' below
-$RECLAIMED_IDS{'::'} = undef;
-
 # Supplies an ID for an object being created in a class tree
 # and reclaims IDs from destroyed objects
 sub _ID
 {
+    return if $TERMINATING;           # Ignore during global cleanup
+
     my ($class, $id) = @_;            # The object's class and id
     my $tree = $ID_SUBS{$class}[1];   # The object's class tree
 
@@ -516,24 +521,21 @@ sub _ID
 
     # Save deleted IDs for later reuse
     if ($id) {
-        local $SIG{__WARN__} = sub { };   # Suppress spurious msg
-        if (keys(%RECLAIMED_IDS)) {       # Perl bug workaround
-            if (! exists($RECLAIMED_IDS{$tree})) {
-                $RECLAIMED_IDS{$tree} = ($threads::shared::threads_shared)
-                                            ? &threads::shared::share([])
-                                            : [];
-            }
-            if (! exists($RECLAIMED_IDS{$tree}[$thread_id])) {
-                $RECLAIMED_IDS{$tree}[$thread_id] = ($threads::shared::threads_shared)
-                                                        ? &threads::shared::share([])
-                                                        : [];
-
-            } elsif (grep { $_ == $id } @{$RECLAIMED_IDS{$tree}[$thread_id]}) {
-                print(STDERR "ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
-                return;
-            }
-            push(@{$RECLAIMED_IDS{$tree}[$thread_id]}, $id);
+        if (! exists($RECLAIMED_IDS{$tree})) {
+            $RECLAIMED_IDS{$tree} = ($threads::shared::threads_shared)
+                                        ? &threads::shared::share([])
+                                        : [];
         }
+        if (! exists($RECLAIMED_IDS{$tree}[$thread_id])) {
+            $RECLAIMED_IDS{$tree}[$thread_id] = ($threads::shared::threads_shared)
+                                                    ? &threads::shared::share([])
+                                                    : [];
+
+        } elsif (grep { $_ == $id } @{$RECLAIMED_IDS{$tree}[$thread_id]}) {
+            print(STDERR "ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
+            return;
+        }
+        push(@{$RECLAIMED_IDS{$tree}[$thread_id]}, $id);
         return;
     }
 
@@ -1227,13 +1229,25 @@ sub DESTROY
         # Grab any error coming into this routine
         my $err = $@;
 
+        # Workaround for Perl's "in cleanup" bug
+        if ($threads::shared::threads_shared && ! $TERMINATING) {
+            eval {
+                my $bug = keys(%ID_COUNTERS) + keys(%RECLAIMED_IDS) + keys(%SHARED);
+            };
+            if ($@) {
+                $TERMINATING = 1;
+            }
+        }
+
         eval {
             my $is_sharing = is_sharing($class);
             if ($is_sharing) {
                 # Thread-shared object
 
-                local $SIG{__WARN__} = sub { };     # Suppress spurious msg
-                if (keys(%SHARED)) {                # Perl bug workaround
+                if ($TERMINATING) {
+                    return if ($THREAD_ID);   # Continue only if main thread
+
+                } else {
                     if (! exists($SHARED{$class}{$$self})) {
                         print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $THREAD_ID twice\n");
                         return;   # Object already deleted (shouldn't happen)
@@ -2062,7 +2076,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.46
+This document describes Object::InsideOut version 1.47
 
 =head1 SYNOPSIS
 
@@ -4229,7 +4243,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.46/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.47/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
