@@ -123,9 +123,9 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 1.47;
+our $VERSION = 1.48;
 
-use Object::InsideOut 1.47;
+use Object::InsideOut 1.48;
 
 my @VALUES  :Field;
 my @CLASSES :Field;
@@ -173,5 +173,5 @@ sub as_hash :Hashify
 
 
 # Ensure correct versioning
-my $VERSION = 1.47;
-($Object::InsideOut::VERSION == 1.47) or die("Version mismatch\n");
+my $VERSION = 1.48;
+($Object::InsideOut::VERSION == 1.48) or die("Version mismatch\n");

@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.47;
+our $VERSION = 1.48;
 
-use Object::InsideOut::Exception 1.47;
-use Object::InsideOut::Util 1.47 ();
+use Object::InsideOut::Exception 1.48;
+use Object::InsideOut::Util 1.48 ();
 
 use B;
 
@@ -2076,7 +2076,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.47
+This document describes Object::InsideOut version 1.48
 
 =head1 SYNOPSIS
 
@@ -4243,7 +4243,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.47/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.48/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
