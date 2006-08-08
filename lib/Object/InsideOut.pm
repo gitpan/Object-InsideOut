@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.48;
+our $VERSION = 1.49;
 
-use Object::InsideOut::Exception 1.48;
-use Object::InsideOut::Util 1.48 ();
+use Object::InsideOut::Exception 1.49;
+use Object::InsideOut::Util 1.49 ();
 
 use B;
 
@@ -1388,7 +1388,7 @@ sub create_accessors :Private
     }
 
     # Get info for accessors
-    my ($get, $set, $type, $name, $return, $private, $restricted);
+    my ($get, $set, $type, $name, $return, $private, $restricted, $lvalue);
     foreach my $key (keys(%{$acc_spec})) {
         my $key_uc = uc($key);
         my $val = $$acc_spec{$key};
@@ -1452,6 +1452,16 @@ sub create_accessors :Private
                 $restricted = $val;
             }
         }
+        # :lvalue accessor
+        elsif ($key =~ /^lv/i) {
+            if ($val && !Scalar::Util::looks_like_number($val)) {
+                $get = $val;
+                $set = $val;
+                $lvalue = 1;
+            } else {
+                $lvalue = $val;
+            }
+        }
         # Unknown parameter
         else {
             OIO::Attribute->die(
@@ -1505,11 +1515,11 @@ sub create_accessors :Private
         $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
     }
 
-    # If 'TYPE' and/or 'RETURN', need 'SET', too
-    if (($type || $return) && ! $set) {
+    # If 'TYPE', 'RETURN' or 'LVALUE', need 'SET', too
+    if (($type || $return || $lvalue) && ! $set) {
         OIO::Attribute->die(
             'message'   => "Can't create accessor method for package '$package'",
-            'Info'      => "No set accessor specified to go with 'TYPE'/'RETURN' keyword",
+            'Info'      => "No set accessor specified to go with 'TYPE'/'RETURN'/'LVALUE' keyword",
             'Attribute' => "Field( $decl )");
     }
 
@@ -1535,6 +1545,14 @@ sub create_accessors :Private
             'message'   => q/Can't create accessor method/,
             'Info'      => q/Invalid setting for 'TYPE'/,
             'Attribute' => "Field( $decl )");
+    } elsif (ref($type)) {
+        if (ref($type) ne 'CODE') {
+            OIO::Attribute->die(
+                'message'   => q/Can't create accessor method/,
+                'Info'      => q/'Type' must be a 'string' or code ref/,
+                'Attribute' => "Field( $decl )");
+        }
+
     } elsif ($type =~ /^num(?:ber|eric)?/i) {
         $type = 'NUMERIC';
     } elsif (uc($type) eq 'LIST' || uc($type) eq 'ARRAY') {
@@ -1560,36 +1578,23 @@ sub create_accessors :Private
     # Code to be eval'ed into subroutines
     my $code = "package $package;\n";
 
+    # Create an :lvalue accessor
+    if ($lvalue) {
+        $code .= create_lvalue_accessor($package, $set, $field_ref, $get,
+                                        $type, $name, $return, $private,
+                                        $restricted, $WEAK{$field_ref});
+
+        if (defined($get) && $get eq $set) {
+            undef($get);
+        }
+    }
+
     # Create 'set' or combination accessor
-    if (defined($set)) {
+    elsif (defined($set)) {
         # Begin with subroutine declaration in the appropriate package
         $code .= "*${package}::$set = sub {\n";
 
-        # Check accessor permission
-        if ($private) {
-            $code .= <<"_PRIVATE_";
-    my \$caller = caller();
-    if (\$caller ne '$package') {
-        OIO::Method->die(
-            'message' => "Can't call private method '$package->$set' from class '\$caller'",
-            'location' => [ caller() ]);
-    }
-_PRIVATE_
-        } elsif ($restricted) {
-            $code .= <<"_RESTRICTED_";
-    my \$caller = caller();
-    if (! \$caller->isa('$package') && ! $package->isa(\$caller)) {
-        OIO::Method->die(
-            'message'  => "Can't call restricted method '$package->$set' from class '\$caller'",
-            'location' => [ caller() ]);
-    }
-_RESTRICTED_
-        }
-
-        # Lock the field if sharing
-        if (is_sharing($package)) {
-            $code .= "    lock(\$field);\n"
-        }
+        $code .= preamble_code($package, $set, $private, $restricted);
 
         # Add GET portion for combination accessor
         if (defined($get) && $get eq $set) {
@@ -1606,7 +1611,7 @@ _COMBINATION_
     }
 _COMBINATION_
             }
-            undef($get);  # That it for 'GET'
+            undef($get);  # That's it for 'GET'
         }
 
         # Else check that set was called with at least one arg
@@ -1622,13 +1627,6 @@ _CHECK_ARGS_
 
         # Add data type checking
         if (ref($type)) {
-            if (ref($type) ne 'CODE') {
-                OIO::Attribute->die(
-                    'message'   => q/Can't create accessor method/,
-                    'Info'      => q/'Type' must be a 'string' or code ref/,
-                    'Attribute' => "Field( $decl )");
-            }
-
             $code .= <<"_CODE_";
     my (\$arg, \$ok, \@errs);
     local \$SIG{__WARN__} = sub { push(\@errs, \@_); };
@@ -1756,9 +1754,15 @@ _REF_
 
         # Add code for return value
         if ($return eq 'SELF') {
-            $code .= "    return (\$_[0]);\n";
+            $code .= "    return \$_[0];\n";
         } elsif ($return eq 'OLD') {
-            $code .= "    return (\$ret);\n";
+            $code .= "    return \$ret;\n";
+        } elsif ($WEAK{$field_ref}) {
+            if (ref($field_ref) eq 'HASH') {
+                $code .= "    return \$\$field\{\${\$_[0]}};\n";
+            } else {
+                $code .= "    return \$\$field\[\${\$_[0]}];\n";
+            }
         }
 
         # Done
@@ -1767,44 +1771,13 @@ _REF_
 
     # Create 'get' accessor
     if (defined($get)) {
-        $code .= "*${package}::$get = sub {\n";
+        $code .= "*${package}::$get = sub {\n"
 
-        # Check accessor permission
-        if ($private) {
-            $code .= <<"_PRIVATE_";
-    my \$caller = caller();
-    if (\$caller ne '$package') {
-        OIO::Method->die(
-            'message' => "Can't call private method '$package->$get' from class '\$caller'",
-            'location' => [ caller() ]);
-    }
-_PRIVATE_
-        } elsif ($restricted) {
-            $code .= <<"_RESTRICTED_";
-    my \$caller = caller();
-    if (! \$caller->isa('$package') && ! $package->isa(\$caller)) {
-        OIO::Method->die(
-            'message'  => "Can't call restricted method '$package->$get' from class '\$caller'",
-            'location' => [ caller() ]);
-    }
-_RESTRICTED_
-        }
+               . preamble_code($package, $get, $private, $restricted)
 
-        # Set up locking code
-        my $lock = (is_sharing($package)) ? "    lock(\$field);\n" : '';
-
-        # Build subroutine text
-        if (ref($field_ref) eq 'HASH') {
-            $code .= <<"_GET_";
-$lock    \$\$field{\${\$_[0]}};
-};
-_GET_
-        } else {
-            $code .= <<"_GET_";
-$lock    \$\$field[\${\$_[0]}];
-};
-_GET_
-        }
+               . ((ref($field_ref) eq 'HASH')
+                    ? "    \$\$field{\${\$_[0]}};\n};\n"
+                    : "    \$\$field[\${\$_[0]}];\n};\n");
     }
 
     # Compile the subroutine(s) in the smallest possible lexical scope
@@ -1823,6 +1796,41 @@ _GET_
             'Code'        => $code,
             'self'        => 1);
     }
+}
+
+# Generate code for start of accessor
+sub preamble_code :Private
+{
+    my ($package, $name, $private, $restricted) = @_;
+    my $code = '';
+
+    # Permission checking code
+    if ($private) {
+        $code .= <<"_PRIVATE_";
+    my \$caller = caller();
+    if (\$caller ne '$package') {
+        OIO::Method->die(
+            'message' => "Can't call private method '$package->$name' from class '\$caller'",
+            'location' => [ caller() ]);
+    }
+_PRIVATE_
+    } elsif ($restricted) {
+        $code .= <<"_RESTRICTED_";
+    my \$caller = caller();
+    if (! \$caller->isa('$package') && ! $package->isa(\$caller)) {
+        OIO::Method->die(
+            'message'  => "Can't call restricted method '$package->$name' from class '\$caller'",
+            'location' => [ caller() ]);
+    }
+_RESTRICTED_
+    }
+
+    # Add field locking code if sharing
+    if (is_sharing($package)) {
+        $code .= "    lock(\$field);\n"
+    }
+
+    return ($code);
 }
 
 
@@ -2025,14 +2033,8 @@ sub disinherit
     goto &inherit;
 }
 
-sub create_heritage
+sub create_heritage :Private
 {
-    # Private
-    my $caller = caller();
-    if ($caller ne __PACKAGE__) {
-        OIO::Method->die('message' => "Can't call private subroutine 'Object::InsideOut::create_heritage' from class '$caller'");
-    }
-
     load('Foreign');
 
     push(@EXPORT, qw(inherit heritage disinherit));
@@ -2064,6 +2066,12 @@ sub AUTOLOAD
     goto &Object::InsideOut::AUTOLOAD;
 }
 
+sub create_lvalue_accessor :Private
+{
+    load('lvalue');
+    goto &create_lvalue_accessor;
+}
+
 }  # End of package's lexical scope
 
 1;
@@ -2076,7 +2084,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.48
+This document describes Object::InsideOut version 1.49
 
 =head1 SYNOPSIS
 
@@ -2942,6 +2950,120 @@ C<:Field> attribute:
 
  # Must be all on one line
  my @level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
+
+=item :lvalue Accessors
+
+As documented in L<perlsub/"Lvalue subroutines">, an C<:lvalue> subroutine
+returns a modifiable value.  This modifiable value can then, for example, be
+used on the left-hand side (hence C<LVALUE>) of an assignment statement, or
+a substitution regular expression.
+
+For Perl 5.8.0 and later, Object::InsideOut supports the generation of
+C<:lvalue> accessors such that their use in an C<LVALUE> context will set the
+value of the object's field.
+
+ package Contact; {
+     use Object::InsideOut;
+
+     # Create separate a get accessor and an :lvalue set accessor
+     my @name  :Field('Get' => 'name', 'Set' => 'set_name', 'lvalue' => 1);
+
+     # Create a standard accessors combined :lvalue accessor
+     my @phone :Field('Std' => 'phone', 'lvalue' => 1);
+
+     # Create a combined :lvalue accessor
+     my @email :Field('lvalue' => 'email');
+ }
+
+ package main;
+
+ my $obj = Contact->new();
+
+ # Use :lvalue accessors in assignment statements
+ $obj->set_name()  = 'Jerry D. Hedden';
+ $obj->set_phone() = '800-555-1212';
+ $obj->email()     = 'jdhedden AT cpan DOT org';
+
+ # Use :lvalue accessor in substituion regexp
+ $obj->email() =~ s/ AT (\w+) DOT /\@$1./;
+
+ # Use :lvalue accessor in a 'substr' call
+ substr($obj->set_phone(), 0, 3) = '888';
+
+ print("Contact info:\n");
+ print("\tName:  ", $obj->name(),      "\n");
+ print("\tPhone: ", $obj->get_phone(), "\n");
+ print("\tEmail: ", $obj->email(),     "\n");
+
+The use of C<:lvalue> accessors requires the installation of the L<Want>
+module from CPAN.  See particularly the section L<Want/"Lvalue subroutines:">
+for more information.
+
+C<:lvalue> accessors also work like regular I<set> accessors in being able to
+accept arguments, and to return values:
+
+ my @data :Field('lvalue' => 'data', 'Return' => 'Old');
+  ...
+ my $old_data = $obj->data($new_data);
+
+B<CAVEATS>
+
+While still classified as I<experimental>, Perl's support for C<:lvalue>
+subroutines has been around since 5.6.0, and a good number of CPAN modules
+make use of them.
+
+By definition, because C<:lvalue> accessors return the I<location> of a field,
+they break encapsulation.  As a result, some OO advocates eschew the use of
+C<:lvalue> accessors.
+
+Using C<:lvalue> accessors can be a tricky at times.  When used as an argument
+to another function, they are (usually) called in C<LVALUE> context which may
+result in seemingly anomalous behavior if used in conjunction with the
+L<'Return'|/"I<Set> Accessor Return Value"> keyword.  For example,
+
+ my @data :Field('lvalue' => 'data', 'Return' => 'Old');
+  ...
+ some_function($obj->data($new_value));
+
+results in C<some_function> not getting the old value of the field as you
+might expect.  In this case, the accessor is called in C<LVALUE> context, and
+the function gets the C<LVALUE> for the field.  When the function uses that
+C<LVALUE>, it gets the new value for the field.
+
+Of course, there are exceptions to the above.  When used as an argument to
+C<print>, C<:lvalue> accessors are called in C<RVALUE> context.  Using the
+above example,
+
+ print('Previous value: ', $obj->data($new_value), "\n");
+
+does, in fact, print out the old value for the field.
+
+Because method calls are just subroutine calls with the object as the first
+argument, method chaining for C<:lvalue> accessors defined in conjuction with
+C<'Return' =E<gt> 'Object'> fails:
+
+ package Foo; {
+     my @foo :Field('lvalue' => 'foo', 'Return' => 'Object');
+
+     sub baz { ... }
+ }
+ ...
+ $obj->foo('bar')->baz();   # Results in a runtime error!
+
+The reason for the failure is that the above is equivalent to:
+
+ Foo::baz(Foo::foo($obj, 'bar'));
+
+So C<foo> is called in C<LVALUE> context, and C<baz> gets the C<LVALUE> of the
+object's I<foo> field (instead of the object itself as you might expect).
+While the following is a workaround for this:
+
+ (my $dummy = $obj->foo('bar'))->baz();
+
+you would most likely just abandon method chaining, and use:
+
+ $obj->foo('bar');
+ $obj->baz();
 
 =back
 
@@ -4237,13 +4359,15 @@ that supports its C<XS> code.
 
 L<Test::More> v0.50 or later (for installation)
 
+Optionally, L<Want> for L</":lvalue Accessors">.
+
 =head1 SEE ALSO
 
 Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.48/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.49/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

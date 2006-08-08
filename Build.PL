@@ -42,6 +42,10 @@ Module::Build->new(
                             'Scalar::Util'        => $Scalar::Util::VERSION,
                         },
 
+    'recommends'     => {
+                            'Want'                => 0,
+                        },
+
 )->create_build_script();
 
 # EOF

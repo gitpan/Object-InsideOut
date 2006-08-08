@@ -32,6 +32,13 @@ _NO_WEAKEN_
 }
 
 
+# Check for Want module
+eval { require Want; };
+if ($@) {
+    print("\n  Optional module 'Want' not installed - needed if using :lvalue accessors\n\n");
+}
+
+
 # Construct make file
 WriteMakefile(
     'NAME'          => 'Object::InsideOut',

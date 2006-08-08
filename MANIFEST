@@ -14,6 +14,7 @@ lib/Object/InsideOut/Foreign.pm
 lib/Object/InsideOut/Dynamic.pm
 lib/Object/InsideOut/Autoload.pm
 lib/Object/InsideOut/Exception.pm
+lib/Object/InsideOut/lvalue.pm
 t/00-load.t
 t/01-basic.t
 t/01a-basic.t
@@ -49,6 +50,7 @@ t/24-preproc.t
 t/25-access.t
 t/26-preinit.t
 t/27-exception.t
+t/28-lvalue.t
 t/A.pm
 t/B.pm
 t/Parent.pm
