@@ -1,5 +1,11 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.51 Wed Aug 30 11:08:30 EDT 2006
+	- Added 'All/Std_All'+'Arg' field declarations keywords
+	- More method chaining support
+	- Require Want 0.12 or later
+	- Document $SIG{'__DIE__'} interference issues
+
 1.49 Tue Aug  8 14:15:43 EDT 2006
 	- Support for :lvalue accessor generation
 

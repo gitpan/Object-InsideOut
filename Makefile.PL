@@ -32,13 +32,6 @@ _NO_WEAKEN_
 }
 
 
-# Check for Want module
-eval { require Want; };
-if ($@) {
-    print("\n  Optional module 'Want' not installed - needed if using :lvalue accessors\n\n");
-}
-
-
 # Construct make file
 WriteMakefile(
     'NAME'          => 'Object::InsideOut',
@@ -49,8 +42,10 @@ WriteMakefile(
                          'Test::More'       => 0.50,
                          'attributes'       => 0,
                          'overload'         => 0,
+                         'B'                => 0,
                          'Data::Dumper'     => 0,
                          'Scalar::Util'     => $Scalar::Util::VERSION,
+                         'Want'             => 0.12,
                        },
     ((ExtUtils::MakeMaker->VERSION() lt '6.25') ?
         ('PL_FILES' => { })            : ()),

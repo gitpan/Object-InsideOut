@@ -79,7 +79,7 @@ sub install_UNIVERSAL
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
-                local $SIG{__DIE__} = 'OIO::trap';
+                local $SIG{'__DIE__'} = 'OIO::trap';
                 if ($code = $thing->$automethod()) {
                     return ($code);
                 }
@@ -123,5 +123,5 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-my $VERSION = 1.49;
-($Object::InsideOut::VERSION == 1.49) or die("Version mismatch\n");
+my $VERSION = 1.51;
+($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");

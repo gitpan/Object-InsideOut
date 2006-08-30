@@ -50,7 +50,7 @@ sub dump
         foreach my $pkg (@{$$TREE_TOP_DOWN{ref($self)}}) {
             # Try to use a class-supplied dumper
             if (my $dumper = $$DUMPERS{$pkg}) {
-                local $SIG{__DIE__} = 'OIO::trap';
+                local $SIG{'__DIE__'} = 'OIO::trap';
                 $dump{$pkg} = $self->$dumper();
 
             } elsif ($$FIELDS{$pkg}) {
@@ -128,7 +128,7 @@ sub dump
         # Convert string input to array ref, if needed
         if (! ref($input)) {
             my @errs;
-            local $SIG{__WARN__} = sub { push(@errs, @_); };
+            local $SIG{'__WARN__'} = sub { push(@errs, @_); };
 
             my $array_ref;
             eval "\$array_ref = $input";
@@ -164,7 +164,7 @@ sub dump
 
             # Try to use a class-supplied pumper
             if (my $pumper = $$PUMPERS{$pkg}) {
-                local $SIG{__DIE__} = 'OIO::trap';
+                local $SIG{'__DIE__'} = 'OIO::trap';
                 $self->$pumper($data);
 
             } else {
@@ -201,5 +201,5 @@ sub dump
 
 
 # Ensure correct versioning
-my $VERSION = 1.49;
-($Object::InsideOut::VERSION == 1.49) or die("Version mismatch\n");
+my $VERSION = 1.51;
+($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");

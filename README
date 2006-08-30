@@ -1,4 +1,4 @@
-Object-InsideOut version 1.49
+Object-InsideOut version 1.51
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -112,15 +112,15 @@ This module uses the following 'standard' modules:
   ExtUtils::MakeMaker          - For installation
   Test::More (0.50 or later)   - For installation
   Scalar::Util (1.10 or later) - Standard in 5.8 or obtain from CPAN
+  Data::Dumper
+  attributes
+  overload
+  B
 
 This module requires the following module available from CPAN:
 
   Exception::Class (1.22 or later)
-
-Using the :lvalue accessor feature of this module requires the following
-module from CPAN:
-
-  Want
+  Want (0.12 or later)
 
 COPYRIGHT AND LICENCE
 

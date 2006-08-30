@@ -38,14 +38,11 @@ Module::Build->new(
                             'Exception::Class'    => 1.22,
                             'attributes'          => 0,
                             'overload'            => 0,
+                            'B'                   => 0,
                             'Data::Dumper'        => 0,
                             'Scalar::Util'        => $Scalar::Util::VERSION,
+                            'Want'                => 0.12,
                         },
-
-    'recommends'     => {
-                            'Want'                => 0,
-                        },
-
 )->create_build_script();
 
 # EOF

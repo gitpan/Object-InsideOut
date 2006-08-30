@@ -14,15 +14,6 @@ sub create_lvalue_accessor
             'Info'    => q/'lvalue' accessors require Perl 5.8.0 or later/);
     }
 
-    eval { require Want; };
-    if ($@) {
-        my ($package, $set) = @_;
-        OIO::Code->die(
-            'message' => "Can't create 'lvalue' accessor method '$set' for package '$package'",
-            'Info'    => q/Failure loading 'Want' module/,
-            'Error'   => $@);
-    }
-
     *Object::InsideOut::create_lvalue_accessor = sub
     {
         my $caller = caller();
@@ -33,35 +24,27 @@ sub create_lvalue_accessor
         my ($package, $set, $field_ref, $get, $type, $name, $return,
             $private, $restricted, $weak) = @_;
 
-        # Begin with subroutine declaration in the appropriate package
-        my $code .= "*${package}::$set = sub :lvalue {\n"
+        # Field string
+        my $fld_str = (ref($field_ref) eq 'HASH') ? "\$\$field\{\${\$_[0]}}" : "\$\$field\[\${\$_[0]}]";
 
-                  . preamble_code($package, $set, $private, $restricted);
+        # Begin with subroutine declaration in the appropriate package
+        my $pcode = preamble_code($package, $set, $private, $restricted);
+        my $code .= <<"_START_";
+*${package}::$set = sub :lvalue {
+$pcode    my \$rvalue = Want::want('RVALUE');
+    my \$lv_assign = Want::want('LVALUE', 'ASSIGN');
+    my \$want_obj = Want::want('OBJECT');
+_START_
 
         # Add GET portion for combination accessor
         if (defined($get) && $get eq $set) {
-            if (ref($field_ref) eq 'HASH') {
-                $code .= <<"_COMBINATION_";
-    my \$rvalue = Want::want('RVALUE');
-    if (\$rvalue && \@_ == 1) {
-        Want::rreturn (\$\$field\{\${\$_[0]}});
-    }
-_COMBINATION_
-            } else {
-                $code .= <<"_COMBINATION_";
-    my \$rvalue = Want::want('RVALUE');
-    if (\$rvalue && \@_ == 1) {
-        Want::rreturn (\$\$field\[\${\$_[0]}]);
-    }
-_COMBINATION_
-            }
+            $code .= "    Want::rreturn($fld_str) if (\$rvalue && \@_ == 1);\n";
         }
 
         # Else check that set was called with at least one arg
         else {
             $code .= <<"_CHECK_ARGS_";
-    my \$rvalue = Want::want('RVALUE');
-    if (\$rvalue && \@_ < 2) {
+    if ((\@_ < 2) && (\$rvalue || (!\$lv_assign && \$want_obj))) {
         OIO::Args->die(
             'message'  => q/Missing arg(s) to '$package->$set'/,
             'location' => [ caller() ]);
@@ -69,12 +52,16 @@ _COMBINATION_
 _CHECK_ARGS_
         }
 
+        # Return value for 'OLD'
+        if ($return eq 'OLD') {
+            $code .= "    my \$ret;\n";
+        }
+
         # Start 'set' code
         $code .= <<"_SET_";
-    my \$lvalue = Want::want('LVALUE', 'ASSIGN');
-    if (\$lvalue || \@_ > 1) {
+    if (\$lv_assign || \@_ > 1) {
         my \@args;
-        if (\$lvalue) {
+        if (\$lv_assign) {
             (\@args) = Want::want('ASSIGN');
         } else {
             \@args = \@_;
@@ -86,7 +73,7 @@ _SET_
         if (ref($type)) {
             $code .= <<"_CODE_";
         my (\$arg, \$ok, \@errs);
-        local \$SIG{__WARN__} = sub { push(\@errs, \@_); };
+        local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
         eval { \$ok = \$type->(\$arg = \$args[0]) };
         if (\$@ || \@errs) {
             my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
@@ -175,46 +162,34 @@ _REF_
 
         # Grab 'OLD' value
         if ($return eq 'OLD') {
-            if (ref($field_ref) eq 'HASH') {
-                $code .= "        my \$ret = \$\$field\{\${\$_[0]}};\n";
-            } else {
-                $code .= "        my \$ret = \$\$field\[\${\$_[0]}];\n";
-            }
+            $code .= "        \$ret = $fld_str;\n";
         }
 
         # Add actual 'set' code
-        if (ref($field_ref) eq 'HASH') {
-            $code .= (is_sharing($package))
-                  ? "        \$\$field\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n"
-                  : "        \$\$field\{\${\$_[0]}} = \$arg;\n";
-            if ($weak) {
-                $code .= "        Scalar::Util::weaken(\$\$field\{\${\$_[0]}});\n";
-            }
-        } else {
-            $code .= (is_sharing($package))
-                  ? "        \$\$field\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n"
-                  : "        \$\$field\[\${\$_[0]}] = \$arg;\n";
-            if ($weak) {
-                $code .= "        Scalar::Util::weaken(\$\$field\[\${\$_[0]}]);\n";
-            }
+        $code .= (is_sharing($package))
+              ? "        $fld_str = Object::InsideOut::Util::make_shared(\$arg);\n"
+              : "        $fld_str = \$arg;\n";
+        if ($weak) {
+            $code .= "        Scalar::Util::weaken($fld_str);\n";
         }
 
         # Add code for return value
-        $code     .= "        Want::lnoreturn if \$lvalue;\n";
+        $code     .= "        Want::lnoreturn if \$lv_assign;\n";
         if ($return eq 'SELF') {
-            $code .= "        Want::rreturn \$_[0]  if \$rvalue;\n";
+            $code .= "        Want::rreturn(\$_[0]) if \$rvalue;\n";
         } elsif ($return eq 'OLD') {
-            $code .= "        Want::rreturn \$ret if \$rvalue;\n";
-        } elsif (ref($field_ref) eq 'HASH') {
-            $code .= "        Want::rreturn \$\$field\{\${\$_[0]}} if \$rvalue;\n";
+            $code .= "        Want::rreturn(\$ret) if \$rvalue;\n";
         } else {
-            $code .= "        Want::rreturn \$\$field\[\${\$_[0]}] if \$rvalue;\n";
+            $code .= "        Want::rreturn($fld_str) if \$rvalue;\n";
         }
         $code .= "    }\n";
-        if (ref($field_ref) eq 'HASH') {
-            $code .= "    \$\$field\{\${\$_[0]}};\n";
+
+        if ($return eq 'SELF') {
+            $code .= "    (\@_ < 2) ? $fld_str : \$_[0];\n";
+        } elsif ($return eq 'OLD') {
+            $code .= "    (\@_ < 2) ? $fld_str : ((Want::want('OBJECT') && !Scalar::Util::blessed(\$ret)) ? \$_[0] : \$ret);\n";
         } else {
-            $code .= "    \$\$field\[\${\$_[0]}];\n";
+            $code .= "    ((\@_ > 1) && Want::want('OBJECT') && !Scalar::Util::blessed($fld_str)) ? \$_[0] : $fld_str;\n";
         }
         $code .= "};\n";
 
@@ -230,5 +205,5 @@ _REF_
 
 
 # Ensure correct versioning
-my $VERSION = 1.49;
-($Object::InsideOut::VERSION == 1.49) or die("Version mismatch\n");
+my $VERSION = 1.51;
+($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");

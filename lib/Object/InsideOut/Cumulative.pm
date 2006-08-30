@@ -84,7 +84,7 @@ sub create_CUMULATIVE :Private
         # Accumulate results
         foreach my $pkg (@{$$tree{$class}}) {
             if (my $code = $$code_refs{$pkg}) {
-                local $SIG{__DIE__} = 'OIO::trap';
+                local $SIG{'__DIE__'} = 'OIO::trap';
                 my @args = @_;
                 if (defined($list_context)) {
                     push(@classes, $pkg);
@@ -123,9 +123,9 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 1.49;
+our $VERSION = 1.51;
 
-use Object::InsideOut 1.49;
+use Object::InsideOut 1.51;
 
 my @VALUES  :Field;
 my @CLASSES :Field;
@@ -173,5 +173,5 @@ sub as_hash :Hashify
 
 
 # Ensure correct versioning
-my $VERSION = 1.49;
-($Object::InsideOut::VERSION == 1.49) or die("Version mismatch\n");
+my $VERSION = 1.51;
+($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");

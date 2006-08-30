@@ -86,7 +86,7 @@ sub create_CHAINED :Private
         # Chain results together
         foreach my $pkg (@{$$tree{$class}}) {
             if (my $code = $$code_refs{$pkg}) {
-                local $SIG{__DIE__} = 'OIO::trap';
+                local $SIG{'__DIE__'} = 'OIO::trap';
                 @args = $thing->$code(@args);
                 push(@classes, $pkg);
             }
@@ -101,5 +101,5 @@ sub create_CHAINED :Private
 
 
 # Ensure correct versioning
-my $VERSION = 1.49;
-($Object::InsideOut::VERSION == 1.49) or die("Version mismatch\n");
+my $VERSION = 1.51;
+($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");

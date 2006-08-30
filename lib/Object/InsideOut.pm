@@ -5,13 +5,13 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.49;
+our $VERSION = 1.51;
 
-use Object::InsideOut::Exception 1.49;
-use Object::InsideOut::Util 1.49 ();
+use Object::InsideOut::Exception 1.51;
+use Object::InsideOut::Util 1.51 ();
 
 use B;
-
+use Want 0.11 ();
 use Scalar::Util 1.10;
 # Verify we have 'weaken'
 {
@@ -307,15 +307,9 @@ sub MODIFY_HASH_ATTRIBUTES
             push(@DUMP_INITARGS, $pkg);
         }
 
-        # Handle ':shared' attribute associated with threads::shared
-        elsif ($attr eq 'shared') {
-            if ($threads::shared::threads_shared) {
-                threads::shared::share($hash);
-            }
-        }
-
         # Unhandled
-        else {
+        # (Must filter out ':shared' attribute due to Perl bug)
+        elsif ($attr ne 'shared') {
             push(@unused_attrs, $attr);
         }
     }
@@ -351,15 +345,9 @@ sub MODIFY_ARRAY_ATTRIBUTES
             $DO_INIT = 1;   # Flag that initialization is required
         }
 
-        # Handle ':shared' attribute associated with threads::shared
-        elsif ($attr eq 'shared') {
-            if ($threads::shared::threads_shared) {
-                threads::shared::share($array);
-            }
-        }
-
         # Unhandled
-        else {
+        # (Must filter out ':shared' attribute due to Perl bug)
+        elsif ($attr ne 'shared') {
             push(@unused_attrs, $attr);
         }
     }
@@ -913,7 +901,7 @@ sub CLONE
                 Internals::SvREADONLY($$obj, 0) if ($] >= 5.008003);
 
                 # Replace the old object ID with a new one
-                local $SIG{__DIE__} = 'OIO::trap';
+                local $SIG{'__DIE__'} = 'OIO::trap';
                 $$obj = $id_sub->($class);
 
                 # Lock the object again
@@ -946,7 +934,7 @@ sub CLONE
                 my $pseudo_object = \do{ my $scalar = $old_id; };
                 foreach my $pkg (@tree) {
                     if (my $replicate = $REPLICATORS{$pkg}) {
-                        local $SIG{__DIE__} = 'OIO::trap';
+                        local $SIG{'__DIE__'} = 'OIO::trap';
                         $replicate->($pseudo_object, $obj, 'CLONE');
                     }
                 }
@@ -1062,7 +1050,7 @@ sub new
     foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
         my $preinit = $PREINITORS{$pkg};
         if ($preinit) {
-            local $SIG{__DIE__} = 'OIO::trap';
+            local $SIG{'__DIE__'} = 'OIO::trap';
             $self->$preinit($all_args);
         }
     }
@@ -1085,7 +1073,7 @@ sub new
 
         if ($init) {
             # Send remaining args, if any, to Init subroutine
-            local $SIG{__DIE__} = 'OIO::trap';
+            local $SIG{'__DIE__'} = 'OIO::trap';
             $self->$init($args);
 
         } elsif (%$args) {
@@ -1153,7 +1141,7 @@ sub clone
 
         # Dispatch any special replication handling
         if (my $replicate = $REPLICATORS{$pkg}) {
-            local $SIG{__DIE__} = 'OIO::trap';
+            local $SIG{'__DIE__'} = 'OIO::trap';
             $parent->$replicate($clone, $deep);
         }
     }
@@ -1282,7 +1270,7 @@ sub DESTROY
                 # Dispatch any special destruction handling
                 if (my $destroy = $DESTROYERS{$pkg}) {
                     eval {
-                        local $SIG{__DIE__} = 'OIO::trap';
+                        local $SIG{'__DIE__'} = 'OIO::trap';
                         $self->$destroy();
                     };
                     $dest_err = OIO::combine($dest_err, $@);
@@ -1370,7 +1358,7 @@ sub create_accessors :Private
     my $acc_spec;
     {
         my @errs;
-        local $SIG{__WARN__} = sub { push(@errs, @_); };
+        local $SIG{'__WARN__'} = sub { push(@errs, @_); };
 
         if ($decl =~ /^{/) {
             eval "\$acc_spec = $decl";
@@ -1388,23 +1376,36 @@ sub create_accessors :Private
     }
 
     # Get info for accessors
-    my ($get, $set, $type, $name, $return, $private, $restricted, $lvalue);
+    my ($get, $set, $type, $name, $return, $private, $restricted, $lvalue,
+        $arg);
     foreach my $key (keys(%{$acc_spec})) {
         my $key_uc = uc($key);
         my $val = $$acc_spec{$key};
+
+        # :InitArgs
+        if ($key_uc =~ /ALL/) {
+            $arg = $val;
+            if ($key_uc eq 'ALL') {
+                $key_uc = 'ACC';
+            }
+        } elsif ($key_uc =~ /ARG/) {
+            $arg = $val;
+            $key_uc = 'IGNORE';
+        }
+
         # Standard accessors
-        if ($key =~ /^st.*d/i) {
+        if ($key_uc =~ /^ST.*D/) {
             $get = 'get_' . $val;
             $set = 'set_' . $val;
         }
         # Get and/or set accessors
-        elsif ($key =~ /^acc|^com|^mut|[gs]et/i) {
+        elsif ($key_uc =~ /^ACC|^COM|^MUT|[GS]ET/) {
             # Get accessor
-            if ($key =~ /acc|com|mut|get/i) {
+            if ($key_uc =~ /ACC|COM|MUT|GET/) {
                 $get = $val;
             }
             # Set accessor
-            if ($key =~ /acc|com|mut|set/i) {
+            if ($key_uc =~ /ACC|COM|MUT|SET/) {
                 $set = $val;
             }
         }
@@ -1436,24 +1437,24 @@ sub create_accessors :Private
             $name = $val;
         }
         # Set accessor return type
-        elsif ($key =~ /^ret(?:urn)?$/i) {
+        elsif ($key_uc =~ /^RET(?:URN)?$/) {
             $return = uc($val);
         }
         # Set accessor permission
-        elsif ($key =~ /^perm|^priv|^restrict/i) {
-            if ($key =~ /^perm/i) {
-                $key = $val;
+        elsif ($key_uc =~ /^PERM|^PRIV|^RESTRICT/) {
+            if ($key_uc =~ /^PERM/) {
+                $key_uc = uc($val);
                 $val = 1;
             }
-            if ($key =~ /^priv/i) {
+            if ($key_uc =~ /^PRIV/) {
                 $private = $val;
             }
-            if ($key =~ /^restrict/i) {
+            if ($key_uc =~ /^RESTRICT/) {
                 $restricted = $val;
             }
         }
         # :lvalue accessor
-        elsif ($key =~ /^lv/i) {
+        elsif ($key_uc =~ /^LV/) {
             if ($val && !Scalar::Util::looks_like_number($val)) {
                 $get = $val;
                 $set = $val;
@@ -1463,16 +1464,38 @@ sub create_accessors :Private
             }
         }
         # Unknown parameter
-        else {
+        elsif ($key_uc ne 'IGNORE') {
             OIO::Attribute->die(
                 'message' => "Can't create accessor method for package '$package'",
                 'Info'    => "Unknown accessor specifier: $key");
         }
+
         # $val must have a usable value
         if (! defined($val) || $val eq '') {
             OIO::Attribute->die(
                 'message'   => "Invalid '$key' entry in :Field attribute",
                 'Attribute' => "Field( $decl )");
+        }
+    }
+
+    # :InitArgs
+    if ($arg) {
+        if (!defined($name)) {
+            $name = $arg;
+        }
+        $INIT_ARGS{$package}{$arg}{'FIELD'} = $field_ref;
+        if ($type) {
+            my $arg_type = $type;
+            if (! ref($type)) {
+                if ($type =~ /^(list|array)$/i) {
+                    $arg_type = 'LIST';
+                } elsif ($type =~ /^array_?ref$/i) {
+                    $arg_type = 'ARRAY';
+                } elsif ($type =~ /^hash(_?ref)?$/i) {
+                    $arg_type = 'HASH';
+                }
+            }
+            $INIT_ARGS{$package}{$arg}{'TYPE'} = $arg_type;
         }
     }
 
@@ -1596,21 +1619,11 @@ sub create_accessors :Private
 
         $code .= preamble_code($package, $set, $private, $restricted);
 
+        my $fld_str = (ref($field_ref) eq 'HASH') ? "\$\$field\{\${\$_[0]}}" : "\$\$field\[\${\$_[0]}]";
+
         # Add GET portion for combination accessor
         if (defined($get) && $get eq $set) {
-            if (ref($field_ref) eq 'HASH') {
-                $code .= <<"_COMBINATION_";
-    if (\@_ == 1) {
-        return (\$\$field\{\${\$_[0]}});
-    }
-_COMBINATION_
-            } else {
-                $code .= <<"_COMBINATION_";
-    if (\@_ == 1) {
-        return (\$\$field\[\${\$_[0]}]);
-    }
-_COMBINATION_
-            }
+            $code .= "    return ($fld_str) if (\@_ == 1);\n";
             undef($get);  # That's it for 'GET'
         }
 
@@ -1629,7 +1642,7 @@ _CHECK_ARGS_
         if (ref($type)) {
             $code .= <<"_CODE_";
     my (\$arg, \$ok, \@errs);
-    local \$SIG{__WARN__} = sub { push(\@errs, \@_); };
+    local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
     eval { \$ok = \$type->(\$arg = \$_[1]) };
     if (\$@ || \@errs) {
         my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
@@ -1727,42 +1740,24 @@ _REF_
 
         # Grab 'OLD' value
         if ($return eq 'OLD') {
-            if (ref($field_ref) eq 'HASH') {
-                $code .= "    my \$ret = \$\$field\{\${\$_[0]}};\n";
-            } else {
-                $code .= "    my \$ret = \$\$field\[\${\$_[0]}];\n";
-            }
+            $code .= "    my \$ret = $fld_str;\n";
         }
 
         # Add actual 'set' code
-        if (ref($field_ref) eq 'HASH') {
-            $code .= (is_sharing($package))
-                  ? "    \$\$field\{\${\$_[0]}} = Object::InsideOut::Util::make_shared(\$arg);\n"
-                  : "    \$\$field\{\${\$_[0]}} = \$arg;\n";
-            if ($WEAK{$field_ref}) {
-                $code .= "    Scalar::Util::weaken(\$\$field\{\${\$_[0]}});\n";
-            }
-        } else {
-            $code .= (is_sharing($package))
-                  ? "    \$\$field\[\${\$_[0]}] = Object::InsideOut::Util::make_shared(\$arg);\n"
-                  : "    \$\$field\[\${\$_[0]}] = \$arg;\n";
-            if ($WEAK{$field_ref}) {
-                $code .= "    Scalar::Util::weaken(\$\$field\[\${\$_[0]}]);\n";
-            }
+        $code .= (is_sharing($package))
+              ? "    $fld_str = Object::InsideOut::Util::make_shared(\$arg);\n"
+              : "    $fld_str = \$arg;\n";
+        if ($WEAK{$field_ref}) {
+            $code .= "    Scalar::Util::weaken($fld_str);\n";
         }
-
 
         # Add code for return value
         if ($return eq 'SELF') {
-            $code .= "    return \$_[0];\n";
+            $code .= "    \$_[0];\n";
         } elsif ($return eq 'OLD') {
-            $code .= "    return \$ret;\n";
-        } elsif ($WEAK{$field_ref}) {
-            if (ref($field_ref) eq 'HASH') {
-                $code .= "    return \$\$field\{\${\$_[0]}};\n";
-            } else {
-                $code .= "    return \$\$field\[\${\$_[0]}];\n";
-            }
+            $code .= "    (Want::want('OBJECT') && !Scalar::Util::blessed(\$ret)) ? \$_[0] : \$ret;\n";
+        } else {
+            $code .= "    (Want::want('OBJECT') && !Scalar::Util::blessed($fld_str)) ? \$_[0] : $fld_str;\n";
         }
 
         # Done
@@ -1782,7 +1777,7 @@ _REF_
 
     # Compile the subroutine(s) in the smallest possible lexical scope
     my @errs;
-    local $SIG{__WARN__} = sub { push(@errs, @_); };
+    local $SIG{'__WARN__'} = sub { push(@errs, @_); };
     {
         my $field = $field_ref;
         eval $code;
@@ -1883,7 +1878,7 @@ _CODE_
 
     # Eval the new code
     my @errs;
-    local $SIG{__WARN__} = sub { push(@errs, @_); };
+    local $SIG{'__WARN__'} = sub { push(@errs, @_); };
     no warnings 'redefine';
 
     eval $code;
@@ -2084,7 +2079,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.49
+This document describes Object::InsideOut version 1.51
 
 =head1 SYNOPSIS
 
@@ -2537,7 +2532,8 @@ Available types are:
 =item Numeric
 
 Can also be specified as C<Num> or C<Number>.  This uses
-Scalar::Util::looks_like_number to test the input value.
+L<Scalar::Util::looks_like_number()|Scalar::Util/"looks_like_number EXPR"> to
+test the input value.
 
 =item List
 
@@ -2618,6 +2614,31 @@ the C<@hosts> array, and a S<C<'HOSTS' =E<gt> value>> pair is B<not> sent to
 the C<:Init> subroutine. In fact, if you specify fields for all your
 parameters, then you don't even need to have an C<:Init> subroutine! All the
 work will be taken care of for you.
+
+A second method for specifying automatic parameter processing is done as part
+of the L</"Field Declarations">:
+
+ my @data :Field('Arg' => 'data');
+
+This is equivalent to:
+
+ my @data :Field;
+
+ my %init_args :InitArgs = (
+     'data' => {
+         'Field' => \@data,
+     },
+ );
+
+With this method, the parameter name used in the C<new()> call must match
+exactly the name specified by the C<'Arg'> keyword.  Further, the parameter
+is optional (i.e. C<'Mandatory' => 0>), has no default, and cannot be
+subjected to preprocessing (see below).  (If you need these features for a
+parameter, then you must use an C<:InitArgs> hash.)  Any L<type
+checking|/"Accessor Type Checking"> specified for the field's I<set> accessor
+will be applied to the parameter.
+
+C<'InitArg'> can be used in place of C<'Arg'>, if desired.
 
 =item Parameter Preprocessing
 
@@ -2833,35 +2854,86 @@ which would be used as follows:
 C<Acc> or can be specified as C<get_set> or C<Combined> or C<Combo> or
 C<Mutator>.)
 
+=item All-in-One
+
+Accessor naming and L<automatic parameter processing|/"Automatic Processing">
+can be combined:
+
+ my @data :Field('All' => 'data');
+
+This is I<syntactic shorthand> for:
+
+ my @data :Field('Acc' => 'data', 'Arg' => 'data');
+
+which, in turn, is equivalent to:
+
+ my @data :Field('Acc' => 'data');
+
+ my %init_args :InitArgs = (
+     'data' => {
+         'Field' => \@data,
+     },
+ );
+
+If I<standard> accessors are desired, use:
+
+ my @data :Field('Std_All' => 'data');
+
 =item I<Set> Accessor Return Value
 
 For any of the automatically generated methods that perform I<set> operations,
 the default for the method's return value is the value being set (i.e., the
 I<new> value).
 
-The C<Return> keyword allows you to modify the default behavior.  The other
-options are to have the I<set> accessor return the I<old> (previous) value (or
-C<undef> if unset):
+The C<Return> keyword allows specify the I<set> accessor's return value.  For
+example, you can explicitly specify the default behavior:
+
+ my @data :Field('Set' => 'set_data', 'Return' => 'New');
+
+or you can specify that the accessor should return the I<old> (previous) value
+(or C<undef> if unset):
 
  my @data :Field('Set' => 'set_data', 'Return' => 'Old');
 
-or to return the object itself:
+or, finally, have it return the object itself:
 
  my @data :Field('Set' => 'set_data', 'Return' => 'Object');
-
-Returning the object from a I<set> method allows it to be chained to other
-methods:
-
- $obj->set_data($data)->do_something();
-
-If desired, you can explicitly specify the default behavior of returning the
-I<new> value:
-
- my @data :Field('Set' => 'set_data', 'Return' => 'New');
 
 (C<Return> may be abbreviated to C<Ret>; C<Previous>, C<Prev> and C<Prior> are
 synonymous with C<Old>; and C<Object> may be abbreviated to C<Obj> and is also
 synonymous with C<Self>.  All these are case-insensitive.)
+
+=item Method Chaining
+
+An obvious case where method chaining can be used is when a field is used to
+store an object:  A method for the stored object can be chained to the I<get>
+accessor call that retrieves that object:
+
+ $obj->get_stored_object()->stored_object_method()
+
+Chaining can be done off of I<set> accessors based on their return value (see
+above).  In this example with a I<set> accessor that returns the I<new> value:
+
+ $obj->set_stored_object($stored_obj)->stored_object_method()
+
+the I<set_stored_object()> call stores the new object, returning it as well,
+and then the I<stored_object_method()> call is invoked via the stored/returned
+object.  The same would work for I<set> accessors that return the I<old>
+value, too, but in that case the chained method is invoked via the previously
+stored (and now returned) object.
+
+This module also tries to do I<the right thing> with method chaining for
+I<set> accessors that don't store/return objects.  In these cases, the object
+used to invoke the I<set> accessor will also be used to invoke the chained
+method (just as though the I<set> accessor were declared with C<'Return'
+=E<gt> 'Object'>):
+
+ $obj->set_data('data')->do_something();
+
+Note, however, that this special handling does not apply to I<get> accessors,
+nor to I<combination> accessors invoked without an argument (i.e., when used
+as a I<get> accessor).  These must return objects in order for method chaining
+to succeed.
 
 =item Accessor Type Checking
 
@@ -2877,7 +2949,8 @@ Available types are:
 =item Numeric
 
 Can also be specified as C<Num> or C<Number>.  This uses
-Scalar::Util::looks_like_number to test the input value.
+L<Scalar::Util::looks_like_number()|Scalar::Util/"looks_like_number EXPR"> to
+test the input value.
 
 =item List or Array
 
@@ -2995,16 +3068,14 @@ value of the object's field.
  print("\tPhone: ", $obj->get_phone(), "\n");
  print("\tEmail: ", $obj->email(),     "\n");
 
-The use of C<:lvalue> accessors requires the installation of the L<Want>
-module from CPAN.  See particularly the section L<Want/"Lvalue subroutines:">
-for more information.
-
 C<:lvalue> accessors also work like regular I<set> accessors in being able to
-accept arguments, and to return values:
+accept arguments, perform type checking, and return values:
 
- my @data :Field('lvalue' => 'data', 'Return' => 'Old');
+ my @pri :Field('lvalue' => 'priority', 'Return' => 'Old', 'Type' => 'Numeric');
   ...
- my $old_data = $obj->data($new_data);
+ my $old_pri = $obj->priority(10);
+
+C<:lvalue> accessors can be used in L<method chains|/"Method Chaining">.
 
 B<CAVEATS>
 
@@ -3037,33 +3108,6 @@ above example,
  print('Previous value: ', $obj->data($new_value), "\n");
 
 does, in fact, print out the old value for the field.
-
-Because method calls are just subroutine calls with the object as the first
-argument, method chaining for C<:lvalue> accessors defined in conjuction with
-C<'Return' =E<gt> 'Object'> fails:
-
- package Foo; {
-     my @foo :Field('lvalue' => 'foo', 'Return' => 'Object');
-
-     sub baz { ... }
- }
- ...
- $obj->foo('bar')->baz();   # Results in a runtime error!
-
-The reason for the failure is that the above is equivalent to:
-
- Foo::baz(Foo::foo($obj, 'bar'));
-
-So C<foo> is called in C<LVALUE> context, and C<baz> gets the C<LVALUE> of the
-object's I<foo> field (instead of the object itself as you might expect).
-While the following is a workaround for this:
-
- (my $dummy = $obj->foo('bar'))->baz();
-
-you would most likely just abandon method chaining, and use:
-
- $obj->foo('bar');
- $obj->baz();
 
 =back
 
@@ -3524,9 +3568,10 @@ C<NAME> keyword:
  my @life :Field('Name' => 'life');
 
 If the C<NAME> keyword is not present, then the name for a field will be
-either the tag from the C<:InitArgs> array that is associated with the field,
-its I<get> method name, its I<set> method name, or, failing all that, a string
-of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
+either the name associated with an C<'All'> or C<'Arg'> tag in the field
+declaration, the tag from the C<:InitArgs> array that is associated with the
+field, its I<get> method name, its I<set> method name, or, failing all that, a
+string of the form C<ARRAY(0x...)> or C<HASH(0x...)>.
 
 When called with a I<true> argument, C<-E<gt>dump()> returns a string version
 of the I<Perl> representation using L<Data::Dumper>.
@@ -4234,6 +4279,41 @@ This error indicates you forgot the following in your class's code:
 
 =back
 
+This module installs a C<__DIE__> handler (see L<perlfunc/"die LIST"> and
+L<perlfunc/"eval BLOCK">) to catch any errant exceptions from class-specific
+code, namely, C<:Init>, C<:Replicate>, C<:Destroy>, etc. subroutines.  This
+handler may interfer with code that uses the C<die> function as a method of
+flow control for leaving an C<eval> block.  The proper method for handling
+this is to localize C<$SIG{'__DIE__'}> inside the C<eval> block:
+
+ eval {
+     local $SIG{'__DIE__'};           # Suppress any existing __DIE__ handler
+     ...
+     die({'found' => 1}) if $found;   # Leave the eval block
+     ...
+ };
+ if ($@) {
+     die unless (ref($@) && $@->{'found'});   # Propagate any 'real' error
+     # Handle 'found' case
+     ...
+ }
+ # Handle 'not found' case
+
+Similarly, if calling code from other modules that work as above, but without
+localizing C<$SIG{'__DIE__'}>, you can workaround this deficiency with your
+own C<eval> block:
+
+ eval {
+     local $SIG{'__DIE__'};     # Suppress any existing __DIE__ handler
+     Some::Module::func();      # Call function that fails to localize
+ };
+ if ($@) {
+     # Handle caught exception
+ }
+
+In addition, you should file a bug report against the offending module along
+with a patch that adds the missing C<local $SIG{'__DIE__'};> statement.
+
 =head1 BUGS AND LIMITATIONS
 
 You cannot overload an object to a scalar context (i.e., can't C<:SCALARIFY>).
@@ -4319,7 +4399,7 @@ For Perl 5.8.1 through 5.8.4, a Perl bug produces spurious warning messages
 when threads are destroyed.  These messages are innocuous, and can be
 suppressed by adding the following to your application code:
 
- $SIG{__WARN__} = sub {
+ $SIG{'__WARN__'} = sub {
          if ($_[0] !~ /^Attempt to free unreferenced scalar/) {
              print(STDERR @_);
          }
@@ -4357,9 +4437,9 @@ L<weaken()|Scalar::Util/"weaken REF"> function which is needed by
 Object::InsideOut.  You'll need to upgrade your version of Scalar::Util to one
 that supports its C<XS> code.
 
-L<Test::More> v0.50 or later (for installation)
+L<Want> v0.12 or later
 
-Optionally, L<Want> for L</":lvalue Accessors">.
+L<Test::More> v0.50 or later (for installation)
 
 =head1 SEE ALSO
 
@@ -4367,7 +4447,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.49/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.51/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

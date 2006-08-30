@@ -5,7 +5,7 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.49;
+our $VERSION = 1.51;
 
 
 ### Module Initialization ###
@@ -185,7 +185,7 @@ sub process_args
             }
 
             my (@errs);
-            local $SIG{__WARN__} = sub { push(@errs, @_); };
+            local $SIG{'__WARN__'} = sub { push(@errs, @_); };
             eval {
                 local $SIG{'__DIE__'};
                 $found{$key} = $pre->($class, $key, $spec_item, $self, $found{$key})
@@ -230,7 +230,7 @@ sub process_args
                 }
 
                 my ($ok, @errs);
-                local $SIG{__WARN__} = sub { push(@errs, @_); };
+                local $SIG{'__WARN__'} = sub { push(@errs, @_); };
                 eval {
                     local $SIG{'__DIE__'};
                     $ok = $type->($found{$key})

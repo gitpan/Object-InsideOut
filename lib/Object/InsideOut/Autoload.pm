@@ -70,7 +70,7 @@ sub AUTOLOAD
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
-                local $SIG{__DIE__} = 'OIO::trap';
+                local $SIG{'__DIE__'} = 'OIO::trap';
                 if (my ($code, $ctype) = $automethod->(@_)) {
                     if (ref($code) ne 'CODE') {
                         # Not a code ref
@@ -163,5 +163,5 @@ sub AUTOLOAD
 
 
 # Ensure correct versioning
-my $VERSION = 1.49;
-($Object::InsideOut::VERSION == 1.49) or die("Version mismatch\n");
+my $VERSION = 1.51;
+($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");

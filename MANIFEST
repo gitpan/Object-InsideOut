@@ -51,6 +51,8 @@ t/25-access.t
 t/26-preinit.t
 t/27-exception.t
 t/28-lvalue.t
+t/29-non_lvalue.t
+t/30-all.t
 t/A.pm
 t/B.pm
 t/Parent.pm

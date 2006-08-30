@@ -1,13 +1,6 @@
 use strict;
 use warnings;
 
-BEGIN {
-    if ($] < 5.008) {
-        print("1..0 # Skip :lvalue requires Perl 5.8.0 or later\n");
-        exit(0);
-    }
-}
-
 use Test::More 'no_plan';
 use Scalar::Util;
 
@@ -24,23 +17,23 @@ package Foo; {
     use Object::InsideOut;
 
     # Separate get and set accessors
-    my @foo1 :Field('Std' => 'foo1',                          'LValue' => 1, 'Return' => 'NEW');
-    my @foo2 :Field('Get' => 'get_foo2', 'set' => 'set_foo2', 'lv'     => 1, 'Return' => 'OLD');
-    my @foo3 :Field('STANDARD' => 'foo3',                     'LVALUE' => 1, 'Return' => 'SELF');
+    my @foo1 :Field('Std' => 'foo1',                          'Return' => 'NEW');
+    my @foo2 :Field('Get' => 'get_foo2', 'set' => 'set_foo2', 'Return' => 'OLD');
+    my @foo3 :Field('STANDARD' => 'foo3',                     'Return' => 'SELF');
 
     # Combined get+set accessor
-    my @bar1 :Field('LValue' => 'bar1',                'Return' => 'new');
-    my @bar2 :Field('Acc'    => 'bar2', 'lvalue' => 1, 'Return' => 'Prev');
-    my @bar3 :Field('get_set' => 'bar3', 'lv'    => 1, 'Return' => 'obj');
+    my @bar1 :Field('Combo'  => 'bar1',  'Return' => 'new');
+    my @bar2 :Field('Acc'    => 'bar2',  'Return' => 'Prev');
+    my @bar3 :Field('get_set' => 'bar3', 'Return' => 'obj');
 
     # Type checking
-    my @baz1 :Field('lv' => 'baz1', 'Return' => 'new', 'Type' => 'Baz');
-    my @baz2 :Field('lv' => 'baz2', 'Return' => 'old', 'Type' => 'Baz');
-    my @baz3 :Field('lv' => 'baz3', 'Return' => 'obj', 'Type' => 'Baz');
+    my @baz1 :Field('Acc' => 'baz1', 'Return' => 'new', 'Type' => 'Baz');
+    my @baz2 :Field('Acc' => 'baz2', 'Return' => 'old', 'Type' => 'Baz');
+    my @baz3 :Field('Acc' => 'baz3', 'Return' => 'obj', 'Type' => 'Baz');
 
-    my @num1 :Field('lv' => 'num1', 'Return' => 'new', 'Type' => 'num');
-    my @num2 :Field('lv' => 'num2', 'Return' => 'old', 'Type' => 'num');
-    my @num3 :Field('lv' => 'num3', 'Return' => 'obj', 'Type' => 'num');
+    my @num1 :Field('Acc' => 'num1', 'Return' => 'new', 'Type' => 'num');
+    my @num2 :Field('Acc' => 'num2', 'Return' => 'old', 'Type' => 'num');
+    my @num3 :Field('Acc' => 'num3', 'Return' => 'obj', 'Type' => 'num');
 
     sub me
     {
@@ -93,21 +86,11 @@ MAIN:
     my $val2 = $obj->get_foo1();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->set_foo1() = $b2;
-    is($obj->get_foo1(), $b2            => 'lvalue assign');
-
-    $obj->set_foo1('foo') = 'Bert';
-    is($obj->get_foo1(), 'Bert'         => 'lvalue assign (arg ignored)');
-
-    $obj->set_foo1() =~ s/er/re/;
-    is($obj->get_foo1(), 'Bret'         => 'lvalue re');
-
-    change_it($obj->set_foo1(), 'Fred');
-    is($obj->get_foo1(), 'Fred'         => 'lvalue');
-    check_it($obj->set_foo1(), 'Fred');
+    eval { $obj->set_foo1() = $b2; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
     change_it($obj->set_foo1('Bert'), 'Mike');
-    is($obj->get_foo1(), 'Mike'         => 'lvalue + arg new');
+    is($obj->get_foo1(), 'Bert'         => 'lvalue does not work');
     check_it($obj->set_foo1('Ralph'), 'Ralph');
 
     $obj->set_foo1($b1);
@@ -138,21 +121,14 @@ MAIN:
     $val2 = $obj->get_foo2();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->set_foo2() = $b2;
-    is($obj->get_foo2(), $b2            => 'lvalue assign');
+    eval { $obj->set_foo2() = $b2; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
-    $obj->set_foo2('foo') = 'Bert';
-    is($obj->get_foo2(), 'Bert'         => 'lvalue assign (arg ignored)');
-
-    $obj->set_foo2() =~ s/er/re/;
-    is($obj->get_foo2(), 'Bret'         => 'lvalue re');
-
-    change_it($obj->set_foo2(), 'Fred');
-    is($obj->get_foo2(), 'Fred'         => 'lvalue');
-    check_it($obj->set_foo2(), 'Fred');
+    eval { $obj->set_foo2() =~ s/er/re/; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
     change_it($obj->set_foo2('Bert'), 'Mike');
-    is($obj->get_foo2(), 'Bert'         => 'lvalue + arg old');
+    is($obj->get_foo2(), 'Bert'         => 'lvalue does not work');
     check_it($obj->set_foo2('Ralph'), 'Bert');
 
     $obj->set_foo2($b1);
@@ -162,10 +138,12 @@ MAIN:
     $obj->set_foo2('bork');
     $val = $obj->set_foo2('bar')->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->get_foo2(), 'bar'          => 'chain set');
 
     $obj->set_foo2($b1);
     $val = $obj->set_foo2($b2)->me();
     is($val, 'Baz(1)'                   => 'chain old object');
+    is($obj->get_foo2(), $b2            => 'chain set');
 
 
     # set - return self
@@ -184,36 +162,29 @@ MAIN:
     $val2 = $obj->get_foo3();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->set_foo3() = $b2;
-    is($obj->get_foo3(), $b2            => 'lvalue assign');
-
-    $obj->set_foo3('foo') = 'Bert';
-    is($obj->get_foo3(), 'Bert'         => 'lvalue assign (arg ignored)');
-
-    $obj->set_foo3() =~ s/er/re/;
-    is($obj->get_foo3(), 'Bret'         => 'lvalue re');
-
-    change_it($obj->set_foo3(), 'Fred');
-    is($obj->get_foo3(), 'Fred'         => 'lvalue');
-    check_it($obj->set_foo3(), 'Fred');
+    eval { $obj->set_foo3() = $b2; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
     my $obj_old = $obj;
     change_it($obj->set_foo3('Bert'), 'Mike');
-    is($obj, 'Mike'                     => 'lvalue + arg self');
-    $obj = $obj_old;
+    is($obj, $obj_old                   => 'lvalue does not work');
     is($obj->get_foo3(), 'Bert'         => 'Change did set');
     check_it($obj->set_foo3('Ralph'), $obj);
     is($obj->get_foo3(), 'Ralph'        => 'Check did set');
 
     $obj->set_foo3($b1);
+    is($obj->get_foo3()->me(), 'Baz(1)' => 'chain get');
+
     eval { $val = $obj->set_foo3()->me(); };
     like($@, qr/Missing arg/            => 'chain set needs arg');
 
     $val = $obj->set_foo3('bork')->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->get_foo3(), 'bork'         => 'chain set');
 
     $val = $obj->set_foo3($b2)->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->get_foo3(), $b2            => 'chain set');
 
 
     # get_set - return new
@@ -229,32 +200,33 @@ MAIN:
     $val2 = $obj->bar1();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->bar1() = $b2;
-    is($obj->bar1(), $b2                => 'lvalue assign');
+    eval { $obj->bar1() = $b2; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
-    $obj->bar1('foo') = 'Bert';
-    is($obj->bar1(), 'Bert'             => 'lvalue assign (arg ignored)');
-
-    $obj->bar1() =~ s/er/re/;
-    is($obj->bar1(), 'Bret'             => 'lvalue re');
+    eval { $obj->bar1() =~ s/er/re/; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
     change_it($obj->bar1(), 'Fred');
-    is($obj->bar1(), 'Fred'             => 'lvalue');
-    check_it($obj->bar1(), 'Fred');
+    is($obj->bar1(), $b1                => 'lvalue does not work');
+    check_it($obj->bar1(), $b1);
 
     change_it($obj->bar1('Bert'), 'Mike');
-    is($obj->bar1(), 'Mike'             => 'lvalue + arg new');
+    is($obj->bar1(), 'Bert'             => 'lvalue does not work');
     check_it($obj->bar1('Ralph'), 'Ralph');
 
     $obj->bar1($b1);
+    is($obj->bar1(), $b1                => 'set');
+
     $val = $obj->bar1()->me();
     is($val, 'Baz(1)'                   => 'chain get');
 
     $val = $obj->bar1('bork')->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->bar1(), 'bork'             => 'chain set');
 
     $val = $obj->bar1($b2)->me();
     is($val, 'Baz(2)'                   => 'chain new object');
+    is($obj->bar1(), $b2                => 'chain set');
 
 
     # get_set - return old
@@ -271,34 +243,30 @@ MAIN:
     $val2 = $obj->bar2();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->bar2() = $b2;
-    is($obj->bar2(), $b2                => 'lvalue assign');
-
-    $obj->bar2('foo') = 'Bert';
-    is($obj->bar2(), 'Bert'             => 'lvalue assign (arg ignored)');
-
-    $obj->bar2() =~ s/er/re/;
-    is($obj->bar2(), 'Bret'             => 'lvalue re');
+    eval { $obj->bar2() = $b2; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
     change_it($obj->bar2(), 'Fred');
-    is($obj->bar2(), 'Fred'             => 'lvalue');
-    check_it($obj->bar2(), 'Fred');
+    is($obj->bar2(), $b1                => 'lvalue does not work');
+    check_it($obj->bar2(), $b1);
 
     change_it($obj->bar2('Bert'), 'Mike');
-    is($obj->bar2(), 'Bert'             => 'lvalue + arg old');
-    check_it($obj->bar2('Ralph'), 'Bert');
+    is($obj->bar2(), 'Bert'             => 'lvalue probably does not work');
+    check_it($obj->bar2($b1), 'Bert');
+    is($obj->bar2(), $b1                => 'set');
 
-    $obj->bar2($b1);
     $val = $obj->bar2()->me();
     is($val, 'Baz(1)'                   => 'chain get');
 
     $obj->bar2('bork');
     $val = $obj->bar2('bar')->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->bar2(), 'bar'              => 'chain set');
 
     $obj->bar2($b1);
     $val = $obj->bar2($b2)->me();
     is($val, 'Baz(1)'                   => 'chain old object');
+    is($obj->bar2(), $b2                => 'chain set');
 
 
     # get_set - return self
@@ -314,36 +282,29 @@ MAIN:
     $val2 = $obj->bar3();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->bar3() = $b2;
-    is($obj->bar3(), $b2                => 'lvalue assign');
-
-    $obj->bar3('foo') = 'Bert';
-    is($obj->bar3(), 'Bert'             => 'lvalue assign (arg ignored)');
-
-    $obj->bar3() =~ s/er/re/;
-    is($obj->bar3(), 'Bret'             => 'lvalue re');
-
     change_it($obj->bar3(), 'Fred');
-    is($obj->bar3(), 'Fred'              => 'lvalue');
-    check_it($obj->bar3(), 'Fred');
+    is($obj->bar3(), $b1                => 'lvalue does not work');
+    check_it($obj->bar3(), $b1);
 
-    $obj_old = $obj;
     change_it($obj->bar3('Bert'), 'Mike');
-    is($obj, 'Mike'                     => 'lvalue + arg self');
-    $obj = $obj_old;
+    is(ref($obj), 'Foo'                 => 'lvalue does not work');
     is($obj->bar3(), 'Bert'             => 'Change did set');
     check_it($obj->bar3('Ralph'), $obj);
     is($obj->bar3(), 'Ralph'            => 'Check did set');
 
-    $obj->bar1($b1);
-    $val = $obj->bar1()->me();
+    $obj->bar3($b1);
+    is($obj->bar3(), $b1                => 'set');
+
+    $val = $obj->bar3()->me();
     is($val, 'Baz(1)'                   => 'chain get');
 
     $val = $obj->bar3('bork')->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->bar3(), 'bork'             => 'chain set');
 
     $val = $obj->bar3($b2)->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->bar3(), $b2                => 'chain set');
 
 
     # get_set - return new - type class
@@ -362,25 +323,23 @@ MAIN:
     $val2 = $obj->baz1();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->baz1() = $b2;
-    is($obj->baz1(), $b2                => 'lvalue assign');
+    eval { $obj->baz1() = $b2; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
-    eval { $obj->baz1() = 'val'; };
-    like($@, qr/must be of type 'Baz'/  => 'lvalue assign - bad');
-
-    $obj->baz1($obj) = $b2;
-    is($obj->baz1(), $b2                => 'lvalue assign (arg ignored)');
+    eval { $obj->baz1($obj) = $b2; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
+    is($obj->baz1(), $b1                => 'not changed');
 
     eval { $obj->baz1() =~ s/Baz/Boing/; };     # Evil
-    ok(! Scalar::Util::blessed($obj->baz1()) => 'lvalue re');
-    like($obj->baz1(), qr/^Boing=SCALAR\(/   => 'lvalue re');
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
+    is($obj->baz1(), $b1                => 'not changed');
 
     change_it($obj->baz1(), 'Fred');
-    is($obj->baz1(), 'Fred'             => 'lvalue - no type check');
-    check_it($obj->baz1(), 'Fred');
+    is($obj->baz1(), $b1                => 'lvalue does not work');
+    check_it($obj->baz1(), $b1);
 
     change_it($obj->baz1($b1), 'Mike');
-    is($obj->baz1(), 'Mike'             => 'lvalue + arg new - no type check');
+    is($obj->baz1(), $b1                => 'lvalue does not work');
     check_it($obj->baz1($b2), $b2);
 
     $val = $obj->baz1()->me();
@@ -388,6 +347,7 @@ MAIN:
 
     $val = $obj->baz1($b1)->me();
     is($val, 'Baz(1)'                   => 'chain new object');
+    is($obj->baz1, $b1                  => 'chain set');
 
 
     # get_set - return old - type class
@@ -403,25 +363,21 @@ MAIN:
     $val2 = $obj->baz2();
     is($val2, $b1                       => 'rvalue get');
 
-    $obj->baz2() = $b2;
-    is($obj->baz2(), $b2                => 'lvalue assign');
-
-    $obj->baz2($obj) = $b2;
-    is($obj->baz2(), $b2                => 'lvalue assign (arg ignored)');
-
     change_it($obj->baz2(), 'Fred');
-    is($obj->baz2(), 'Fred'             => 'lvalue - no type check');
-    check_it($obj->baz2(), 'Fred');
+    is($obj->baz2(), $b1                => 'lvalue does not work');
+    check_it($obj->baz2(), $b1);
 
-    change_it($obj->baz2($b1), 'Mike');
-    is($obj->baz2(), $b1                => 'lvalue + arg old');
-    check_it($obj->baz2($b2), $b1);
+    change_it($obj->baz2($b2), 'Mike');
+    is($obj->baz2(), $b2                => 'lvalue does not work');
+    check_it($obj->baz2($b1), $b2);
+    is($obj->baz2(), $b1                => 'set');
 
     $val = $obj->baz2()->me();
-    is($val, 'Baz(2)'                   => 'chain get');
+    is($val, 'Baz(1)'                   => 'chain get');
 
-    $val = $obj->baz2($b1)->me();
-    is($val, 'Baz(2)'                   => 'chain old object');
+    $val = $obj->baz2($b2)->me();
+    is($val, 'Baz(1)'                   => 'chain old object');
+    is($obj->baz2(), $b2                => 'chain set');
 
 
     # get_set - return self - type class
@@ -437,21 +393,12 @@ MAIN:
     $val2 = $obj->baz3();
     is($val2, $b2                       => 'rvalue get');
 
-    $obj->baz3() = $b1;
-    is($obj->baz3(), $b1                => 'lvalue assign');
-
-    $obj->baz3($obj) = $b2;
-    is($obj->baz3(), $b2                => 'lvalue assign (arg ignored)');
-
     change_it($obj->baz3(), 'Fred');
-    is($obj->baz3(), 'Fred'             => 'lvalue - no type check');
-    check_it($obj->baz3(), 'Fred');
+    is($obj->baz3(), $b2                => 'lvalue does not work');
+    check_it($obj->baz3(), $b2);
 
-    $obj_old = $obj;
     change_it($obj->baz3($b1), 'Mike');
-    is($obj, 'Mike'                     => 'lvalue + arg self - no type check');
-    $obj = $obj_old;
-    is($obj->baz3(), $b1                => 'Change did set');
+    is($obj->baz3(), $b1                => 'lvalue does not work');
     check_it($obj->baz3($b2), $obj);
     is($obj->baz3(), $b2                => 'Check did set');
 
@@ -460,6 +407,7 @@ MAIN:
 
     $val = $obj->baz3($b1)->me();
     is($val, 'Foo(1)'                   => 'chain self');
+    is($obj->baz3(), $b1                => 'chain set');
 
 
     # get_set - return new - type num
@@ -478,26 +426,16 @@ MAIN:
     $val2 = $obj->num1();
     is($val2, 2                         => 'rvalue get');
 
-    $obj->num1() = 3;
-    is($obj->num1(), 3                  => 'lvalue assign');
-
-    eval { $obj->num1() = 'val'; };
-    like($@, qr/must be numeric/        => 'lvalue assign - bad');
-
-    $obj->num1('bork') = 4;
-    is($obj->num1(), 4                  => 'lvalue assign (arg ignored)');
-
-    $obj->num1(5);
-    eval { $obj->num1() =~ s/5/Boing/; };     # Evil
-    is($obj->num1(), 'Boing'            => 'lvalue re');
+    eval { $obj->num1('bork') = 3; };
+    like($@, qr/non-lvalue subroutine/  => 'not lvalue');
 
     change_it($obj->num1(), 'Fred');
-    is($obj->num1(), 'Fred'             => 'lvalue - no type check');
-    check_it($obj->num1(), 'Fred');
+    is($obj->num1(), 2                  => 'lvalue does not work');
+    check_it($obj->num1(), 2);
 
-    change_it($obj->num1(6), 'Mike');
-    is($obj->num1(), 'Mike'             => 'lvalue + arg new - no type check');
-    check_it($obj->num1(7), 7);
+    change_it($obj->num1(4), 'Mike');
+    is($obj->num1(), 4                  => 'lvalue does not work');
+    check_it($obj->num1(5), 5);
 
     eval { $val = $obj->num1()->me(); };
     like($@, qr/Can't call method/      => 'chain get needs object');
@@ -520,18 +458,8 @@ MAIN:
     $val2 = $obj->num2();
     is($val2, 2                         => 'rvalue get');
 
-    $obj->num2() = 3;
-    is($obj->num2(), 3                  => 'lvalue assign');
-
-    $obj->num2('bork') = 4;
-    is($obj->num2(), 4                  => 'lvalue assign (arg ignored)');
-
-    change_it($obj->num2(), 'Fred');
-    is($obj->num2(), 'Fred'             => 'lvalue - no type check');
-    check_it($obj->num2(), 'Fred');
-
     change_it($obj->num2(5), 'Mike');
-    is($obj->num2(), 5                  => 'lvalue + arg old');
+    is($obj->num2(), 5                  => 'lvalue does not work');
     check_it($obj->num2(6), 5);
 
     $val = $obj->num2(7)->me();
@@ -553,21 +481,8 @@ MAIN:
     $val2 = $obj->num3();
     is($val2, 2                         => 'rvalue get');
 
-    $obj->num3() = 3;
-    is($obj->num3(), 3                  => 'lvalue assign');
-
-    $obj->num3($obj) = 4;
-    is($obj->num3(), 4                  => 'lvalue assign (arg ignored)');
-
-    change_it($obj->num3(), 'Fred');
-    is($obj->num3(), 'Fred'             => 'lvalue - no type check');
-    check_it($obj->num3(), 'Fred');
-
-    $obj_old = $obj;
     change_it($obj->num3(5), 'Mike');
-    is($obj, 'Mike'                     => 'lvalue + arg self - no type check');
-    $obj = $obj_old;
-    is($obj->num3(), 5                  => 'Change did set');
+    is($obj->num3(), 5                  => 'lvalue does not work');
     check_it($obj->num3(6), $obj);
     is($obj->num3(), 6                  => 'Check did set');
 

@@ -31,7 +31,7 @@ sub generate_OVERLOAD :Private
 
         # Eval the code string
         my @errs;
-        local $SIG{__WARN__} = sub { push(@errs, @_); };
+        local $SIG{'__WARN__'} = sub { push(@errs, @_); };
         eval $code;
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
@@ -66,5 +66,5 @@ sub generate_OVERLOAD :Private
 
 
 # Ensure correct versioning
-my $VERSION = 1.49;
-($Object::InsideOut::VERSION == 1.49) or die("Version mismatch\n");
+my $VERSION = 1.51;
+($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");
