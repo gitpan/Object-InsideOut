@@ -1,4 +1,4 @@
-Object-InsideOut version 1.51
+Object-InsideOut version 1.52
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -120,6 +120,10 @@ This module uses the following 'standard' modules:
 This module requires the following module available from CPAN:
 
   Exception::Class (1.22 or later)
+
+Using the :lvalue accessor feature of this module requires the following
+module from CPAN:
+
   Want (0.12 or later)
 
 COPYRIGHT AND LICENCE

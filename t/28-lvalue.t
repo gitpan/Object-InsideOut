@@ -6,6 +6,11 @@ BEGIN {
         print("1..0 # Skip :lvalue requires Perl 5.8.0 or later\n");
         exit(0);
     }
+    eval { require Want; };
+    if ($@ || $Want::VERSION < 0.12) {
+        print("1..0 # Skip Needs Want 0.12 or later\n");
+        exit(0);
+    }
 }
 
 use Test::More 'no_plan';

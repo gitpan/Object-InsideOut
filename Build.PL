@@ -41,6 +41,9 @@ Module::Build->new(
                             'B'                   => 0,
                             'Data::Dumper'        => 0,
                             'Scalar::Util'        => $Scalar::Util::VERSION,
+                        },
+
+    'recommends'     => {
                             'Want'                => 0.12,
                         },
 )->create_build_script();

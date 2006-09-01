@@ -15,6 +15,7 @@ lib/Object/InsideOut/Dynamic.pm
 lib/Object/InsideOut/Autoload.pm
 lib/Object/InsideOut/Exception.pm
 lib/Object/InsideOut/lvalue.pm
+lib/Object/InsideOut/attributes.pm
 t/00-load.t
 t/01-basic.t
 t/01a-basic.t
@@ -53,6 +54,7 @@ t/27-exception.t
 t/28-lvalue.t
 t/29-non_lvalue.t
 t/30-all.t
+t/31-attr.t
 t/A.pm
 t/B.pm
 t/Parent.pm

@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+1.52 Fri Sep  1 15:58:25 EDT 2006
+	- Support class-specified attribute handlers
+	- Made Want module optional
+
 1.51 Wed Aug 30 11:08:30 EDT 2006
 	- Added 'All/Std_All'+'Arg' field declarations keywords
 	- More method chaining support

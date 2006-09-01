@@ -32,6 +32,31 @@ _NO_WEAKEN_
 }
 
 
+# Check for Want module
+eval { require Want; };
+if ($@) {
+    print(<<_WANT_);
+
+Checking prerequisites...
+ * Optional prerequisite Want is not installed
+
+ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
+of the modules indicated above before proceeding with this installation
+
+_WANT_
+} elsif ($Want::VERSION < 0.12) {
+    print(<<_WANT_);
+
+Checking prerequisites...
+ * Want ($Want::VERSION) is installed, but we prefer to have 0.12 or later
+
+ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
+of the modules indicated above before proceeding with this installation
+
+_WANT_
+}
+
+
 # Construct make file
 WriteMakefile(
     'NAME'          => 'Object::InsideOut',
@@ -45,7 +70,6 @@ WriteMakefile(
                          'B'                => 0,
                          'Data::Dumper'     => 0,
                          'Scalar::Util'     => $Scalar::Util::VERSION,
-                         'Want'             => 0.12,
                        },
     ((ExtUtils::MakeMaker->VERSION() lt '6.25') ?
         ('PL_FILES' => { })            : ()),
@@ -69,6 +93,8 @@ vcheck:
 	@if ! grep "Util $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
 	@if ! grep "version $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in POD of InsideOut.pm"; fi
 	@if ! grep "Object-InsideOut-$(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in Anno link in InsideOut.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Chained.pm >/dev/null; then echo "Version error in Chained.pm"; fi

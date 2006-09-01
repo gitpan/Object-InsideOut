@@ -14,6 +14,20 @@ sub create_lvalue_accessor
             'Info'    => q/'lvalue' accessors require Perl 5.8.0 or later/);
     }
 
+    eval { require Want; };
+    if ($@) {
+        my ($package, $set) = @_;
+        OIO::Code->die(
+            'message' => "Can't create 'lvalue' accessor method '$set' for package '$package'",
+            'Info'    => q/Failure loading 'Want' module/,
+            'Error'   => $@);
+    } elsif ($Want::VERSION < 0.12) {
+        my ($package, $set) = @_;
+        OIO::Code->die(
+            'message' => "Can't create 'lvalue' accessor method '$set' for package '$package'",
+            'Info'    => q/Requires 'Want' v0.12 or later/);
+    }
+
     *Object::InsideOut::create_lvalue_accessor = sub
     {
         my $caller = caller();
@@ -205,5 +219,5 @@ _REF_
 
 
 # Ensure correct versioning
-my $VERSION = 1.51;
-($Object::InsideOut::VERSION == 1.51) or die("Version mismatch\n");
+my $VERSION = 1.52;
+($Object::InsideOut::VERSION == 1.52) or die("Version mismatch\n");
