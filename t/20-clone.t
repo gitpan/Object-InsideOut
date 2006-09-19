@@ -5,7 +5,8 @@ use Test::More 'no_plan';
 
 package Foo; {
     use Object::InsideOut;
-    my @foo :Field('Acc' => 'foo', 'Deep' => 1);
+    my @foo :Field('Acc' => 'foo')
+            :Deep;
 }
 
 package Bar; {

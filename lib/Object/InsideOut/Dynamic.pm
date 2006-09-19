@@ -16,8 +16,7 @@ sub create_field
             shift;
         }
 
-        my ($class, $field, $attr) = @_;
-
+        my ($class, $field, @attrs) = @_;
         # Verify valid class
         if (! $class->$u_isa(__PACKAGE__)) {
             OIO::Args->die(
@@ -32,27 +31,32 @@ sub create_field
                 'Arg'     => $field);
         }
 
-        # Tidy up attribute
-        if ($attr) {
-            $attr =~ s/^\s*:\s*Field\s*//i;         # Remove :Field
-            $attr =~ s/^[(]\s*[{]?\s*//i;           # Remove ({
-            $attr =~ s/\s*[}]?\s*[)]\s*[;]?\s*$//;  # Remove })
-            $attr =~ s/[\r\n]/ /g;                  # Handle line-wrapping
-            if ($attr) {
-                $attr = "($attr)";                  # Add () if not empty string
-            }
-        }
-        if (! $attr) {
+        # Check for attributes
+        if (! @attrs) {
             OIO::Args->die(
-                'message' => 'Missing accessor generation parameters',
-                'Usage'   => 'See POD for correct usage');
+                'message' => 'Missing field attributes',
+                'Usage' => q/Object::InsideOut->create_field($class, '%|@'.$fld_name, @attributes);/);
+        }
+
+        # Convert attributes to single string
+        s/^\s*(.*?)\s*$/$1/ foreach @attrs;
+        my $attr = join(',', @attrs);
+        $attr =~ s/[\r\n]/ /sg;
+        $attr =~ s/,\s*,/,/g;
+        $attr =~ s/\)\s*,\s*:/) :/g;
+        if ($attr !~ /^\s*:/) {
+            $attr = ":Field($attr)";
         }
 
         # Create the declaration
         my @errs;
         local $SIG{'__WARN__'} = sub { push(@errs, @_); };
 
-        my $code = "package $class; my $field :Field$attr;";
+        my $code = "package $class; my $field $attr;";
+
+        # Inspect generated code
+        print($code, "\n") if $Object::InsideOut::DEBUG;
+
         eval $code;
         if (my $e = Exception::Class::Base->caught()) {
             die($e);
@@ -79,5 +83,5 @@ sub create_field
 
 
 # Ensure correct versioning
-my $VERSION = 1.52;
-($Object::InsideOut::VERSION == 1.52) or die("Version mismatch\n");
+my $VERSION = 2.01;
+($Object::InsideOut::VERSION == 2.01) or die("Version mismatch\n");

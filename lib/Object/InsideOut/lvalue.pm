@@ -42,28 +42,32 @@ sub create_lvalue_accessor
         my $fld_str = (ref($field_ref) eq 'HASH') ? "\$\$field\{\${\$_[0]}}" : "\$\$field\[\${\$_[0]}]";
 
         # Begin with subroutine declaration in the appropriate package
-        my $pcode = preamble_code($package, $set, $private, $restricted);
-        my $code .= <<"_START_";
-*${package}::$set = sub :lvalue {
-$pcode    my \$rvalue = Want::want('RVALUE');
-    my \$lv_assign = Want::want('LVALUE', 'ASSIGN');
-    my \$want_obj = Want::want('OBJECT');
-_START_
+        my $code = "*${package}::$set = sub :lvalue {\n"
+                 . preamble_code($package, $set, $private, $restricted)
+                 . "    my \$rv = !Want::want_lvalue(0);\n";
 
         # Add GET portion for combination accessor
+        my $obj_str = q/(Want::wantref() eq 'OBJECT')/;
         if (defined($get) && $get eq $set) {
-            $code .= "    Want::rreturn($fld_str) if (\$rvalue && \@_ == 1);\n";
+            $code .= "    Want::rreturn($fld_str) if (\$rv && (\@_ == 1));\n";
         }
 
         # Else check that set was called with at least one arg
         else {
             $code .= <<"_CHECK_ARGS_";
-    if ((\@_ < 2) && (\$rvalue || (!\$lv_assign && \$want_obj))) {
+    my \$wobj = $obj_str;
+    if ((\@_ < 2) && (\$rv || \$wobj)) {
         OIO::Args->die(
             'message'  => q/Missing arg(s) to '$package->$set'/,
             'location' => [ caller() ]);
     }
 _CHECK_ARGS_
+            $obj_str = '$wobj';
+        }
+
+        # Add field locking code if sharing
+        if (is_sharing($package)) {
+            $code .= "    lock(\$field);\n"
         }
 
         # Return value for 'OLD'
@@ -71,24 +75,23 @@ _CHECK_ARGS_
             $code .= "    my \$ret;\n";
         }
 
-        # Start 'set' code
+        # Get args if assignment
         $code .= <<"_SET_";
-    if (\$lv_assign || \@_ > 1) {
-        my \@args;
-        if (\$lv_assign) {
-            (\@args) = Want::want('ASSIGN');
-        } else {
-            \@args = \@_;
-            shift(\@args);
-        }
+    my \$assign;
+    if (my \@args = Want::wantassign(1)) {
+        \@_ = (\$_[0], \@args);
+        \$assign = 1;
+    }
+    if (\@_ > 1) {
 _SET_
 
         # Add data type checking
+        my $arg_str = '$_[1]';
         if (ref($type)) {
             $code .= <<"_CODE_";
         my (\$arg, \$ok, \@errs);
         local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
-        eval { \$ok = \$type->(\$arg = \$args[0]) };
+        eval { \$ok = \$type->($arg_str) };
         if (\$@ || \@errs) {
             my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
             OIO::Code->die(
@@ -97,7 +100,7 @@ _SET_
         }
         if (! \$ok) {
             OIO::Args->die(
-                'message'  => "Argument to '$package->$set' failed type check: \$arg",
+                'message'  => "Argument to '$package->$set' failed type check: $arg_str",
                 'location' => [ caller() ]);
         }
 _CODE_
@@ -106,26 +109,21 @@ _CODE_
             # For 'weak' fields, the data must be a ref
             if ($weak) {
                 $code .= <<"_WEAK_";
-        my \$arg;
-        if (! ref(\$arg = \$args[0])) {
+        if (! ref($arg_str)) {
             OIO::Args->die(
-                'message'  => "Bad argument: \$arg",
+                'message'  => "Bad argument: $arg_str",
                 'Usage'    => q/Argument to '$package->$set' must be a reference/,
                 'location' => [ caller() ]);
         }
 _WEAK_
-            } else {
-                # No data type check required
-                $code .= "        my \$arg = \$args[0];\n";
             }
 
         } elsif ($type eq 'NUMERIC') {
             # One numeric argument
             $code .= <<"_NUMERIC_";
-        my \$arg;
-        if (! Scalar::Util::looks_like_number(\$arg = \$args[0])) {
+        if (! Scalar::Util::looks_like_number($arg_str)) {
             OIO::Args->die(
-                'message'  => "Bad argument: \$arg",
+                'message'  => "Bad argument: $arg_str",
                 'Usage'    => q/Argument to '$package->$set' must be numeric/,
                 'location' => [ caller() ]);
         }
@@ -134,25 +132,36 @@ _NUMERIC_
         } elsif ($type eq 'ARRAY') {
             # List/array - 1+ args or array ref
             $code .= <<'_ARRAY_';
-        my $arg = (@args == 1 && ref($args[0]) eq 'ARRAY') ? $args[0] : \@args;
+        my $arg;
+        if (@_ == 2 && ref($_[1]) eq 'ARRAY') {
+            $arg = $_[1];
+        } else {
+            my @args = @_;
+            shift(@args);
+            $arg = \@args;
+        }
 _ARRAY_
+            $arg_str = '$arg';
 
         } elsif ($type eq 'HASH') {
             # Hash - pairs of args or hash ref
             $code .= <<"_HASH_";
         my \$arg;
-        if (\@args == 1 && ref(\$args[0]) eq 'HASH') {
-            \$arg = \$args[0];
-        } elsif (\@args % 2 == 1) {
+        if (\@_ == 2 && ref(\$_[1]) eq 'HASH') {
+            \$arg = \$_[1];
+        } elsif (\@_ % 2 == 0) {
             OIO::Args->die(
                 'message'  => q/Odd number of arguments: Can't create hash ref/,
                 'Usage'    => q/'$package->$set' requires a hash ref or an even number of args (to make a hash ref)/,
                 'location' => [ caller() ]);
         } else {
+            my \@args = \@_;
+            shift(\@args);
             my \%args = \@args;
             \$arg = \\\%args;
         }
 _HASH_
+            $arg_str = '$arg';
 
         } else {
             # Support explicit specification of array refs and hash refs
@@ -164,8 +173,7 @@ _HASH_
 
             # One object or ref arg - exact spelling and case required
             $code .= <<"_REF_";
-        my \$arg;
-        if (! Object::InsideOut::Util::is_it(\$arg = \$args[0], '$type')) {
+        if (! Object::InsideOut::Util::is_it($arg_str, '$type')) {
             OIO::Args->die(
                 'message'  => q/Bad argument: Wrong type/,
                 'Usage'    => q/Argument to '$package->$set' must be of type '$type'/,
@@ -181,29 +189,29 @@ _REF_
 
         # Add actual 'set' code
         $code .= (is_sharing($package))
-              ? "        $fld_str = Object::InsideOut::Util::make_shared(\$arg);\n"
-              : "        $fld_str = \$arg;\n";
+              ? "        $fld_str = Object::InsideOut::Util::make_shared($arg_str);\n"
+              : "        $fld_str = $arg_str;\n";
         if ($weak) {
             $code .= "        Scalar::Util::weaken($fld_str);\n";
         }
 
         # Add code for return value
-        $code     .= "        Want::lnoreturn if \$lv_assign;\n";
+        $code     .= "        Want::lnoreturn if \$assign;\n";
         if ($return eq 'SELF') {
-            $code .= "        Want::rreturn(\$_[0]) if \$rvalue;\n";
+            $code .= "        Want::rreturn(\$_[0]) if \$rv;\n";
         } elsif ($return eq 'OLD') {
-            $code .= "        Want::rreturn(\$ret) if \$rvalue;\n";
+            $code .= "        Want::rreturn(\$ret) if \$rv;\n";
         } else {
-            $code .= "        Want::rreturn($fld_str) if \$rvalue;\n";
+            $code .= "        Want::rreturn($fld_str) if \$rv;\n";
         }
         $code .= "    }\n";
 
         if ($return eq 'SELF') {
             $code .= "    (\@_ < 2) ? $fld_str : \$_[0];\n";
         } elsif ($return eq 'OLD') {
-            $code .= "    (\@_ < 2) ? $fld_str : ((Want::want('OBJECT') && !Scalar::Util::blessed(\$ret)) ? \$_[0] : \$ret);\n";
+            $code .= "    (\@_ < 2) ? $fld_str : (($obj_str && !Scalar::Util::blessed(\$ret)) ? \$_[0] : \$ret);\n";
         } else {
-            $code .= "    ((\@_ > 1) && Want::want('OBJECT') && !Scalar::Util::blessed($fld_str)) ? \$_[0] : $fld_str;\n";
+            $code .= "    ((\@_ > 1) && $obj_str && !Scalar::Util::blessed($fld_str)) ? \$_[0] : $fld_str;\n";
         }
         $code .= "};\n";
 
@@ -219,5 +227,5 @@ _REF_
 
 
 # Ensure correct versioning
-my $VERSION = 1.52;
-($Object::InsideOut::VERSION == 1.52) or die("Version mismatch\n");
+my $VERSION = 2.01;
+($Object::InsideOut::VERSION == 2.01) or die("Version mismatch\n");

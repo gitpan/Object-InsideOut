@@ -11,8 +11,6 @@ use Test::More 'no_plan';
 package Foo; {
     use Object::InsideOut;
 
-    my @foo :F(foo);    # :Field('all'=>'foo')
-
     sub _add_defaults :MOD_SCALAR_ATTRS
     {
         my ($pkg, $scalar, @attrs) = @_;
@@ -45,6 +43,8 @@ package Foo; {
 
         return (@unused_attrs);
     }
+
+    my @foo :F(foo);    # :Field('all'=>'foo')
 }
 
 package Bork; {

@@ -27,7 +27,8 @@ package MyDer; {
 
     my %public  :Field;
     my %private :Field;
-    my %misc    :Field('Name' => 'misc');
+    my %misc    :Field
+                :Name( 'misc' );
     my %hidden  :Field;
 
     my %init_args :InitArgs = (

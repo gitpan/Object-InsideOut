@@ -5,7 +5,8 @@ use Test::More 'no_plan';
 
 package Foo; {
     use Object::InsideOut;
-    my @foo :Field('Acc' => 'foo', 'Weak' => 1);
+    my @foo :Field('Acc' => 'foo')
+            :Weak;
 
     my %init_args :InitArgs = (
         'foo' => {

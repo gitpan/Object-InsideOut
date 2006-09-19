@@ -3,9 +3,10 @@ use warnings;
 
 use Test::More 'no_plan';
 
+#$Object::InsideOut::DEBUG = 1;
+
 package My::Class; {
     use Object::InsideOut;
-
 
     sub auto : Automethod
     {
@@ -19,11 +20,20 @@ package My::Class; {
             return;
         }
         Object::InsideOut->create_field($class, '@'.$fld_name,
-                                        "'Name'=>'$fld_name',
-                                         'Std' =>'$fld_name'");
+                                        "'Name'=>'$fld_name',",
+                                        "'Std' =>'$fld_name'");
 
         no strict 'refs';
         return *{$class.'::'.$method}{'CODE'};
+    }
+
+    sub make
+    {
+        my ($self, $name, $type) = @_;
+        Object::InsideOut->create_field(__PACKAGE__, '@'.$name,
+                                        ":Field('Std' =>'$name',",
+                                        "       'Type' => '$type')",
+                                        ":Name($name)");
     }
 }
 
@@ -47,6 +57,12 @@ MAIN:
     can_ok('My::Sub', qw(get_data set_data));
     $obj->munge('hello');
     is($obj->get_data(), 5              => 'Not munged');
+
+    $obj->make('foo', 'numeric');
+    can_ok($obj, qw(get_foo set_foo));
+    $obj->set_foo(99);
+    is($obj->get_foo(), 99              => 'Dynamic foo');
+
     #print(STDERR $obj->dump(1), "\n");
 }
 

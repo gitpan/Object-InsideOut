@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 1.52;
+our $VERSION = 2.01;
 
-use Object::InsideOut::Exception 1.52;
-use Object::InsideOut::Util 1.52 ();
+use Object::InsideOut::Exception 2.01;
+use Object::InsideOut::Util 2.01 ();
 
 use B;
 use Scalar::Util 1.10;
@@ -41,7 +41,7 @@ my $THREAD_ID = 0;
 my %IS_SHARING;
 
 # 'Want' module loaded?
-my $HAVE_WANT;
+our $USE_WANT;
 
 # Workaround for Perl's "in cleanup" bug
 my $TERMINATING = 0;
@@ -314,6 +314,21 @@ sub MODIFY_HASH_ATTRIBUTES
             $DO_INIT = 1;   # Flag that initialization is required
         }
 
+        # Weak field
+        elsif ($attr =~ /^Weak$/i) {
+            $WEAK{$hash} = 1;
+        }
+
+        # Deep cloning field
+        elsif ($attr =~ /^Deep$/i) {
+            $DEEP_CLONE{$hash} = 1;
+        }
+
+        # Field name for dump
+        elsif ($attr =~ /^Name\s*[(]\s*'?([^)'\s]+)'?\s*[)]/i) {
+            $DUMP_FIELDS{$pkg}{$1} = [ $hash, 'Name' ];
+        }
+
         # Declaration for object initializer hash
         elsif ($attr =~ /^InitArgs?$/i) {
             $INIT_ARGS{$pkg} = $hash;
@@ -362,6 +377,23 @@ sub MODIFY_ARRAY_ATTRIBUTES
             my ($decl) = $attr =~ /^Fields?\s*(?:[(]\s*(.*)\s*[)])/i;
             push(@{$NEW_FIELDS{$pkg}}, [ $array, $decl ]);
             $DO_INIT = 1;   # Flag that initialization is required
+        }
+
+        # Weak field
+        elsif ($attr =~ /^Weak$/i) {
+            $WEAK{$array} = 1;
+        }
+
+        # Deep cloning field
+        elsif (($attr =~ /^Deep$/i) ||
+               ($attr =~ /^(?:Copy|Clone)\s*[(]\s*'?Deep'?\s*[)]/i))
+        {
+            $DEEP_CLONE{$array} = 1;
+        }
+
+        # Field name for dump
+        elsif ($attr =~ /^(?:Name|Dump)\s*[(]\s*'?([^)'\s]+)'?\s*[)]/i) {
+            $DUMP_FIELDS{$pkg}{$1} = [ $array, 'Name' ];
         }
 
         # Unhandled
@@ -782,9 +814,9 @@ sub initialize :Private
 sub process_fields :Private
 {
     # See if we have the 'Want' module
-    if (! defined($HAVE_WANT)) {
+    if (! defined($USE_WANT)) {
         eval { require Want; };
-        $HAVE_WANT = (! $@ && ($Want::VERSION >= 0.12)) ? 1 : 0;
+        $USE_WANT = (! $@ && ($Want::VERSION >= 0.12)) ? 1 : 0;
     }
 
     # Process :FIELD declarations
@@ -1565,7 +1597,11 @@ sub create_accessors :Private
                 'Info'      => "'$get' already specified for another field using '$DUMP_FIELDS{$package}{$get}[1]'",
                 'Attribute' => "Field( $decl )");
         }
-        $DUMP_FIELDS{$package}{$get} = [ $field_ref, 'Get' ];
+        if (! exists($DUMP_FIELDS{$package}{$get}) ||
+            ($DUMP_FIELDS{$package}{$get}[1] ne 'Name'))
+        {
+            $DUMP_FIELDS{$package}{$get} = [ $field_ref, 'Get' ];
+        }
 
     } elsif ($set) {
         if (exists($DUMP_FIELDS{$package}{$set}) &&
@@ -1576,7 +1612,11 @@ sub create_accessors :Private
                 'Info'      => "'$set' already specified for another field using '$DUMP_FIELDS{$package}{$set}[1]'",
                 'Attribute' => "Field( $decl )");
         }
-        $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
+        if (! exists($DUMP_FIELDS{$package}{$set}) ||
+            ($DUMP_FIELDS{$package}{$set}[1] ne 'Name'))
+        {
+            $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
+        }
     }
 
     # If 'TYPE', 'RETURN' or 'LVALUE', need 'SET', too
@@ -1680,11 +1720,12 @@ _CHECK_ARGS_
         }
 
         # Add data type checking
+        my $arg_str = '$_[1]';
         if (ref($type)) {
             $code .= <<"_CODE_";
-    my (\$arg, \$ok, \@errs);
+    my (\$ok, \@errs);
     local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
-    eval { \$ok = \$type->(\$arg = \$_[1]) };
+    eval { \$ok = \$type->($arg_str) };
     if (\$@ || \@errs) {
         my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
         OIO::Code->die(
@@ -1693,7 +1734,7 @@ _CHECK_ARGS_
     }
     if (! \$ok) {
         OIO::Args->die(
-            'message'  => "Argument to '$package->$set' failed type check: \$arg",
+            'message'  => "Argument to '$package->$set' failed type check: $arg_str",
             'location' => [ caller() ]);
     }
 _CODE_
@@ -1702,26 +1743,21 @@ _CODE_
             # For 'weak' fields, the data must be a ref
             if ($WEAK{$field_ref}) {
                 $code .= <<"_WEAK_";
-    my \$arg;
-    if (! ref(\$arg = \$_[1])) {
+    if (! ref($arg_str)) {
         OIO::Args->die(
-            'message'  => "Bad argument: \$arg",
+            'message'  => "Bad argument: $arg_str",
             'Usage'    => q/Argument to '$package->$set' must be a reference/,
             'location' => [ caller() ]);
     }
 _WEAK_
-            } else {
-                # No data type check required
-                $code .= "    my \$arg = \$_[1];\n";
             }
 
         } elsif ($type eq 'NUMERIC') {
             # One numeric argument
             $code .= <<"_NUMERIC_";
-    my \$arg;
-    if (! Scalar::Util::looks_like_number(\$arg = \$_[1])) {
+    if (! Scalar::Util::looks_like_number($arg_str)) {
         OIO::Args->die(
-            'message'  => "Bad argument: \$arg",
+            'message'  => "Bad argument: $arg_str",
             'Usage'    => q/Argument to '$package->$set' must be numeric/,
             'location' => [ caller() ]);
     }
@@ -1739,6 +1775,7 @@ _NUMERIC_
         $arg = \@args;
     }
 _ARRAY_
+            $arg_str = '$arg';
 
         } elsif ($type eq 'HASH') {
             # Hash - pairs of args or hash ref
@@ -1758,6 +1795,7 @@ _ARRAY_
         \$arg = \\\%args;
     }
 _HASH_
+            $arg_str = '$arg';
 
         } else {
             # Support explicit specification of array refs and hash refs
@@ -1769,14 +1807,18 @@ _HASH_
 
             # One object or ref arg - exact spelling and case required
             $code .= <<"_REF_";
-    my \$arg;
-    if (! Object::InsideOut::Util::is_it(\$arg = \$_[1], '$type')) {
+    if (! Object::InsideOut::Util::is_it($arg_str, '$type')) {
         OIO::Args->die(
             'message'  => q/Bad argument: Wrong type/,
             'Usage'    => q/Argument to '$package->$set' must be of type '$type'/,
             'location' => [ caller() ]);
     }
 _REF_
+        }
+
+        # Add field locking code if sharing
+        if (is_sharing($package)) {
+            $code .= "    lock(\$field);\n"
         }
 
         # Grab 'OLD' value
@@ -1786,8 +1828,8 @@ _REF_
 
         # Add actual 'set' code
         $code .= (is_sharing($package))
-              ? "    $fld_str = Object::InsideOut::Util::make_shared(\$arg);\n"
-              : "    $fld_str = \$arg;\n";
+              ? "    $fld_str = Object::InsideOut::Util::make_shared($arg_str);\n"
+              : "    $fld_str = $arg_str;\n";
         if ($WEAK{$field_ref}) {
             $code .= "    Scalar::Util::weaken($fld_str);\n";
         }
@@ -1796,15 +1838,14 @@ _REF_
         if ($return eq 'SELF') {
             $code .= "    \$_[0];\n";
         } elsif ($return eq 'OLD') {
-            if ($HAVE_WANT) {
-                $code .= "    (Want::want('OBJECT') && !Scalar::Util::blessed(\$ret)) ? \$_[0] : ";
+            if ($USE_WANT) {
+                $code .= "    ((Want::wantref() eq 'OBJECT') && !Scalar::Util::blessed(\$ret)) ? \$_[0] : ";
             }
             $code .= "\$ret;\n";
-        } else {
-            if ($HAVE_WANT) {
-                $code .= "    (Want::want('OBJECT') && !Scalar::Util::blessed($fld_str)) ? \$_[0] : ";
-            }
-            $code .= "$fld_str;\n";
+        } elsif ($USE_WANT) {
+            $code .= "    ((Want::wantref() eq 'OBJECT') && !Scalar::Util::blessed($fld_str)) ? \$_[0] : $fld_str;\n";
+        } elsif ($WEAK{$field_ref}) {
+            $code .= "    $fld_str;\n";
         }
 
         # Done
@@ -1821,6 +1862,9 @@ _REF_
                     ? "    \$\$field{\${\$_[0]}};\n};\n"
                     : "    \$\$field[\${\$_[0]}];\n};\n");
     }
+
+    # Inspect generated code
+    print($code) if $Object::InsideOut::DEBUG;
 
     # Compile the subroutine(s) in the smallest possible lexical scope
     my @errs;
@@ -1865,11 +1909,6 @@ _PRIVATE_
             'location' => [ caller() ]);
     }
 _RESTRICTED_
-    }
-
-    # Add field locking code if sharing
-    if (is_sharing($package)) {
-        $code .= "    lock(\$field);\n"
     }
 
     return ($code);
@@ -2135,7 +2174,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 1.52
+This document describes Object::InsideOut version 2.01
 
 =head1 SYNOPSIS
 
@@ -2955,12 +2994,12 @@ For any of the automatically generated methods that perform I<set> operations,
 the default for the method's return value is the value being set (i.e., the
 I<new> value).
 
-The C<Return> keyword allows specify the I<set> accessor's return value.  For
-example, you can explicitly specify the default behavior:
+You can specify the I<set> accessor's return value using the C<Return>
+keyword.  For example, to explicitly specify the default behavior use:
 
  my @data :Field('Set' => 'set_data', 'Return' => 'New');
 
-or you can specify that the accessor should return the I<old> (previous) value
+You can specify that the accessor should return the I<old> (previous) value
 (or C<undef> if unset):
 
  my @data :Field('Set' => 'set_data', 'Return' => 'Old');
@@ -3004,6 +3043,12 @@ Note, however, that this special handling does not apply to I<get> accessors,
 nor to I<combination> accessors invoked without an argument (i.e., when used
 as a I<get> accessor).  These must return objects in order for method chaining
 to succeed.
+
+Using the L<Want> module results in a bit more code being executed in I<set>
+accessors.  To suppress the use of the L<Want> module, add the following at
+the start of your application code:
+
+ $Object::InsideOut::USE_WANT = 0;
 
 =item Accessor Type Checking
 
@@ -3083,8 +3128,8 @@ code ref on the input argument should be a boolean value.
 Note that it is an error to use the C<Type> keyword by itself, or in
 combination with only the C<Get> keyword.
 
-Due to limitations in the Perl parser, you cannot use line wrapping with the
-C<:Field> attribute:
+Due to limitations in the Perl parser, the entirety of any one attribute must
+be on a single line:
 
  # This doesn't work
  # my @level :Field('Get'  => 'level',
@@ -3093,6 +3138,11 @@ C<:Field> attribute:
 
  # Must be all on one line
  my @level :Field('Get' =>'level', 'Set' => 'set_level', 'Type' => 'Num');
+
+However, multiple attributes can appear on separate lines:
+
+ my @obj :Field('Acc' =>'obj')
+         :Weak;
 
 =item :lvalue Accessors
 
@@ -3161,6 +3211,37 @@ By definition, because C<:lvalue> accessors return the I<location> of a field,
 they break encapsulation.  As a result, some OO advocates eschew the use of
 C<:lvalue> accessors.
 
+C<:lvalue> accessors are slower than corresponding I<non-lvalue> accessors.
+This is due to the fact that more code is needed to handle all the diverse
+ways in which C<:lvalue> accessors may be used.  (I've done my best to
+optimize the generated code.)  For example, here's the code that is generated
+for a simple combined accessor:
+
+ *Foo::foo = sub {
+     return ($$field[${$_[0]}]) if (@_ == 1);
+     $$field[${$_[0]}] = $_[1];
+ };
+
+And the corresponding code for an C<:lvalue> combined accessor:
+
+ *Foo::foo = sub :lvalue {
+     my $rv = !Want::want_lvalue(0);
+     Want::rreturn($$field[${$_[0]}]) if ($rv && (@_ == 1));
+     my $assign;
+     if (my @args = Want::wantassign(1)) {
+         @_ = ($_[0], @args);
+         $assign = 1;
+     }
+     if (@_ > 1) {
+         $$field[${$_[0]}] = $_[1];
+         Want::lnoreturn if $assign;
+         Want::rreturn($$field[${$_[0]}]) if $rv;
+     }
+     ((@_ > 1) && (Want::wantref() eq 'OBJECT') &&
+      !Scalar::Util::blessed($$field[${$_[0]}]))
+            ? $_[0] : $$field[${$_[0]}];
+ };
+
 =back
 
 =head2 I<Weak> Fields
@@ -3172,7 +3253,7 @@ accessors, C<:InitArgs>, the C<-E<gt>set()> method, etc., will automatically
 be L<weaken|Scalar::Util/"weaken REF">ed after being stored in the field
 array/hash.
 
- my @data :Field('Weak' => 1);
+ my @data :Field :Weak;
 
 NOTE: If data in a I<weak> field is set directly (i.e., the C<-E<gt>set()>
 method is not used), then L<weaken()|Scalar::Util/"weaken REF"> must be
@@ -3188,16 +3269,9 @@ setting field data within class code.)
 
 Object cloning can be controlled at the field level such that only specified
 fields are I<deeply> copied when C<-E<gt>clone()> is called without any
-arguments.  This is done by adding another specifier to the C<:Field>
-attribute:
+arguments.  This is done by adding the C<:Deep> attribute to the field:
 
- my @data :Field('Clone' => 'deep');
-    # or
- my @data :Field('Copy' => 'deep');
-    # or
- my @data :Field('Deep' => 1);
-
-(As usual, the keywords above are case-insensitive.)
+ my @data :Field :Deep;
 
 =head2 Object ID
 
@@ -3622,12 +3696,11 @@ S<C<key =E<gt> value>> pairs for the object's fields.  For example:
  ]
 
 The name for an object field (I<data> and I<life> in the example above) can be
-specified as part of the L<field declaration|/"Field Declarations"> using the
-C<NAME> keyword:
+specified by adding the C<:Name> attribute to the field:
 
- my @life :Field('Name' => 'life');
+ my @life :Field :Name(life);
 
-If the C<NAME> keyword is not present, then the name for a field will be
+If the C<:Name> attribute is not used, then the name for a field will be
 either the name associated with an C<'All'> or C<'Arg'> tag in the field
 declaration, the tag from the C<:InitArgs> array that is associated with the
 field, its I<get> method name, its I<set> method name, or, failing all that, a
@@ -3750,15 +3823,27 @@ for example, as part of an C<:Automethod>.  Object::InsideOut provides a class
 method for this:
 
  # Dynamically create a hash field with standard accessors
- Object::InsideOut->create_field($class, '%'.$fld, "'Standard'=>'$fld'");
+ Object::InsideOut->create_field($class, '%'.$fld, "'Std'=>'$fld'");
 
 The first argument is the class into which the field will be added.  The
 second argument is a string containing the name of the field preceeded by
 either a C<@> or C<%> to declare an array field or hash field, respectively.
-The third argument is a string containing S<C<key =E<gt> value>> pairs used in
-conjunction with the C<:Field> attribute for generating field accessors.
+The remaining string arguments either contain S<C<key =E<gt> value>> pairs
+which will be embedded in a C<:Field> attribute declaration:
 
-Here's a more elaborate example used in inside an C<:Automethod>:
+ Object::InsideOut->create_field('My::Class, '@data',
+                                 "'Acc'  => 'data'",
+                                 "'Type' => 'numeric'");
+
+or multiple attributes declared in full:
+
+ Object::InsideOut->create_field('My::Class, '@obj',
+                                 ":Field('Acc'  => 'obj'",
+                                 "       'Type' => 'Some::Class')",
+                                 ":Weak");
+
+Here's an example of an C<:Automethod> subroutine that uses dynamic field
+creation:
 
  package My::Class; {
      use Object::InsideOut;
@@ -3777,7 +3862,7 @@ Here's a more elaborate example used in inside an C<:Automethod>:
 
          # Create the field and its standard accessors
          Object::InsideOut->create_field($class, '@'.$fld_name,
-                                         "'Standard'=>'$fld_name'");
+                                         "'Std'=>'$fld_name'");
 
          # Return code ref for newly created accessor
          no strict 'refs';
@@ -3950,9 +4035,9 @@ the Object::InsideOut declaration inside your package:
      ...
  }
 
-This allows you to access the foreign class's static (i.e., class) methods from
-your own class.  For example, suppose C<Foreign::Class> has a class method
-called C<foo>.  With the above, you can access that method using
+This allows you to access the foreign class's static (i.e., class) methods
+from your own class.  For example, suppose C<Foreign::Class> has a class
+method called C<foo>.  With the above, you can access that method using
 C<My::Class-E<gt>foo()> instead.
 
 Multiple foreign inheritance is supported, as well:
@@ -4291,6 +4376,21 @@ Attribute 'modify' handlers are called I<upwards> through the class hierarchy
 I<override> the handling of attributes by parent classes, or to add attributes
 (via the returned list of unhandled attributes) for parent classes to process.
 
+Attribute 'modify' handlers should be located at the beginning of a package,
+or at least before any use of attibutes on the corresponding type of variable
+or subroutine:
+
+ package My::Class; {
+     use Object::InsideOut;
+
+     sub _array_attrs :MOD_ARRAY_ATTRS
+     {
+        ...
+     }
+
+     my @my_array :MyArrayAttr;
+ }
+
 For I<attribute 'fetch' handlers>, follow the same procedures:  Label the
 subroutine with the C<:FETCH_*_ATTRIBUTES> attribute (or C<:FETCH_*_ATTRS> for
 short).  Contrary to the documentation in L<attributes/"Package-specific
@@ -4445,8 +4545,9 @@ without later definition) with C<:Automethod>:
      }
  }
 
-Due to limitations in the Perl parser, you cannot use line wrapping with the
-C<:Field> attribute.
+Due to limitations in the Perl parser, the entirety of any one attribute must
+be on a single line.  (However, multiple attributes may appear on separate
+lines.)
 
 If a I<set> accessor accepts scalars, then you can store any inside-out
 object type in it.  If its C<Type> is set to C<HASH>, then it can store any
@@ -4559,7 +4660,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-1.52/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.01/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

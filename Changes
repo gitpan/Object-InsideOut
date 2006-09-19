@@ -1,5 +1,18 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.01 Tue Sep 19 11:00:15 EDT 2006
+	- Started redesign on field attributes
+		Changed  :Field(..., 'Weak' => 1)
+		     To  :Field(...) :Weak
+		Changed  :Field(..., 'Deep' => 1), etc.
+		     To  :Field(...) :Deep
+		Changed  :Field(..., 'Name' => 'foo')
+		     To  :Field(...) :Name(foo)
+	  (Multiple attributes can be line wrapped! See POD.)
+	- Optimized 'set' accessor code
+	- Added option to suppress use of Want module
+	- Documented that attribute handlers need to come first in a class
+
 1.52 Fri Sep  1 15:58:25 EDT 2006
 	- Support class-specified attribute handlers
 	- Made Want module optional
