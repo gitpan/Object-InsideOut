@@ -30,10 +30,10 @@ package My::Class; {
     sub make
     {
         my ($self, $name, $type) = @_;
-        Object::InsideOut->create_field(__PACKAGE__, '@'.$name,
-                                        ":Field('Std' =>'$name',",
-                                        "       'Type' => '$type')",
-                                        ":Name($name)");
+        My::Class->create_field('@'.$name,
+                                ":Field('Std' =>'$name',",
+                                "       'Type' => '$type')",
+                                ":Name($name)");
     }
 }
 

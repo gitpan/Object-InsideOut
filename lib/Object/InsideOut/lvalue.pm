@@ -36,10 +36,13 @@ sub create_lvalue_accessor
         }
 
         my ($package, $set, $field_ref, $get, $type, $name, $return,
-            $private, $restricted, $weak) = @_;
+            $private, $restricted, $weak, $pre) = @_;
 
         # Field string
-        my $fld_str = (ref($field_ref) eq 'HASH') ? "\$\$field\{\${\$_[0]}}" : "\$\$field\[\${\$_[0]}]";
+        my $fld_str = (ref($field_ref) eq 'HASH') ? "\$field->\{\${\$_[0]}}" : "\$field->\[\${\$_[0]}]";
+
+        # 'Want object' string
+        my $obj_str = q/(Want::wantref() eq 'OBJECT')/;
 
         # Begin with subroutine declaration in the appropriate package
         my $code = "*${package}::$set = sub :lvalue {\n"
@@ -47,12 +50,11 @@ sub create_lvalue_accessor
                  . "    my \$rv = !Want::want_lvalue(0);\n";
 
         # Add GET portion for combination accessor
-        my $obj_str = q/(Want::wantref() eq 'OBJECT')/;
-        if (defined($get) && $get eq $set) {
+        if ($get && ($get eq $set)) {
             $code .= "    Want::rreturn($fld_str) if (\$rv && (\@_ == 1));\n";
         }
 
-        # Else check that set was called with at least one arg
+        # If set only, then must have at least one arg
         else {
             $code .= <<"_CHECK_ARGS_";
     my \$wobj = $obj_str;
@@ -85,23 +87,45 @@ _CHECK_ARGS_
     if (\@_ > 1) {
 _SET_
 
+        # Add preprocessing code block
+        if ($pre) {
+            $code .= <<"_PRE_";
+        {
+            my \@errs;
+            local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
+            eval {
+                my \$self = shift;
+                \@_ = (\$self, \$preproc->(\$self, \$field, \@_));
+            };
+            if (\$@ || \@errs) {
+                my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
+                OIO::Code->die(
+                    'message' => q/Problem with preprocessing routine for '$package->$set'/,
+                    'Error'   => \$err);
+            }
+        }
+_PRE_
+        }
+
         # Add data type checking
         my $arg_str = '$_[1]';
         if (ref($type)) {
             $code .= <<"_CODE_";
-        my (\$arg, \$ok, \@errs);
-        local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
-        eval { \$ok = \$type->($arg_str) };
-        if (\$@ || \@errs) {
-            my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
-            OIO::Code->die(
-                'message' => q/Problem with type check routine for '$package->$set'/,
-                'Error'   => \$err);
-        }
-        if (! \$ok) {
-            OIO::Args->die(
-                'message'  => "Argument to '$package->$set' failed type check: $arg_str",
-                'location' => [ caller() ]);
+        {
+            my (\$arg, \$ok, \@errs);
+            local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
+            eval { \$ok = \$type_check->($arg_str) };
+            if (\$@ || \@errs) {
+                my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
+                OIO::Code->die(
+                    'message' => q/Problem with type check routine for '$package->$set'/,
+                    'Error'   => \$err);
+            }
+            if (! \$ok) {
+                OIO::Args->die(
+                    'message'  => "Argument to '$package->$set' failed type check: $arg_str",
+                    'location' => [ caller() ]);
+            }
         }
 _CODE_
 
@@ -227,5 +251,5 @@ _REF_
 
 
 # Ensure correct versioning
-my $VERSION = 2.01;
-($Object::InsideOut::VERSION == 2.01) or die("Version mismatch\n");
+my $VERSION = 2.02;
+($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");

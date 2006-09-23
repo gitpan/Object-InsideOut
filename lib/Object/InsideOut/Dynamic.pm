@@ -31,21 +31,19 @@ sub create_field
                 'Arg'     => $field);
         }
 
-        # Check for attributes
-        if (! @attrs) {
-            OIO::Args->die(
-                'message' => 'Missing field attributes',
-                'Usage' => q/Object::InsideOut->create_field($class, '%|@'.$fld_name, @attributes);/);
-        }
-
         # Convert attributes to single string
-        s/^\s*(.*?)\s*$/$1/ foreach @attrs;
-        my $attr = join(',', @attrs);
-        $attr =~ s/[\r\n]/ /sg;
-        $attr =~ s/,\s*,/,/g;
-        $attr =~ s/\)\s*,\s*:/) :/g;
-        if ($attr !~ /^\s*:/) {
-            $attr = ":Field($attr)";
+        my $attr;
+        if (@attrs) {
+            s/^\s*(.*?)\s*$/$1/ foreach @attrs;
+            $attr = join(',', @attrs);
+            $attr =~ s/[\r\n]/ /sg;
+            $attr =~ s/,\s*,/,/g;
+            $attr =~ s/\)\s*,\s*:/) :/g;
+            if ($attr !~ /^\s*:/) {
+                $attr = ":Field($attr)";
+            }
+        } else {
+            $attr = ':Field';
         }
 
         # Create the declaration
@@ -55,7 +53,7 @@ sub create_field
         my $code = "package $class; my $field $attr;";
 
         # Inspect generated code
-        print($code, "\n") if $Object::InsideOut::DEBUG;
+        print("\n", $code, "\n\n") if $Object::InsideOut::DEBUG;
 
         eval $code;
         if (my $e = Exception::Class::Base->caught()) {
@@ -83,5 +81,5 @@ sub create_field
 
 
 # Ensure correct versioning
-my $VERSION = 2.01;
-($Object::InsideOut::VERSION == 2.01) or die("Version mismatch\n");
+my $VERSION = 2.02;
+($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");

@@ -8,7 +8,7 @@ no warnings 'redefine';
 sub dump
 {
     my ($DUMP_INITARGS, $DUMP_FIELDS, $DUMPERS, $PUMPERS,
-        $INIT_ARGS, $TREE_TOP_DOWN, $FIELDS, $call, @args) = @_;
+        $INIT_ARGS, $TREE_TOP_DOWN, $FIELDS, $WEAK, $call, @args) = @_;
 
     *Object::InsideOut::dump = sub
     {
@@ -69,6 +69,9 @@ sub dump
                             $dump{$pkg}{$name} = $$field[$$self];
                         }
                     }
+                    if ($$WEAK{$field} && exists($dump{$pkg}{$name})) {
+                        Scalar::Util::weaken($dump{$pkg}{$name});
+                    }
                     @fields = grep { $_ != $field } @fields;
                 }
 
@@ -82,6 +85,9 @@ sub dump
                         if (exists($$field[$$self])) {
                             $dump{$pkg}{$field} = $$field[$$self];
                         }
+                    }
+                    if ($$WEAK{$field} && exists($dump{$pkg}{$field})) {
+                        Scalar::Util::weaken($dump{$pkg}{$field});
                     }
                 }
             }
@@ -201,5 +207,5 @@ sub dump
 
 
 # Ensure correct versioning
-my $VERSION = 2.01;
-($Object::InsideOut::VERSION == 2.01) or die("Version mismatch\n");
+my $VERSION = 2.02;
+($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");

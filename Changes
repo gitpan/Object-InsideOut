@@ -1,5 +1,15 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.02 Sat Sep 23 17:57:11 EST 2006
+	- Completed redesign on field attributes
+	  (Backwards compatibility maintained.  See POD for details.)
+	- Support argument preprocessing on set accessors
+	- Fixed handling of weak fields in dump()
+	- Want module not used by default
+	  (Still required for :lvalue accessors)
+	- Removed 'process_args' from Object::InsideOut::Util
+	  (Hope no one was using it.  It wasn't documented.)
+
 2.01 Tue Sep 19 11:00:15 EDT 2006
 	- Started redesign on field attributes
 		Changed  :Field(..., 'Weak' => 1)
