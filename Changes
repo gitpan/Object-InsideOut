@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.04 Tue Oct  3 15:01:30 EDT 2006
+	- Removed :lvalue method from meta tests
+
 2.03 Tue Oct  3 14:40:26 EDT 2006
 	- Added introspection
 	- Document My::Class->create_field()

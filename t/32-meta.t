@@ -46,7 +46,7 @@ package Bar; {
     use Object::InsideOut::Metadata;
 
     my @info :Field :Type(list) :All(info);
-    my @set  :Field :Set('name' => 'barset', 'ret' => 'old', 'lv' => 1);
+    my @set  :Field :Set('name' => 'barset', 'ret' => 'old');
 
     sub cu :Cumulative   { return ('Bar cumulative'); }
     sub ch :Chain(Bottom up)
@@ -164,7 +164,6 @@ sub check_bar
 
           'barset' => { 'class'  => 'Bar',
                         'kind'   => 'set',
-                        'lvalue' => 1,
                         'return' => 'old' },
 
           'cu' => { 'class'  => 'Bar',

@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.03;
+our $VERSION = 2.04;
 
-use Object::InsideOut::Exception 2.03;
-use Object::InsideOut::Util 2.03 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.04;
+use Object::InsideOut::Util 2.04 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -2594,7 +2594,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.03
+This document describes Object::InsideOut version 2.04
 
 =head1 SYNOPSIS
 
@@ -5264,7 +5264,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.03/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.04/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
