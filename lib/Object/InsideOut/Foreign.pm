@@ -17,19 +17,15 @@ sub inherit
         # Must be called as an object method
         my $obj_class = Scalar::Util::blessed($self);
         if (! $obj_class) {
-            OIO::Code->die(
-                'message'  => '->inherit() invoked as a class method',
-                'Info'     => '->inherit() is an object method');
+            OIO::Method->die('message' => q/'inherit' called as a class method/);
         }
 
         # Inheritance takes place in caller's package
-        my $package = caller();
+        my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $obj_class->$u_isa($package)) {
-            OIO::Code->die(
-                'message'  => '->inherit() not called within class hierarchy',
-                'Info'     => '->inherit() is a restricted method');
+        if (! $obj_class->$u_isa($pkg)) {
+            OIO::Method->die('message' => "Can't call restricted method 'inherit' from class '$pkg'");
         }
 
         # Flatten arg list
@@ -48,10 +44,10 @@ sub inherit
         }
 
         # Get 'heritage' field and 'classes' hash
-        if (! exists($$HERITAGE{$package})) {
-            create_heritage($package);
+        if (! exists($$HERITAGE{$pkg})) {
+            create_heritage($pkg);
         }
-        my ($heritage, $classes) = @{$$HERITAGE{$package}};
+        my ($heritage, $classes) = @{$$HERITAGE{$pkg}};
 
         # Process args
         my $objs = exists($$heritage{$$self}) ? $$heritage{$$self} : [];
@@ -84,24 +80,20 @@ sub inherit
         # Must be called as an object method
         my $obj_class = Scalar::Util::blessed($self);
         if (! $obj_class) {
-            OIO::Code->die(
-                'message'  => '->inherit() invoked as a class method',
-                'Info'     => '->inherit() is an object method');
+            OIO::Method->die('message' => q/'heritage' called as a class method/);
         }
 
         # Inheritance takes place in caller's package
-        my $package = caller();
+        my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $obj_class->$u_isa($package)) {
-            OIO::Code->die(
-                'message'  => '->inherit() not called within class hierarchy',
-                'Info'     => '->inherit() is a restricted method');
+        if (! $obj_class->$u_isa($pkg)) {
+            OIO::Method->die('message' => "Can't call restricted method 'heritage' from class '$pkg'");
         }
 
         # Anything to return?
-        if (! exists($$HERITAGE{$package}) ||
-            ! exists($$HERITAGE{$package}[0]{$$self}))
+        if (! exists($$HERITAGE{$pkg}) ||
+            ! exists($$HERITAGE{$pkg}[0]{$$self}))
         {
             return;
         }
@@ -112,10 +104,10 @@ sub inherit
             @objs = grep {
                         my $obj = $_;
                         grep { ref($obj) eq $_ } @_
-                    } @{$$HERITAGE{$package}[0]{$$self}};
+                    } @{$$HERITAGE{$pkg}[0]{$$self}};
         } else {
             # Return entire list
-            @objs = @{$$HERITAGE{$package}[0]{$$self}};
+            @objs = @{$$HERITAGE{$pkg}[0]{$$self}};
         }
 
         # Return results
@@ -136,19 +128,15 @@ sub inherit
         # Must be called as an object method
         my $class = Scalar::Util::blessed($self);
         if (! $class) {
-            OIO::Code->die(
-                'message'  => '->disinherit() invoked as a class method',
-                'Info'     => '->disinherit() is an object method');
+            OIO::Method->die('message' => q/'disinherit' called as a class method/);
         }
 
         # Disinheritance takes place in caller's package
-        my $package = caller();
+        my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $class->$u_isa($package)) {
-            OIO::Code->die(
-                'message'  => '->disinherit() not called within class hierarchy',
-                'Info'     => '->disinherit() is a restricted method');
+        if (! $class->$u_isa($pkg)) {
+            OIO::Method->die('message' => "Can't call restricted method 'disinherit' from class '$pkg'");
         }
 
         # Flatten arg list
@@ -167,12 +155,12 @@ sub inherit
         }
 
         # Get 'heritage' field
-        if (! exists($$HERITAGE{$package})) {
+        if (! exists($$HERITAGE{$pkg})) {
             OIO::Code->die(
                 'message'  => 'Nothing to ->disinherit()',
-                'Info'     => "Class '$package' is currently not inheriting from any foreign classes");
+                'Info'     => "Class '$pkg' is currently not inheriting from any foreign classes");
         }
-        my $heritage = $$HERITAGE{$package}[0];
+        my $heritage = $$HERITAGE{$pkg}[0];
 
         # Get inherited objects
         my @objs = exists($$heritage{$$self}) ? @{$$heritage{$$self}} : ();
@@ -233,31 +221,31 @@ sub inherit
             OIO::Method->die('message' => "Can't call private subroutine 'Object::InsideOut::create_heritage' from class '$caller'");
         }
 
-        my $package = shift;
+        my $pkg = shift;
 
         # Check if 'heritage' already exists
-        if (exists($$DUMP_FIELDS{$package}{'heritage'})) {
+        if (exists($$DUMP_FIELDS{$pkg}{'heritage'})) {
             OIO::Attribute->die(
-                'message' => "Can't inherit into '$package'",
-                'Info'    => "'heritage' already specified for another field using '$$DUMP_FIELDS{$package}{'heritage'}[1]'");
+                'message' => "Can't inherit into '$pkg'",
+                'Info'    => "'heritage' already specified for another field using '$$DUMP_FIELDS{$pkg}{'heritage'}[1]'");
         }
 
         # Create the heritage field
         my $heritage = {};
 
         # Share the field, if applicable
-        if (is_sharing($package)) {
+        if (is_sharing($pkg)) {
             threads::shared::share($heritage)
         }
 
         # Save the field's ref
-        push(@{$$FIELDS{$package}}, $heritage);
+        push(@{$$FIELDS{$pkg}}, $heritage);
 
         # Save info for ->dump()
-        $$DUMP_FIELDS{$package}{'heritage'} = [ $heritage, 'Inherit' ];
+        $$DUMP_FIELDS{$pkg}{'heritage'} = [ $heritage, 'Inherit' ];
 
         # Save heritage info
-        $$HERITAGE{$package} = [ $heritage, {} ];
+        $$HERITAGE{$pkg} = [ $heritage, {} ];
 
         # Set up UNIVERSAL::can/isa to handle foreign inheritance
         install_UNIVERSAL();
@@ -273,5 +261,5 @@ sub inherit
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

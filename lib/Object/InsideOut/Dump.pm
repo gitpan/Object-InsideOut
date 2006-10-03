@@ -45,6 +45,11 @@ sub dump
             }
         }
 
+        # Must call ->dump() as an object method
+        if (! Scalar::Util::blessed($self)) {
+            OIO::Method->die('message' => q/'dump' called as a class method/);
+        }
+
         # Gather data from the object's class tree
         my %dump;
         foreach my $pkg (@{$$TREE_TOP_DOWN{ref($self)}}) {
@@ -120,9 +125,7 @@ sub dump
                 $input = shift;    # Called as a class method
 
             } elsif (Scalar::Util::blessed($input)) {
-                OIO::Code->die(
-                    'message' => '->pump() invoked as an object method',
-                    'Info'    => '->pump() is a class method');
+                OIO::Method->die('message' => q/'pump' called as an object method/);
             }
         }
 
@@ -207,5 +210,5 @@ sub dump
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

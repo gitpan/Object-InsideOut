@@ -63,18 +63,21 @@ WriteMakefile(
     'AUTHOR'        => 'Jerry D. Hedden <jdhedden AT cpan DOT org>',
     'VERSION_FROM'  => 'lib/Object/InsideOut.pm',
     'ABSTRACT_FROM' => 'lib/Object/InsideOut.pm',
-    'PREREQ_PM'     => { 'Exception::Class' => 1.22,
-                         'Test::More'       => 0.50,
+    'PREREQ_PM'     => { 'strict'           => 0,
+                         'warnings'         => 0,
                          'attributes'       => 0,
                          'overload'         => 0,
+                         'Config'           => 0,
                          'B'                => 0,
                          'Data::Dumper'     => 0,
                          'Scalar::Util'     => $Scalar::Util::VERSION,
+                         'Exception::Class' => 1.22,
+                         'Test::More'       => 0.50,
                        },
-    ((ExtUtils::MakeMaker->VERSION() lt '6.25') ?
-        ('PL_FILES' => { })            : ()),
-    ((ExtUtils::MakeMaker->VERSION() gt '6.30') ?
-        ('LICENSE'  => 'perl')         : ()),
+    ((ExtUtils::MakeMaker->VERSION() lt '6.25')
+                              ? ('PL_FILES' => { })    : ()),
+    ((ExtUtils::MakeMaker->VERSION() gt '6.30')
+                              ? ('LICENSE'  => 'perl') : ()),
 );
 
 
@@ -93,8 +96,6 @@ vcheck:
 	@if ! grep "Util $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
 	@if ! grep "version $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in POD of InsideOut.pm"; fi
 	@if ! grep "Object-InsideOut-$(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in Anno link in InsideOut.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Chained.pm >/dev/null; then echo "Version error in Chained.pm"; fi
@@ -115,6 +116,14 @@ vcheck:
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Universal.pm >/dev/null; then echo "Version error in Universal.pm"; fi
 	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Universal.pm >/dev/null; then echo "Version error in Universal.pm"; fi
 	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Util.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Util.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/lvalue.pm >/dev/null; then echo "Version error in lvalue.pm"; fi
+	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/lvalue.pm >/dev/null; then echo "Version error in lvalue.pm"; fi
+	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
+	@if ! grep "::Util $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
+	@if ! grep "::InsideOut $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
+	@if ! grep "version $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
 
 chmod:
 	@$(CHMOD) 644 Build.PL `cat MANIFEST`

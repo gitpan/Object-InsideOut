@@ -19,6 +19,12 @@ sub install_UNIVERSAL
     {
         my ($thing, $method) = @_;
 
+        # Is it a metadata call?
+        if (! $method) {
+            my $meths = $thing->Object::InsideOut::meta()->get_methods();
+            return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
+        }
+
         # First, try the original UNIVERSAL::can()
         my $code;
         if ($method =~ /^SUPER::/) {
@@ -94,9 +100,13 @@ sub install_UNIVERSAL
     {
         my ($thing, $type) = @_;
 
+        # Is it a metadata call?
+        if (! $type) {
+            return $thing->Object::InsideOut::meta()->get_classes();
+        }
+
         # First, try the original UNIVERSAL::isa()
-        my $isa = $thing->$u_isa($type);
-        if ($isa) {
+        if (my $isa = $thing->$u_isa($type)) {
             return ($isa);
         }
 
@@ -104,7 +114,7 @@ sub install_UNIVERSAL
         foreach my $package (@{$$TREE_BOTTOM_UP{ref($thing) || $thing}}) {
             if (exists($$HERITAGE{$package})) {
                 foreach my $pkg (keys(%{$$HERITAGE{$package}[1]})) {
-                    if ($isa = $pkg->$u_isa($type)) {
+                    if (my $isa = $pkg->$u_isa($type)) {
                         return ($isa);
                     }
                 }
@@ -123,5 +133,5 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

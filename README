@@ -1,4 +1,4 @@
-Object-InsideOut version 2.02
+Object-InsideOut version 2.03
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -86,6 +86,11 @@ class-supplied subroutines.  Serialization using 'Storable' is also supported.
 Object::InsideOut allows classes to inherit from foreign (i.e.,
 non-Object::InsideOut) classes, thus allowing you to sub-class other Perl
 class, and access their methods from your own objects.
+
+* Introspection
+
+Obtain constructor parameters and method metadata for Object::InsideOut
+classes.
 
 INSTALLATION
 

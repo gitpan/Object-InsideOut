@@ -64,14 +64,20 @@ sub install_ATTRIBUTES
     *Object::InsideOut::install_ATTRIBUTES = sub { };
 }
 
-sub FETCH_SCALAR_ATTRIBUTES { return (FETCH_ATTRS('SCALAR', @_)); }
-sub FETCH_HASH_ATTRIBUTES   { return (FETCH_ATTRS('HASH',   @_)); }
-sub FETCH_ARRAY_ATTRIBUTES  { return (FETCH_ATTRS('ARRAY',  @_)); }
-sub FETCH_CODE_ATTRIBUTES   { return (FETCH_ATTRS('CODE',   @_)); }
+add_meta(__PACKAGE__, {
+    'MODIFY_SCALAR_ATTRIBUTES' => {'hidden' => 1},
+    'CHECK_ATTRS'              => {'hidden' => 1},
+    'FETCH_ATTRS'              => {'hidden' => 1},
+});
+
+sub FETCH_SCALAR_ATTRIBUTES :Sub { return (FETCH_ATTRS('SCALAR', @_)); }
+sub FETCH_HASH_ATTRIBUTES   :Sub { return (FETCH_ATTRS('HASH',   @_)); }
+sub FETCH_ARRAY_ATTRIBUTES  :Sub { return (FETCH_ATTRS('ARRAY',  @_)); }
+sub FETCH_CODE_ATTRIBUTES   :Sub { return (FETCH_ATTRS('CODE',   @_)); }
 
 }  # End of package's lexical scope
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

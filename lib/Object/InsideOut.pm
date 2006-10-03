@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.02;
+our $VERSION = 2.03;
 
-use Object::InsideOut::Exception 2.02;
-use Object::InsideOut::Util 2.02 'hash_re';
+use Object::InsideOut::Exception 2.03;
+use Object::InsideOut::Util 2.03 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -30,8 +30,39 @@ use Scalar::Util 1.10;
 # Flag for running package initialization routine
 my $DO_INIT = 1;
 
-# Cached value of original ->isa() method
+# Cached value of original isa/can methods
 my $UNIV_ISA = \&UNIVERSAL::isa;
+my $UNIV_CAN = \&UNIVERSAL::can;
+
+# Our own versions of ->isa() and ->can() that supports metadata
+{
+    no warnings 'redefine';
+
+    *UNIVERSAL::isa = sub
+    {
+        my ($thing, $type) = @_;
+
+        # Want classes?
+        if (! $type) {
+            return $thing->Object::InsideOut::meta()->get_classes();
+        }
+
+        goto $UNIV_ISA;
+    };
+
+    *UNIVERSAL::can = sub
+    {
+        my ($thing, $method) = @_;
+
+        # Want methods?
+        if (! $method) {
+            my $meths = $thing->Object::InsideOut::meta()->get_methods();
+            return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
+        }
+
+        goto $UNIV_CAN;
+    };
+}
 
 # ID of currently executing thread
 my $THREAD_ID = 0;
@@ -167,16 +198,14 @@ sub import
             if (! exists($HERITAGE{$class})) {
                 create_heritage($class);
             }
-            my $classes = $HERITAGE{$class}[1];
-
             # Add parent to inherited classes
-            $classes->{$parent} = undef;
+            $HERITAGE{$class}[1]{$parent} = undef;
         }
     }
 
     # Add Object::InsideOut to class's @ISA array, if needed
     if ($need_oio) {
-        push(@{$class.'::ISA'}, $self);
+        push(@{$class.'::ISA'}, __PACKAGE__);
     }
 
     # Add calling class to tree
@@ -288,10 +317,163 @@ my @OVERLOAD_ATTRS = qw(STRINGIFY NUMERIFY BOOLIFY
 # the bottom up.  They are :HIDDEN.
 my %ATTR_HANDLERS;
 
+# Metadata
+my (%SUBROUTINES, %METHODS);
+
+use Object::InsideOut::Metadata 2.03;
+
+add_meta(__PACKAGE__, {
+    'import'                 => {'hidden' => 1},
+    'MODIFY_CODE_ATTRIBUTES' => {'hidden' => 1},
+    'inherit'                => {'restricted' => 1},
+    'disinherit'             => {'restricted' => 1},
+    'heritage'               => {'restricted' => 1},
+});
+
+
+# Handles subroutine attributes supported by this package.
+# See 'perldoc attributes' for details.
+sub MODIFY_CODE_ATTRIBUTES
+{
+    my ($pkg, $code, @attrs) = @_;
+
+    # Call attribute handlers in the class tree
+    if (exists($ATTR_HANDLERS{'MOD'}{'CODE'})) {
+        @attrs = CHECK_ATTRS('CODE', $pkg, $code, @attrs);
+        return if (! @attrs);
+    }
+
+    # Save caller info with code ref for error reporting purposes
+    my $info = [ $code, [ $pkg, (caller(2))[1,2] ] ];
+
+    my @unused_attrs;   # List of any unhandled attributes
+
+    # Save the code refs in the appropriate hashes
+    while (my $attribute = shift(@attrs)) {
+        my ($attr, $arg) = $attribute =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
+        $attr = uc($attr);
+        # Attribute may be followed by 'PUBLIC', 'PRIVATE' or 'RESTRICED'
+        # Default to 'HIDDEN' if none.
+        $arg = ($arg) ? uc($arg) : 'HIDDEN';
+
+        if ($attr eq 'ID') {
+            $ID_SUBS{$pkg} = [ $code, @{$$info[1]} ];
+            push(@attrs, $arg) if $] > 5.006;
+            $DO_INIT = 1;
+
+        } elsif ($attr eq 'PREINIT') {
+            $PREINITORS{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr eq 'INIT') {
+            $INITORS{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr =~ /^REPL(?:ICATE)?$/) {
+            $REPLICATORS{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr =~ /^DEST(?:ROY)?$/) {
+            $DESTROYERS{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr =~ /^AUTO(?:METHOD)?$/) {
+            $AUTOMETHODS{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+            $DO_INIT = 1;
+
+        } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
+            if ($arg =~ /BOTTOM\s+UP/) {
+                push(@{$ANTICUMULATIVE{$pkg}}, $info);
+            } else {
+                push(@{$CUMULATIVE{$pkg}}, $info);
+            }
+            $DO_INIT = 1;
+
+        } elsif ($attr =~ /^CHAIN(?:ED)?$/) {
+            if ($arg =~ /BOTTOM\s+UP/) {
+                push(@{$ANTICHAINED{$pkg}}, $info);
+            } else {
+                push(@{$CHAINED{$pkg}}, $info);
+            }
+            $DO_INIT = 1;
+
+        } elsif ($attr =~ /^DUMP(?:ER)?$/) {
+            $DUMPERS{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr =~ /^PUMP(?:ER)?$/) {
+            $PUMPERS{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr =~ /^RESTRICT(?:ED)?$/) {
+            push(@{$RESTRICTED{$pkg}}, $info);
+            $DO_INIT = 1;
+
+        } elsif ($attr =~ /^PRIV(?:ATE)?$/) {
+            push(@{$PRIVATE{$pkg}}, $info);
+            $DO_INIT = 1;
+
+        } elsif ($attr =~ /^HIDD?EN?$/) {
+            push(@{$HIDDEN{$pkg}}, $info);
+            $DO_INIT = 1;
+
+        } elsif ($attr =~ /^SUB/) {
+            push(@{$SUBROUTINES{$pkg}}, $info);
+            if ($arg ne 'HIDDEN') {
+                push(@attrs, $arg) if $] > 5.006;
+            }
+            $DO_INIT = 1;
+
+        } elsif ($attr =~ /^METHOD/) {
+            if ($arg ne 'HIDDEN') {
+                push(@$info, $arg);
+                push(@{$METHODS{$pkg}}, $info);
+                $DO_INIT = 1;
+            }
+
+        } elsif ($attr =~ /^MOD(?:IFY)?_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
+            install_ATTRIBUTES();
+            $ATTR_HANDLERS{'MOD'}{$1}{$pkg} = $code;
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr =~ /^FETCH_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
+            install_ATTRIBUTES();
+            push(@{$ATTR_HANDLERS{'FETCH'}{$1}}, $code);
+            push(@attrs, $arg) if $] > 5.006;
+
+        } elsif ($attr eq 'SCALARIFY') {
+            OIO::Attribute->die(
+                'message' => q/:SCALARIFY not allowed/,
+                'Info'    => q/The scalar of an object is its object ID, and can't be redefined/,
+                'ignore_package' => 'attributes');
+
+        } elsif (my ($ify_attr) = grep { $_ eq $attr } @OVERLOAD_ATTRS) {
+            # Overload (-ify) attributes
+            push(@{$OVERLOAD{$pkg}}, [$ify_attr, @{$info} ]);
+            $DO_INIT = 1;
+
+        } elsif ($attr !~ /^PUB(LIC)?$/) {   # PUBLIC is ignored
+            # Not handled
+            push(@unused_attrs, $attribute);
+        }
+    }
+
+    # If using Attribute::Handlers, send it any unused attributes
+    if (@unused_attrs &&
+        Attribute::Handlers::UNIVERSAL->can('MODIFY_CODE_ATTRIBUTES'))
+    {
+        return (Attribute::Handlers::UNIVERSAL::MODIFY_CODE_ATTRIBUTES($pkg, $code, @unused_attrs));
+    }
+
+    # Return any unused attributes
+    return (@unused_attrs);
+}
+
 
 # This subroutine handles attributes on hashes as part of this package.
 # See 'perldoc attributes' for details.
-sub MODIFY_HASH_ATTRIBUTES
+sub MODIFY_HASH_ATTRIBUTES :Sub
 {
     my ($pkg, $hash, @attrs) = @_;
 
@@ -361,7 +543,7 @@ sub MODIFY_HASH_ATTRIBUTES
 
 # This subroutine handles attributes on arrays as part of this package.
 # See 'perldoc attributes' for details.
-sub MODIFY_ARRAY_ATTRIBUTES
+sub MODIFY_ARRAY_ATTRIBUTES :Sub
 {
     my ($pkg, $array, @attrs) = @_;
 
@@ -423,140 +605,6 @@ sub MODIFY_ARRAY_ATTRIBUTES
 }
 
 
-# Handles subroutine attributes supported by this package.
-# See 'perldoc attributes' for details.
-sub MODIFY_CODE_ATTRIBUTES
-{
-    my ($pkg, $code, @attrs) = @_;
-
-    # Call attribute handlers in the class tree
-    if (exists($ATTR_HANDLERS{'MOD'}{'CODE'})) {
-        @attrs = CHECK_ATTRS('CODE', $pkg, $code, @attrs);
-        return if (! @attrs);
-    }
-
-    # Save caller info with code ref for error reporting purposes
-    my $info = [ $code, [ $pkg, (caller(2))[1,2] ] ];
-
-    my @unused_attrs;   # List of any unhandled attributes
-
-    # Save the code refs in the appropriate hashes
-    while (my $attribute = shift(@attrs)) {
-        my ($attr, $arg) = $attribute =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
-        $attr = uc($attr);
-        # Attribute may be followed by 'PUBLIC', 'PRIVATE' or 'RESTRICED'
-        # Default to 'HIDDEN' if none.
-        $arg = ($arg) ? uc($arg) : 'HIDDEN';
-
-        if ($attr eq 'ID') {
-            $ID_SUBS{$pkg} = [ $code, @{$$info[1]} ];
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr eq 'PREINIT') {
-            $PREINITORS{$pkg} = $code;
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr eq 'INIT') {
-            $INITORS{$pkg} = $code;
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr =~ /^REPL(?:ICATE)?$/) {
-            $REPLICATORS{$pkg} = $code;
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr =~ /^DEST(?:ROY)?$/) {
-            $DESTROYERS{$pkg} = $code;
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr =~ /^AUTO(?:METHOD)?$/) {
-            $AUTOMETHODS{$pkg} = $code;
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
-            if ($arg =~ /BOTTOM\s+UP/) {
-                push(@{$ANTICUMULATIVE{$pkg}}, $info);
-            } else {
-                push(@{$CUMULATIVE{$pkg}}, $info);
-            }
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr =~ /^CHAIN(?:ED)?$/) {
-            if ($arg =~ /BOTTOM\s+UP/) {
-                push(@{$ANTICHAINED{$pkg}}, $info);
-            } else {
-                push(@{$CHAINED{$pkg}}, $info);
-            }
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr =~ /^DUMP(?:ER)?$/) {
-            $DUMPERS{$pkg} = $code;
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr =~ /^PUMP(?:ER)?$/) {
-            $PUMPERS{$pkg} = $code;
-            # Process attribute 'arg' as an attribute
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr =~ /^RESTRICT(?:ED)?$/) {
-            push(@{$RESTRICTED{$pkg}}, $info);
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr =~ /^PRIV(?:ATE)?$/) {
-            push(@{$PRIVATE{$pkg}}, $info);
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr eq 'HIDDEN') {
-            push(@{$HIDDEN{$pkg}}, $info);
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr =~ /^MOD(?:IFY)?_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
-            install_ATTRIBUTES();
-            $ATTR_HANDLERS{'MOD'}{$1}{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr =~ /^FETCH_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
-            install_ATTRIBUTES();
-            push(@{$ATTR_HANDLERS{'FETCH'}{$1}}, $code);
-            push(@attrs, $arg) if $] > 5.006;
-
-        } elsif ($attr eq 'SCALARIFY') {
-            OIO::Attribute->die(
-                'message' => q/:SCALARIFY not allowed/,
-                'Info'    => q/The scalar of an object is its object ID, and can't be redefined/,
-                'ignore_package' => 'attributes');
-
-        } elsif (my ($ify_attr) = grep { $_ eq $attr } @OVERLOAD_ATTRS) {
-            # Overload (-ify) attributes
-            push(@{$OVERLOAD{$pkg}}, [$ify_attr, @{$info} ]);
-            $DO_INIT = 1;   # Flag that initialization is required
-
-        } elsif ($attr !~ /^PUB(LIC)?$/) {   # PUBLIC is ignored
-            # Not handled
-            push(@unused_attrs, $attribute);
-        }
-    }
-
-    # If using Attribute::Handlers, send it any unused attributes
-    if (@unused_attrs &&
-        Attribute::Handlers::UNIVERSAL->can('MODIFY_CODE_ATTRIBUTES'))
-    {
-        return (Attribute::Handlers::UNIVERSAL::MODIFY_CODE_ATTRIBUTES($pkg, $code, @unused_attrs));
-    }
-
-    # Return any unused attributes
-    return (@unused_attrs);
-}
-
-
 ### Array-based Object Support ###
 
 # Object ID counters - one for each class tree possibly per thread
@@ -571,7 +619,7 @@ if ($threads::shared::threads_shared) {
 
 # Supplies an ID for an object being created in a class tree
 # and reclaims IDs from destroyed objects
-sub _ID
+sub _ID :Sub
 {
     return if $TERMINATING;           # Ignore during global cleanup
 
@@ -623,7 +671,7 @@ sub _ID
 ### Initialization Handling ###
 
 # Finds a subroutine's name from its code ref
-sub sub_name :Private
+sub sub_name :Sub(Private)
 {
     my ($ref, $attr, $location) = @_;
 
@@ -647,7 +695,7 @@ sub sub_name :Private
 
 
 # Perform much of the 'magic' for this module
-sub initialize :Private
+sub initialize :Sub(Private)
 {
     $DO_INIT = 0;   # Clear initialization flag
 
@@ -665,7 +713,7 @@ sub initialize :Private
             foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
                 if ($ID_SUBS{$pkg}) {
                     if ($id_sub_pkg) {
-                        # Verify that all the ID subs in heirarchy are the same
+                        # Verify that all the ID subs in hierarchy are the same
                         if (($ID_SUBS{$pkg}[0] != $ID_SUBS{$id_sub_pkg}[0]) ||
                             ($ID_SUBS{$pkg}[1] ne $ID_SUBS{$id_sub_pkg}[1]))
                         {
@@ -705,7 +753,6 @@ sub initialize :Private
         }
     } while ($reapply);
 
-
     # If needed, process any thread object sharing flags
     if (%IS_SHARING && $threads::shared::threads_shared) {
         foreach my $flag_class (keys(%IS_SHARING)) {
@@ -744,74 +791,96 @@ sub initialize :Private
         }
     }
 
-
     # Process field attributes
     process_fields();
-
 
     # Implement UNIVERSAL::can/isa with :AutoMethods
     if (%AUTOMETHODS) {
         install_UNIVERSAL();
     }
 
-
     # Implement cumulative methods
     if (%CUMULATIVE || %ANTICUMULATIVE) {
-        generate_CUMULATIVE(\%CUMULATIVE,    \%ANTICUMULATIVE,
-                            \%TREE_TOP_DOWN, \%TREE_BOTTOM_UP, $UNIV_ISA);
-        undef(%CUMULATIVE);      # No longer needed
+        generate_CUMULATIVE();
+        undef(%CUMULATIVE);
         undef(%ANTICUMULATIVE);
     }
 
-
     # Implement chained methods
     if (%CHAINED || %ANTICHAINED) {
-        generate_CHAINED(\%CHAINED,       \%ANTICHAINED,
-                         \%TREE_TOP_DOWN, \%TREE_BOTTOM_UP, $UNIV_ISA);
-        undef(%CHAINED);      # No longer needed
+        generate_CHAINED();
+        undef(%CHAINED);
         undef(%ANTICHAINED);
     }
 
-
     # Implement overload (-ify) operators
     if (%OVERLOAD) {
-        generate_OVERLOAD(\%OVERLOAD, \%TREE_TOP_DOWN);
-        undef(%OVERLOAD);   # No longer needed
+        generate_OVERLOAD();
+        undef(%OVERLOAD);
     }
-
 
     # Implement restricted methods - only callable within hierarchy
-    foreach my $package (keys(%RESTRICTED)) {
-        foreach my $info (@{$RESTRICTED{$package}}) {
+    foreach my $pkg (keys(%RESTRICTED)) {
+        my %meta;
+        while (my $info = shift(@{$RESTRICTED{$pkg}})) {
             my ($code, $location) = @{$info};
             my $name = sub_name($code, ':RESTRICTED', $location);
-            *{$package.'::'.$name} = create_RESTRICTED($package, $name, $code);
+            *{$pkg.'::'.$name} = create_RESTRICTED($pkg, $name, $code);
+            $meta{$name}{'restricted'} = 1;
         }
+        add_meta($pkg, \%meta);
     }
-    undef(%RESTRICTED);   # No longer needed
-
+    undef(%RESTRICTED);
 
     # Implement private methods - only callable from class itself
-    foreach my $package (keys(%PRIVATE)) {
-        foreach my $info (@{$PRIVATE{$package}}) {
+    foreach my $pkg (keys(%PRIVATE)) {
+        my %meta;
+        while (my $info = shift(@{$PRIVATE{$pkg}})) {
             my ($code, $location) = @{$info};
             my $name = sub_name($code, ':PRIVATE', $location);
-            *{$package.'::'.$name} = create_PRIVATE($package, $name, $code);
+            *{$pkg.'::'.$name} = create_PRIVATE($pkg, $name, $code);
+            $meta{$name}{'hidden'} = 1;
         }
+        add_meta($pkg, \%meta);
     }
-    undef(%PRIVATE);   # No longer needed
-
+    undef(%PRIVATE);
 
     # Implement hidden methods - no longer callable by name
-    foreach my $package (keys(%HIDDEN)) {
-        foreach my $info (@{$HIDDEN{$package}}) {
+    foreach my $pkg (keys(%HIDDEN)) {
+        my %meta;
+        while (my $info = shift(@{$HIDDEN{$pkg}})) {
             my ($code, $location) = @{$info};
             my $name = sub_name($code, ':HIDDEN', $location);
-            create_HIDDEN($package, $name);
+            create_HIDDEN($pkg, $name);
+            $meta{$name}{'hidden'} = 1;
         }
+        add_meta($pkg, \%meta);
     }
-    undef(%HIDDEN);   # No longer needed
+    undef(%HIDDEN);
 
+    # Add metadata for subroutines
+    foreach my $pkg (keys(%SUBROUTINES)) {
+        my %meta;
+        while (my $info = shift(@{$SUBROUTINES{$pkg}})) {
+            my ($code, $location) = @{$info};
+            my $name = sub_name($code, ':SUB', $location);
+            $meta{$name}{'hidden'} = 1;
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%SUBROUTINES);
+
+    # Add metadata for methods
+    foreach my $pkg (keys(%METHODS)) {
+        my %meta;
+        while (my $info = shift(@{$METHODS{$pkg}})) {
+            my ($code, $location, $kind) = @{$info};
+            my $name = sub_name($code, ':METHOD', $location);
+            $meta{$name}{'kind'} = lc($kind);
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%METHODS);
 
     # Export methods
     export_methods();
@@ -819,7 +888,7 @@ sub initialize :Private
 
 
 # Process attributes for field hashes/arrays including generating accessors
-sub process_fields :Private
+sub process_fields :Sub(Private)
 {
     # 'Want' module loaded?
     my $use_want = (defined($Want::VERSION) && ($Want::VERSION >= 0.12));
@@ -877,7 +946,7 @@ sub process_fields :Private
 # threads
 #my %IS_SHARING;   # Declared above
 
-sub set_sharing :Private
+sub set_sharing :Sub(Private)
 {
     my ($class, $sharing, $file, $line) = @_;
     $sharing = ($sharing) ? 1 : 0;
@@ -905,7 +974,7 @@ sub set_sharing :Private
 
 # Internal subroutine that determines if a class's objects are shared between
 # threads
-sub is_sharing :Private
+sub is_sharing :Sub(Private)
 {
     my $class = $_[0];
     return ($threads::shared::threads_shared
@@ -934,7 +1003,7 @@ if ($threads::shared::threads_shared) {
 # Called after thread is cloned
 sub CLONE
 {
-    # Don't execute when called for subclasses
+    # Don't execute when called for sub-classes
     if ($_[0] ne __PACKAGE__) {
         return;
     }
@@ -1032,16 +1101,17 @@ sub CLONE
 
 ### Object Methods ###
 
-my @EXPORT = qw(new clone set DESTROY);
+my @EXPORT = qw(new clone meta set DESTROY);
 
 # Helper subroutine to export methods to classes
-sub export_methods :Private
+sub export_methods :Sub(Private)
 {
     my @EXPORT_STORABLE = qw(STORABLE_freeze STORABLE_thaw);
 
     no strict 'refs';
 
     foreach my $pkg (keys(%TREE_TOP_DOWN)) {
+        my %meta;
         EXPORT:
         foreach my $sym (@EXPORT, ($pkg->isa('Storable')) ? @EXPORT_STORABLE : ()) {
             my $full_sym = $pkg.'::'.$sym;
@@ -1057,20 +1127,40 @@ sub export_methods :Private
                     }
                 }
                 *{$full_sym} = \&{$sym};
+
+                # Add metadata
+                if ($sym eq 'new') {
+                    $meta{'new'}{'kind'} = 'constructor';
+
+                } elsif ($sym eq 'clone' || $sym eq 'dump') {
+                    $meta{$sym}{'kind'} = 'object';
+
+                } elsif ($sym eq 'create_field') {
+                    $meta{$sym}{'kind'} = 'class';
+
+                } elsif ($sym =~ /^STORABLE_/ ||
+                         $sym eq 'AUTOLOAD')
+                {
+                    $meta{$sym}{'hidden'} = 1;
+
+                } elsif ($sym =~ /herit/ || $sym eq 'set') {
+                    $meta{$sym} = { 'kind' => 'object',
+                                    'restricted' => 1 };
+                }
             }
         }
+        add_meta($pkg, \%meta);
     }
 }
 
 
 # Helper subroutine to create a new 'bare' object
-sub _obj :Private
+sub _obj :Sub(Private)
 {
     my $class = shift;
 
     # Create a new 'bare' object
-    my $self = Object::InsideOut::Util::create_object($class,
-                                                      $ID_SUBS{$class}[0]);
+    my $self = create_object($class, $ID_SUBS{$class}[0]);
 
     # Thread support
     if (is_sharing($class)) {
@@ -1094,7 +1184,7 @@ sub _obj :Private
 
 
 # Extracts specified args from those given
-sub _args :Private
+sub _args :Sub(Private)
 {
     my $class = shift;
     my $self  = shift;   # Object being initialized with args
@@ -1164,7 +1254,7 @@ sub _args :Private
         }
 
         # Preprocess the argument
-        if (defined(my $pre = hash_re($spec_item, qr/^PRE/i))) {
+        if (my $pre = hash_re($spec_item, qr/^PRE/i)) {
             if (ref($pre) ne 'CODE') {
                 OIO::Code->die(
                     'message' => q/Can't handle argument/,
@@ -1208,16 +1298,8 @@ sub _args :Private
             }
         }
 
-        my $field = hash_re($spec_item, qr/^FIELD$/i);
-        my $type = hash_re($spec_item, qr/^TYPE$/i);
-        if ($field && !$type) {
-            if ($type = $FIELD_TYPE{$field}) {
-                $spec_item->{'TYPE'} = $type;
-            }
-        }
-
         # Check for correct type
-        if ($type) {
+        if (my $type = hash_re($spec_item, qr/^TYPE$/i)) {
             # Custom type checking
             if (ref($type)) {
                 if (ref($type) ne 'CODE') {
@@ -1270,7 +1352,7 @@ sub _args :Private
                 if ($type =~ /^(array|hash)(?:_?ref)?$/i) {
                     $type = uc($1);
                 }
-                if (! Object::InsideOut::Util::is_it($found{$key}, $type)) {
+                if (! is_it($found{$key}, $type)) {
                     OIO::Args->die(
                         'message' => "Bad value for initializer '$key': $found{$key}",
                         'Usage'   => "Initializer '$key' for class '$class' must be an object or ref of type '$type'",
@@ -1282,7 +1364,7 @@ sub _args :Private
         # If the destination field is specified, then put it in, and remove it
         # from the found args hash.  If thread-sharing, then make sure the
         # value is thread-shared.
-        if ($field) {
+        if (my $field = hash_re($spec_item, qr/^FIELD$/i)) {
             $self->set($field, delete($found{$key}));
         }
     }
@@ -1300,13 +1382,11 @@ sub new
 
     # Can't call ->new() on this package
     if ($class eq __PACKAGE__) {
-        OIO::Method->die('message' => q/Can't create objects from 'Object::InsideOut' itself/);
+        OIO::Method->die('message' => q/'new' called on non-class 'Object::InsideOut'/);
     }
 
     # Perform package initialization, if required
-    if ($DO_INIT) {
-        initialize();
-    }
+    initialize() if ($DO_INIT);
 
     # Gather arguments into a single hash ref
     my $all_args = {};
@@ -1380,7 +1460,7 @@ sub clone
     # Must call ->clone() as an object method
     my $class = Scalar::Util::blessed($parent);
     if (! $class) {
-        OIO::Method->die('message'  => q/Must call ->clone() as an object method/);
+        OIO::Method->die('message' => q/'clone' called as a class method/);
     }
 
     # Create a new 'bare' object
@@ -1432,10 +1512,52 @@ sub clone
 }
 
 
+# Get a metadata object
+sub meta
+{
+    my ($thing, $arg) = @_;
+    my $class = ref($thing) || $thing;
+
+    # No metadata for OIO
+    if ($class eq __PACKAGE__) {
+        OIO::Method->die('message' => q/'meta' called on non-class 'Object::InsideOut'/);
+    }
+
+    # Perform package initialization, if required
+    initialize() if ($DO_INIT);
+
+    # Get all foreign classes
+    my %foreign;
+    foreach my $pkg (@{$TREE_BOTTOM_UP{$class}}) {
+        if (exists($HERITAGE{$pkg})) {
+            @foreign{keys(%{$HERITAGE{$pkg}[1]})} = undef;
+        }
+    }
+    my @foreign = (keys(%foreign));
+
+    return (Object::InsideOut::Metadata->new(
+                'INIT_ARGS'     => \%INIT_ARGS,
+                'AUTOMETHODS'   => \%AUTOMETHODS,
+                'CLASSES'       => $TREE_TOP_DOWN{$class},
+                'FOREIGN'       => \@foreign));
+}
+
+
 # Put data in a field, making sure that sharing is supported
 sub set
 {
     my ($self, $field, $data) = @_;
+
+    # Must call ->set() as an object method
+    if (! Scalar::Util::blessed($self)) {
+        OIO::Method->die('message' => q/'set' called as a class method/);
+    }
+
+    # Restrict usage to inside class hierarchy
+    if (! $self->$UNIV_ISA('Object::InsideOut')) {
+        my $caller = caller();
+        OIO::Method->die('message' => "Can't call restricted method 'inherit' from class '$caller'");
+    }
 
     # Check usage
     if (! defined($field)) {
@@ -1463,9 +1585,9 @@ sub set
     {
         lock($field);
         if ($fld_type eq 'ARRAY') {
-            $$field[$$self] = Object::InsideOut::Util::make_shared($data);
+            $$field[$$self] = make_shared($data);
         } else {
-            $$field{$$self} = Object::InsideOut::Util::make_shared($data);
+            $$field{$$self} = make_shared($data);
         }
 
     } else {
@@ -1596,12 +1718,14 @@ sub DESTROY
 
 ### Serialization support using Storable ###
 
-sub STORABLE_freeze {
+sub STORABLE_freeze :Sub
+{
     my ($self, $cloning) = @_;
     return ('', $self->dump());
 }
 
-sub STORABLE_thaw {
+sub STORABLE_thaw :Sub
+{
     my ($obj, $cloning, $data);
     if (@_ == 4) {
         ($obj, $cloning, undef, $data) = @_;
@@ -1631,9 +1755,9 @@ sub STORABLE_thaw {
 ### Accessor Generator ###
 
 # Creates object data accessors for classes
-sub create_accessors :Private
+sub create_accessors :Sub(Private)
 {
-    my ($package, $field_ref, $attr, $use_want) = @_;
+    my ($pkg, $field_ref, $attr, $use_want) = @_;
 
     # Extract info from attribute
     my ($kind) = $attr =~ /^(\w+)/;
@@ -1646,7 +1770,7 @@ sub create_accessors :Private
     } elsif (! $decl) {
         return if ($kind =~ /^Field/i);
         OIO::Attribute->die(
-            'message'   => "Missing declarations for attribute in package '$package'",
+            'message'   => "Missing declarations for attribute in package '$pkg'",
             'Attribute' => $attr);
     } elsif ($kind !~ /^Field/i) {
         $decl =~ s/'?name'?\s*=>/'$kind'=>/i;
@@ -1667,7 +1791,7 @@ sub create_accessors :Private
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
             OIO::Attribute->die(
-                'message'   => "Malformed attribute in package '$package'",
+                'message'   => "Malformed attribute in package '$pkg'",
                 'Error'     => $err,
                 'Attribute' => $attr);
         }
@@ -1731,7 +1855,7 @@ sub create_accessors :Private
                 # Check type-checking setting and set default
                 if (!$val || (ref($val) && (ref($val) ne 'CODE'))) {
                     OIO::Attribute->die(
-                        'message'   => "Can't create accessor method for package '$package'",
+                        'message'   => "Can't create accessor method for package '$pkg'",
                         'Info'      => q/Bad 'Type' specifier: Must be a 'string' or code ref/,
                         'Attribute' => $attr);
                 }
@@ -1784,7 +1908,7 @@ sub create_accessors :Private
                 $pre = $val;
                 if (ref($pre) ne 'CODE') {
                     OIO::Attribute->die(
-                        'message'   => "Can't create accessor method for package '$package'",
+                        'message'   => "Can't create accessor method for package '$pkg'",
                         'Info'      => q/Bad 'Preprocessor' specifier: Must be a code ref/,
                         'Attribute' => $attr);
                 }
@@ -1792,7 +1916,7 @@ sub create_accessors :Private
             # Unknown parameter
             elsif ($key_uc ne 'IGNORE') {
                 OIO::Attribute->die(
-                    'message' => "Can't create accessor method for package '$package'",
+                    'message' => "Can't create accessor method for package '$pkg'",
                     'Info'    => "Unknown accessor specifier: $key");
             }
 
@@ -1809,58 +1933,64 @@ sub create_accessors :Private
     if ($arg || ($kind =~ /^ARG$/i)) {
         if (!$arg) {
             $arg = hash_re($acc_spec, qr/^ARG$/i);
-            $INIT_ARGS{$package}{$arg} = $acc_spec;
+            $INIT_ARGS{$pkg}{$arg} = $acc_spec;
         }
         if (!defined($name)) {
             $name = $arg;
         }
-        $INIT_ARGS{$package}{$arg}{'FIELD'} = $field_ref;
+        $INIT_ARGS{$pkg}{$arg}{'FIELD'} = $field_ref;
+        # Add type to :InitArgs
+        if (my $type = $FIELD_TYPE{$field_ref}) {
+            if (! hash_re($INIT_ARGS{$pkg}{$arg}, qr/^TYPE$/i)) {
+                $INIT_ARGS{$pkg}{$arg}{'TYPE'} = $type;
+            }
+        }
     }
 
     # Add field info for dump()
     if ($name) {
-        if (exists($DUMP_FIELDS{$package}{$name}) &&
-            $field_ref != $DUMP_FIELDS{$package}{$name}[0])
+        if (exists($DUMP_FIELDS{$pkg}{$name}) &&
+            $field_ref != $DUMP_FIELDS{$pkg}{$name}[0])
         {
             OIO::Attribute->die(
-                'message'   => "Can't create accessor method for package '$package'",
-                'Info'      => "'$name' already specified for another field using '$DUMP_FIELDS{$package}{$name}[1]'",
+                'message'   => "Can't create accessor method for package '$pkg'",
+                'Info'      => "'$name' already specified for another field using '$DUMP_FIELDS{$pkg}{$name}[1]'",
                 'Attribute' => $attr);
         }
-        $DUMP_FIELDS{$package}{$name} = [ $field_ref, 'Name' ];
+        $DUMP_FIELDS{$pkg}{$name} = [ $field_ref, 'Name' ];
         # Done if only 'Name' present
         if (! $get && ! $set && ! $return && ! $lvalue) {
             return;
         }
 
     } elsif ($get) {
-        if (exists($DUMP_FIELDS{$package}{$get}) &&
-            $field_ref != $DUMP_FIELDS{$package}{$get}[0])
+        if (exists($DUMP_FIELDS{$pkg}{$get}) &&
+            $field_ref != $DUMP_FIELDS{$pkg}{$get}[0])
         {
             OIO::Attribute->die(
-                'message'   => "Can't create accessor method for package '$package'",
-                'Info'      => "'$get' already specified for another field using '$DUMP_FIELDS{$package}{$get}[1]'",
+                'message'   => "Can't create accessor method for package '$pkg'",
+                'Info'      => "'$get' already specified for another field using '$DUMP_FIELDS{$pkg}{$get}[1]'",
                 'Attribute' => $attr);
         }
-        if (! exists($DUMP_FIELDS{$package}{$get}) ||
-            ($DUMP_FIELDS{$package}{$get}[1] ne 'Name'))
+        if (! exists($DUMP_FIELDS{$pkg}{$get}) ||
+            ($DUMP_FIELDS{$pkg}{$get}[1] ne 'Name'))
         {
-            $DUMP_FIELDS{$package}{$get} = [ $field_ref, 'Get' ];
+            $DUMP_FIELDS{$pkg}{$get} = [ $field_ref, 'Get' ];
         }
 
     } elsif ($set) {
-        if (exists($DUMP_FIELDS{$package}{$set}) &&
-            $field_ref != $DUMP_FIELDS{$package}{$set}[0])
+        if (exists($DUMP_FIELDS{$pkg}{$set}) &&
+            $field_ref != $DUMP_FIELDS{$pkg}{$set}[0])
         {
             OIO::Attribute->die(
-                'message'   => "Can't create accessor method for package '$package'",
-                'Info'      => "'$set' already specified for another field using '$DUMP_FIELDS{$package}{$set}[1]'",
+                'message'   => "Can't create accessor method for package '$pkg'",
+                'Info'      => "'$set' already specified for another field using '$DUMP_FIELDS{$pkg}{$set}[1]'",
                 'Attribute' => $attr);
         }
-        if (! exists($DUMP_FIELDS{$package}{$set}) ||
-            ($DUMP_FIELDS{$package}{$set}[1] ne 'Name'))
+        if (! exists($DUMP_FIELDS{$pkg}{$set}) ||
+            ($DUMP_FIELDS{$pkg}{$set}[1] ne 'Name'))
         {
-            $DUMP_FIELDS{$package}{$set} = [ $field_ref, 'Set' ];
+            $DUMP_FIELDS{$pkg}{$set} = [ $field_ref, 'Set' ];
         }
     } elsif (! $return && ! $lvalue) {
         return;
@@ -1869,7 +1999,7 @@ sub create_accessors :Private
     # If 'RETURN' or 'LVALUE', need 'SET', too
     if (($return || $lvalue) && ! $set) {
         OIO::Attribute->die(
-            'message'   => "Can't create accessor method for package '$package'",
+            'message'   => "Can't create accessor method for package '$pkg'",
             'Info'      => "No set accessor specified to go with 'RETURN'/'LVALUE'",
             'Attribute' => $attr);
     }
@@ -1879,10 +2009,10 @@ sub create_accessors :Private
         if ($method) {
             no strict 'refs';
             # Do not overwrite existing methods
-            if (*{$package.'::'.$method}{CODE}) {
+            if (*{$pkg.'::'.$method}{CODE}) {
                 OIO::Attribute->die(
                     'message'   => q/Can't create accessor method/,
-                    'Info'      => "Method '$method' already exists in class '$package'",
+                    'Info'      => "Method '$method' already exists in class '$pkg'",
                     'Attribute' => $attr);
             }
         }
@@ -1905,12 +2035,47 @@ sub create_accessors :Private
     # Get type checking (if any)
     my $type = $FIELD_TYPE{$field_ref} || 'NONE';
 
+    # Metadata
+    my %meta;
+    if ($set) {
+        $meta{$set}{'kind'} = ($get && ($get eq $set)) ? 'accessor' : 'set';
+        if ($lvalue) {
+            $meta{$set}{'lvalue'} = 1;
+        }
+        $meta{$set}{'return'} = lc($return);
+    }
+    if ($get && (!$set || ($get ne $set))) {
+        $meta{$get}{'kind'} = 'get';
+    }
+    foreach my $meth ($get, $set) {
+        next if (! $meth);
+        # Type
+        if (ref($type)) {
+            $meta{$meth}{'type'} = $type;
+        } elsif ($type eq 'NUMERIC') {
+            $meta{$meth}{'type'} = 'numeric';
+        } elsif ($type eq 'LIST' || $type =~ /^array(?:_?ref)?$/i) {
+            $meta{$meth}{'type'} = 'ARRAY';
+        } elsif ($type =~ /^hash(?:_?ref)?$/i) {
+            $meta{$meth}{'type'} = 'HASH';
+        } elsif ($type ne 'NONE') {
+            $meta{$meth}{'type'} = $type;
+        }
+        # Permissions
+        if ($private) {
+            $meta{$meth}{'hidden'} = 1;
+        } elsif ($restricted) {
+            $meta{$meth}{'restricted'} = 1;
+        }
+    }
+    add_meta($pkg, \%meta);
+
     # Code to be eval'ed into subroutines
-    my $code = "package $package;\n";
+    my $code = "package $pkg;\n";
 
     # Create an :lvalue accessor
     if ($lvalue) {
-        $code .= create_lvalue_accessor($package, $set, $field_ref, $get,
+        $code .= create_lvalue_accessor($pkg, $set, $field_ref, $get,
                                         $type, $name, $return, $private,
                                         $restricted, $WEAK{$field_ref}, $pre);
     }
@@ -1918,9 +2083,9 @@ sub create_accessors :Private
     # Create 'set' or combination accessor
     elsif ($set) {
         # Begin with subroutine declaration in the appropriate package
-        $code .= "*${package}::$set = sub {\n";
+        $code .= "*${pkg}::$set = sub {\n";
 
-        $code .= preamble_code($package, $set, $private, $restricted);
+        $code .= preamble_code($pkg, $set, $private, $restricted);
 
         my $fld_str = (ref($field_ref) eq 'HASH') ? "\$field->\{\${\$_[0]}}" : "\$field->\[\${\$_[0]}]";
 
@@ -1934,7 +2099,7 @@ sub create_accessors :Private
             $code .= <<"_CHECK_ARGS_";
     if (\@_ < 2) {
         OIO::Args->die(
-            'message'  => q/Missing arg(s) to '$package->$set'/,
+            'message'  => q/Missing arg(s) to '$pkg->$set'/,
             'location' => [ caller() ]);
     }
 _CHECK_ARGS_
@@ -1953,7 +2118,7 @@ _CHECK_ARGS_
         if (\$@ || \@errs) {
             my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
             OIO::Code->die(
-                'message' => q/Problem with preprocessing routine for '$package->$set'/,
+                'message' => q/Problem with preprocessing routine for '$pkg->$set'/,
                 'Error'   => \$err);
         }
     }
@@ -1971,12 +2136,12 @@ _PRE_
         if (\$@ || \@errs) {
             my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
             OIO::Code->die(
-                'message' => q/Problem with type check routine for '$package->$set'/,
+                'message' => q/Problem with type check routine for '$pkg->$set'/,
                 'Error'   => \$err);
         }
         if (! \$ok) {
             OIO::Args->die(
-                'message'  => "Argument to '$package->$set' failed type check: $arg_str",
+                'message'  => "Argument to '$pkg->$set' failed type check: $arg_str",
                 'location' => [ caller() ]);
         }
     }
@@ -1989,7 +2154,7 @@ _CODE_
     if (! ref($arg_str)) {
         OIO::Args->die(
             'message'  => "Bad argument: $arg_str",
-            'Usage'    => q/Argument to '$package->$set' must be a reference/,
+            'Usage'    => q/Argument to '$pkg->$set' must be a reference/,
             'location' => [ caller() ]);
     }
 _WEAK_
@@ -2001,7 +2166,7 @@ _WEAK_
     if (! Scalar::Util::looks_like_number($arg_str)) {
         OIO::Args->die(
             'message'  => "Bad argument: $arg_str",
-            'Usage'    => q/Argument to '$package->$set' must be numeric/,
+            'Usage'    => q/Argument to '$pkg->$set' must be numeric/,
             'location' => [ caller() ]);
     }
 _NUMERIC_
@@ -2029,7 +2194,7 @@ _ARRAY_
     } elsif (\@_ % 2 == 0) {
         OIO::Args->die(
             'message'  => q/Odd number of arguments: Can't create hash ref/,
-            'Usage'    => q/'$package->$set' requires a hash ref or an even number of args (to make a hash ref)/,
+            'Usage'    => q/'$pkg->$set' requires a hash ref or an even number of args (to make a hash ref)/,
             'location' => [ caller() ]);
     } else {
         my \@args = \@_;
@@ -2053,14 +2218,14 @@ _HASH_
     if (! Object::InsideOut::Util::is_it($arg_str, '$type')) {
         OIO::Args->die(
             'message'  => q/Bad argument: Wrong type/,
-            'Usage'    => q/Argument to '$package->$set' must be of type '$type'/,
+            'Usage'    => q/Argument to '$pkg->$set' must be of type '$type'/,
             'location' => [ caller() ]);
     }
 _REF_
         }
 
         # Add field locking code if sharing
-        if (is_sharing($package)) {
+        if (is_sharing($pkg)) {
             $code .= "    lock(\$field);\n"
         }
 
@@ -2070,7 +2235,7 @@ _REF_
         }
 
         # Add actual 'set' code
-        $code .= (is_sharing($package))
+        $code .= (is_sharing($pkg))
               ? "    $fld_str = Object::InsideOut::Util::make_shared($arg_str);\n"
               : "    $fld_str = $arg_str;\n";
         if ($WEAK{$field_ref}) {
@@ -2098,9 +2263,9 @@ _REF_
 
     # Create 'get' accessor
     if ($get && (!$set || ($get ne $set))) {
-        $code .= "*${package}::$get = sub {\n"
+        $code .= "*${pkg}::$get = sub {\n"
 
-               . preamble_code($package, $get, $private, $restricted)
+               . preamble_code($pkg, $get, $private, $restricted)
 
                . ((ref($field_ref) eq 'HASH')
                     ? "    \$field->{\${\$_[0]}};\n};\n"
@@ -2122,7 +2287,7 @@ _REF_
     if ($@ || @errs) {
         my ($err) = split(/ at /, $@ || join(" | ", @errs));
         OIO::Internal->die(
-            'message'     => "Failure creating accessor for class '$package'",
+            'message'     => "Failure creating accessor for class '$pkg'",
             'Error'       => $err,
             'Declaration' => $attr,
             'Code'        => $code,
@@ -2131,28 +2296,24 @@ _REF_
 }
 
 # Generate code for start of accessor
-sub preamble_code :Private
+sub preamble_code :Sub(Private)
 {
-    my ($package, $name, $private, $restricted) = @_;
+    my ($pkg, $name, $private, $restricted) = @_;
     my $code = '';
 
     # Permission checking code
     if ($private) {
         $code .= <<"_PRIVATE_";
     my \$caller = caller();
-    if (\$caller ne '$package') {
-        OIO::Method->die(
-            'message' => "Can't call private method '$package->$name' from class '\$caller'",
-            'location' => [ caller() ]);
+    if (\$caller ne '$pkg') {
+        OIO::Method->die('message' => "Can't call private method '$pkg->$name' from class '\$caller'");
     }
 _PRIVATE_
     } elsif ($restricted) {
         $code .= <<"_RESTRICTED_";
     my \$caller = caller();
-    if (! \$caller->isa('$package') && ! $package->isa(\$caller)) {
-        OIO::Method->die(
-            'message'  => "Can't call restricted method '$package->$name' from class '\$caller'",
-            'location' => [ caller() ]);
+    if (! \$caller->isa('$pkg') && ! $pkg->isa(\$caller)) {
+        OIO::Method->die('message'  => "Can't call restricted method '$pkg->$name' from class '\$caller'");
     }
 _RESTRICTED_
     }
@@ -2165,46 +2326,46 @@ _RESTRICTED_
 
 # Returns a 'wrapper' closure back to initialize() that restricts a method
 # to being only callable from within its class hierarchy
-sub create_RESTRICTED :Private
+sub create_RESTRICTED :Sub(Private)
 {
-    my ($package, $method, $code) = @_;
+    my ($pkg, $method, $code) = @_;
     return sub {
         my $caller = caller();
         # Caller must be in class hierarchy
-        if ($caller->$UNIV_ISA($package) || $package->$UNIV_ISA($caller)) {
+        if ($caller->$UNIV_ISA($pkg) || $pkg->$UNIV_ISA($caller)) {
             goto $code;
         }
-        OIO::Method->die('message'  => "Can't call restricted method '$package->$method' from class '$caller'");
+        OIO::Method->die('message' => "Can't call restricted method '$pkg->$method' from class '$caller'");
     };
 }
 
 
 # Returns a 'wrapper' closure back to initialize() that makes a method
 # private (i.e., only callable from within its own class).
-sub create_PRIVATE :Private
+sub create_PRIVATE :Sub(Private)
 {
-    my ($package, $method, $code) = @_;
+    my ($pkg, $method, $code) = @_;
     return sub {
         my $caller = caller();
         # Caller must be in the package
-        if ($caller eq $package) {
+        if ($caller eq $pkg) {
             goto $code;
         }
-        OIO::Method->die('message' => "Can't call private method '$package->$method' from class '$caller'");
+        OIO::Method->die('message' => "Can't call private method '$pkg->$method' from class '$caller'");
     };
 }
 
 
 # Redefines a subroutine to make it uncallable - with the original code ref
 # stored elsewhere, of course.
-sub create_HIDDEN :Private
+sub create_HIDDEN :Sub(Private)
 {
-    my ($package, $method) = @_;
+    my ($pkg, $method) = @_;
 
     # Create new code that hides the original method
     my $code = <<"_CODE_";
-sub ${package}::$method {
-    OIO::Method->die('message'  => q/Can't call hidden method '$package->$method'/);
+sub ${pkg}::$method {
+    OIO::Method->die('message' => q/Can't call hidden method '$pkg->$method'/);
 }
 _CODE_
 
@@ -2218,7 +2379,7 @@ _CODE_
     if ($@ || @errs) {
         my ($err) = split(/ at /, $@ || join(" | ", @errs));
         OIO::Internal->die(
-            'message'  => "Failure hiding '$package->$method'",
+            'message'  => "Failure hiding '$pkg->$method'",
             'Error'    => $err,
             'Code'     => $code,
             'self'     => 1);
@@ -2229,7 +2390,7 @@ _CODE_
 ### Delayed Loading ###
 
 # Loads sub-modules
-sub load :Private
+sub load :Sub(Private)
 {
     my $mod = shift;
     my $file = "Object/InsideOut/$mod.pm";
@@ -2258,47 +2419,57 @@ sub load :Private
     }
 }
 
-sub generate_CUMULATIVE :Private
+sub generate_CUMULATIVE :Sub(Private)
 {
     load('Cumulative');
+
+    @_ = (\%CUMULATIVE, \%ANTICUMULATIVE, \%TREE_TOP_DOWN, \%TREE_BOTTOM_UP,
+          $UNIV_ISA);
+
     goto &generate_CUMULATIVE;
 }
 
-sub create_CUMULATIVE :Private
+sub create_CUMULATIVE :Sub(Private)
 {
     load('Cumulative');
     goto &create_CUMULATIVE;
 }
 
-sub generate_CHAINED :Private
+sub generate_CHAINED :Sub(Private)
 {
     load('Chained');
+
+    @_ = (\%CHAINED, \%ANTICHAINED, \%TREE_TOP_DOWN, \%TREE_BOTTOM_UP,
+          $UNIV_ISA);
+
     goto &generate_CHAINED;
 }
 
-sub create_CHAINED :Private
+sub create_CHAINED :Sub(Private)
 {
     load('Chained');
     goto &create_CHAINED;
 }
 
-sub generate_OVERLOAD :Private
+sub generate_OVERLOAD :Sub(Private)
 {
     load('Overload');
+
+    @_ = (\%OVERLOAD, \%TREE_TOP_DOWN);
+
     goto &generate_OVERLOAD;
 }
 
-sub install_UNIVERSAL
+sub install_UNIVERSAL :Sub
 {
     load('Universal');
 
-    @_ = (\&UNIVERSAL::isa, \&UNIVERSAL::can, \%AUTOMETHODS,
-          \%HERITAGE, \%TREE_BOTTOM_UP);
+    @_ = ($UNIV_ISA, $UNIV_CAN, \%AUTOMETHODS, \%HERITAGE, \%TREE_BOTTOM_UP);
 
     goto &install_UNIVERSAL;
 }
 
-sub install_ATTRIBUTES
+sub install_ATTRIBUTES :Sub
 {
     load('attributes');
 
@@ -2307,7 +2478,7 @@ sub install_ATTRIBUTES
     goto &install_ATTRIBUTES;
 }
 
-sub dump
+sub dump :Method(Object)
 {
     load('Dump');
 
@@ -2320,7 +2491,7 @@ sub dump
     goto &dump;
 }
 
-sub pump
+sub pump :Method(Class)
 {
     load('Dump');
 
@@ -2333,7 +2504,7 @@ sub pump
     goto &dump;
 }
 
-sub inherit
+sub inherit :Method(Object)
 {
     load('Foreign');
 
@@ -2345,7 +2516,7 @@ sub inherit
     goto &inherit;
 }
 
-sub heritage
+sub heritage :Method(Object)
 {
     load('Foreign');
 
@@ -2357,7 +2528,7 @@ sub heritage
     goto &inherit;
 }
 
-sub disinherit
+sub disinherit :Method(Object)
 {
     load('Foreign');
 
@@ -2369,7 +2540,7 @@ sub disinherit
     goto &inherit;
 }
 
-sub create_heritage :Private
+sub create_heritage :Sub(Private)
 {
     load('Foreign');
 
@@ -2381,16 +2552,19 @@ sub create_heritage :Private
     goto &inherit;
 }
 
-sub create_field
+sub create_field :Method(Class)
 {
     load('Dynamic');
+
+    push(@EXPORT, 'create_field');
+    $DO_INIT = 1;
 
     unshift(@_, $UNIV_ISA);
 
     goto &create_field;
 }
 
-sub AUTOLOAD
+sub AUTOLOAD :Sub
 {
     load('Autoload');
 
@@ -2402,7 +2576,7 @@ sub AUTOLOAD
     goto &Object::InsideOut::AUTOLOAD;
 }
 
-sub create_lvalue_accessor :Private
+sub create_lvalue_accessor :Sub(Private)
 {
     load('lvalue');
     goto &create_lvalue_accessor;
@@ -2420,7 +2594,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.02
+This document describes Object::InsideOut version 2.03
 
 =head1 SYNOPSIS
 
@@ -2430,7 +2604,8 @@ This document describes Object::InsideOut version 2.02
      # Numeric field
      #   With combined get+set accessor
      my @data
-            :Field('Type' => 'NUMERIC')
+            :Field
+            :Type(Numeric)
             :Accessor(data);
 
      # Takes 'INPUT' (or 'input', etc.) as a mandatory parameter to ->new()
@@ -2461,7 +2636,8 @@ This document describes Object::InsideOut version 2.02
      #     Value automatically added to @info array
      #     Defaults to [ 'empty' ]
      my @info
-            :Field('Type' => 'LIST')
+            :Field
+            :Type(List)
             :Standard(info)
             :Arg('Name' => 'INFO', 'Default' => 'empty');
  }
@@ -2473,7 +2649,8 @@ This document describes Object::InsideOut version 2.02
      #   With combined accessor
      #   Plus automatic parameter processing on object creation
      my @foo
-            :Field('Type' => 'My::Class')
+            :Field
+            :Type(My::Class)
             :All(foo);
  }
 
@@ -2594,6 +2771,11 @@ Object::InsideOut allows classes to inherit from foreign (i.e.,
 non-Object::InsideOut) classes, thus allowing you to sub-class other Perl
 class, and access their methods from your own objects.
 
+=item * Introspection
+
+Obtain constructor parameters and method metadata for Object::InsideOut
+classes.
+
 =back
 
 =head1 CLASSES
@@ -2606,8 +2788,8 @@ S<C<use Object::InsideOut;>>:
      ...
  }
 
-Sub-classes inherit from base classes by telling Object::InsideOut what the
-parent class is:
+Sub-classes (child classes) inherit from base classes (parent classes) by
+telling Object::InsideOut what the parent class is:
 
  package My::Sub; {
      use Object::InsideOut qw(My::Parent);
@@ -2624,7 +2806,9 @@ Multiple inheritance is also supported:
 Object::InsideOut acts as a replacement for the C<base> pragma:  It loads the
 parent module(s), calls their C<import> functions, and sets up the sub-class's
 @ISA array.  Therefore, you should not S<C<use base ...>> yourself, nor try to
-set up C<@ISA> arrays.
+set up C<@ISA> arrays.  Further, you should not use a class's C<@ISA> array to
+determine a class's hierarchy:  See L</"INTROSPECTION"> for details on how to
+do this.
 
 If a parent class takes parameters (e.g., symbols to be exported via
 L<Exporter|/"Usage With C<Exporter>">), enclose them in an array ref
@@ -2753,14 +2937,14 @@ followed by a set of parameters in parentheses.  For example, the attributes
 on the following array declare it as an object field, and specify the
 generation of an accessor method for that field:
 
- my @level :Field :Accessor('Name' => 'level');
+ my @level :Field :Accessor(level);
 
 When multiple attributes are assigned to a single entity, they may all appear
 on the same line (as shown above), or on separate lines:
 
  my @level
      :Field
-     :Accessor('Name' => 'level');
+     :Accessor(level);
 
 However, due to limitations in the Perl parser, the entirety of any one
 attribute must be on a single line:
@@ -2769,13 +2953,12 @@ attribute must be on a single line:
  # my @level
  #     :Field
  #     :Accessor('Name'   => 'level',
- #               'Type'   => 'Numeric',
  #               'Return' => 'Old');
 
  # Each attribute must be all on one line
  my @level
      :Field
-     :Accessor('Name' => 'level', 'Type' => 'Numeric', 'Return' => 'Old');
+     :Accessor('Name' => 'level', 'Return' => 'Old');
 
 For Object::InsideOut's purposes, the case of an attribute's name does not
 matter:
@@ -2805,9 +2988,6 @@ Object data fields may also be hashes:
 However, as array access is as much as 40% faster than hash access, you should
 stick to using arrays.  (See L</"Object ID"> concerning when hashes may be
 required.)
-
-(The case of the word I<Field> does not matter, but, by convention, should not
-be all lowercase.)
 
 =head2 Getting Data
 
@@ -3033,11 +3213,11 @@ C<Regexp> may be abbreviated to C<Regex> or C<Re>.
 
 =head1 OBJECT PRE-iNITIALIZATION
 
-Occassionally, a subclass may need to send a parameter to a parent class as
+Occassionally, a child class may need to send a parameter to a parent class as
 part of object initialization.  This can be accomplished by supplying a
-C<:PreInit> labeled subroutine in the subclass.  These subroutines, if found,
-are called in order from the bottom of the class heirarchy upwards (i.e.,
-child classes first).
+C<:PreInit> labeled subroutine in the child class.  These subroutines, if
+found, are called in order from the bottom of the class hierarchy upwards
+(i.e., child classes first).
 
 The subroutine should expect two arguments:  The newly created
 (un-initialized) object (i.e., C<$self>), and a hash ref of all the parameters
@@ -3639,7 +3819,7 @@ and produces:
 
 As illustrated above, cumulative methods are tagged with the C<:Cumulative>
 attribute (or S<C<:Cumulative(top down)>>), and propagate from the I<top down>
-through the class hierarchy (i.e., from the base classes down through the
+through the class hierarchy (i.e., from the parent classes down through the
 child classes).  If tagged with S<C<:Cumulative(bottom up)>>, they will
 propagated from the object's class upwards through the parent classes.
 
@@ -3755,13 +3935,13 @@ leading and trailing whitespace to be removed, then the name to be properly
 cased, and finally whitespace to be compressed to a single space.  The
 resulting C<$name> would be returned to the caller.
 
-The default direction is to chain methods from the base classes at the top of
-the class hierarchy down through the child classes.  You may use the attribute
-S<C<:Chained(top down)>> to make this more explicit.
+The default direction is to chain methods from the parent classes at the top
+of the class hierarchy down through the child classes.  You may use the
+attribute S<C<:Chained(top down)>> to make this more explicit.
 
 If you label the method with the S<C<:Chained(bottom up)>> attribute, then the
 chained methods are called starting with the object's class and working
-upwards through the class hierarchy, similar to how
+upwards through the parent classes in the class hierarchy, similar to how
 S<C<:Cumulative(bottom up)>> works.
 
 Unlike C<:Cumulative> methods, C<:Chained> methods return a scalar when used
@@ -3845,7 +4025,7 @@ be structured:
  }
 
 Note: The I<OPTIONAL> code above for installing the generated handler as a
-method should not be used with C<:Cumulative> or C<:Chained> Automethods.
+method should not be used with C<:Cumulative> or C<:Chained> automethods.
 
 =head1 OBJECT SERIALIZATION
 
@@ -4125,7 +4305,7 @@ for example, as part of an C<:Automethod>.  Object::InsideOut provides a class
 method for this:
 
  # Dynamically create a hash field with standard accessors
- Object::InsideOut->create_field($class, '%'.$fld, ":Std($fld)");
+ My::Class->create_field('%'.$fld, ":Std($fld)");
 
 The first argument is the class into which the field will be added.  The
 second argument is a string containing the name of the field preceeded by
@@ -4134,14 +4314,12 @@ The remaining string arguments should be attributes declaring accessors and
 the like.  The C<:Field> attribute is assumed, and does not need to be added
 to the attribute list.  For example:
 
- Object::InsideOut->create_field('My::Class', '@data',
-                                              ":Type(numeric)",
-                                              ":Acc(data)" );
+ My::Class->create_field('@data', ":Type(numeric)",
+                                  ":Acc(data)");
 
- Object::InsideOut->create_field('My::Class', '@obj',
-                                              ":Type(Some::Class)",
-                                              ":Acc(obj)",
-                                              ":Weak" );
+ My::Class->create_field('@obj', ":Type(Some::Class)",
+                                 ":Acc(obj)",
+                                 ":Weak");
 
 Here's an example of an C<:Automethod> subroutine that uses dynamic field
 creation:
@@ -4162,8 +4340,7 @@ creation:
          }
 
          # Create the field and its standard accessors
-         Object::InsideOut->create_field($class, '@'.$fld_name,
-                                                 ":Std($fld_name)" );
+         $class->create_field('@'.$fld_name, ":Std($fld_name)");
 
          # Return code ref for newly created accessor
          no strict 'refs';
@@ -4590,6 +4767,62 @@ approach would be to first use the documented method for foreign inheritance
 (i.e., S<C<use Object::InsideOut qw(Foreign::Class);>>).  If that works, then
 I strongly recommend that you just use that approach unless you have a good
 reason not to.  If it doesn't work, then try S<C<use base>>.
+
+=head1 INTROSPECTION
+
+Object::InsideOut provides an introspection API that allow you to obtain
+metadata on a class's hierarchy, constructor parameters, and methods.
+
+=over
+
+=item my $meta = My::Class->meta();
+
+=item my $meta = $obj->meta();
+
+The C<-E<gt>meta()> method, which is exported by Object::InsideOut to each
+class, returns an L<Object::InsideOut::Metadata> object which can then be
+I<queried> for information about the invoking class or invoking object's
+class:
+
+ # Get an object's class hierarchy
+ my @classes = $obj->meta()->get_classes();
+
+ # Get info on the args for a class's constructor (i.e., ->new() parameters)
+ my %args = My::Class->meta()->get_args();
+
+ # Get info on the methods that can be called by an object
+ my %methods = $obj->meta()->get_methods();
+
+=item My::Class->isa();
+
+=item $obj->isa();
+
+When called in an array context, calling C<-E<gt>isa()> without any arguments
+on an Object::InsideOut class or object returns a list of the classes in the
+class hierarchy for that class or object, and is equivalent to:
+
+ my @classes = $obj->meta()->get_classes();
+
+When called in a scalar context, it returns an array ref containing the
+classes.
+
+=item My::Class->can();
+
+=item $obj->can();
+
+When called in an array context, calling C<-E<gt>can()> without any arguments
+on an Object::InsideOut class or object returns a list of the method names for
+that class or object, and is equivalent to:
+
+ my %methods = $obj->meta()->get_methods();
+ my @methods = keys(%methods);
+
+When called in a scalar context, it returns an array ref containing the
+method names.
+
+=back
+
+See L<Object::InsideOut::Metadata> for more details.
 
 =head1 THREAD SUPPORT
 
@@ -5031,7 +5264,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.02/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.03/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
@@ -5039,7 +5272,9 @@ L<http://www.perlmonks.org/?node_id=483162>,
 L<http://www.perlmonks.org/?node_id=515650>,
 Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
 
-L<Storable>
+L<Object::InsideOut::Metadata>
+
+L<Storable>, L<Exception:Class>, L<Want>, L<attributes>, L<overload>
 
 =head1 ACKNOWLEDGEMENTS
 

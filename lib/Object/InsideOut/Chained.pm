@@ -4,7 +4,7 @@ use strict;
 use warnings;
 no warnings 'redefine';
 
-sub generate_CHAINED :Private
+sub generate_CHAINED :Sub(Private)
 {
     my ($CHAINED,       $ANTICHAINED,
         $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
@@ -12,7 +12,7 @@ sub generate_CHAINED :Private
     # Get names for :CHAINED methods
     my (%chain, %chain_loc);
     foreach my $package (keys(%{$CHAINED})) {
-        foreach my $info (@{$$CHAINED{$package}}) {
+        while (my $info = shift(@{$$CHAINED{$package}})) {
             my ($code, $location) = @{$info};
             my $name = sub_name($code, ':CHAINED', $location);
             $chain{$name}{$package} = $code;
@@ -23,7 +23,7 @@ sub generate_CHAINED :Private
     # Get names for :CHAINED(BOTTOM UP) methods
     my %antichain;
     foreach my $package (keys(%{$ANTICHAINED})) {
-        foreach my $info (@{$$ANTICHAINED{$package}}) {
+        while (my $info = shift(@{$$ANTICHAINED{$package}})) {
             my ($code, $location) = @{$info};
             my $name = sub_name($code, ':CHAINED(BOTTOM UP)', $location);
 
@@ -55,6 +55,7 @@ sub generate_CHAINED :Private
         my $code = create_CHAINED($TREE_TOP_DOWN, $chain{$name});
         foreach my $package (keys(%{$chain{$name}})) {
             *{$package.'::'.$name} = $code;
+            add_meta($package, $name, 'kind', 'chained');
         }
     }
 
@@ -63,6 +64,7 @@ sub generate_CHAINED :Private
         my $code = create_CHAINED($TREE_BOTTOM_UP, $antichain{$name});
         foreach my $package (keys(%{$antichain{$name}})) {
             *{$package.'::'.$name} = $code;
+            add_meta($package, $name, 'kind', 'chained (bottom up)');
         }
     }
 }
@@ -70,7 +72,7 @@ sub generate_CHAINED :Private
 
 # Returns a closure back to initialize() that is used to setup CHAINED
 # and CHAINED(BOTTOM UP) methods for a particular method name.
-sub create_CHAINED :Private
+sub create_CHAINED :Sub(Private)
 {
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
@@ -101,5 +103,5 @@ sub create_CHAINED :Private
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

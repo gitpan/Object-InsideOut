@@ -4,7 +4,7 @@ use strict;
 use warnings;
 no warnings 'redefine';
 
-sub generate_CUMULATIVE :Private
+sub generate_CUMULATIVE :Sub(Private)
 {
     my ($CUMULATIVE,    $ANTICUMULATIVE,
         $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
@@ -12,7 +12,7 @@ sub generate_CUMULATIVE :Private
     # Get names for :CUMULATIVE methods
     my (%cum, %cum_loc);
     foreach my $package (keys(%{$CUMULATIVE})) {
-        foreach my $info (@{$$CUMULATIVE{$package}}) {
+        while (my $info = shift(@{$$CUMULATIVE{$package}})) {
             my ($code, $location) = @{$info};
             my $name = sub_name($code, ':CUMULATIVE', $location);
             $cum{$name}{$package} = $code;
@@ -23,7 +23,7 @@ sub generate_CUMULATIVE :Private
     # Get names for :CUMULATIVE(BOTTOM UP) methods
     my %anticum;
     foreach my $package (keys(%{$ANTICUMULATIVE})) {
-        foreach my $info (@{$$ANTICUMULATIVE{$package}}) {
+        while (my $info = shift(@{$$ANTICUMULATIVE{$package}})) {
             my ($code, $location) = @{$info};
             my $name = sub_name($code, ':CUMULATIVE(BOTTOM UP)', $location);
 
@@ -55,6 +55,7 @@ sub generate_CUMULATIVE :Private
         my $code = create_CUMULATIVE($TREE_TOP_DOWN, $cum{$name});
         foreach my $package (keys(%{$cum{$name}})) {
             *{$package.'::'.$name} = $code;
+            add_meta($package, $name, 'kind', 'cumulative');
         }
     }
 
@@ -63,6 +64,7 @@ sub generate_CUMULATIVE :Private
         my $code = create_CUMULATIVE($TREE_BOTTOM_UP, $anticum{$name});
         foreach my $package (keys(%{$anticum{$name}})) {
             *{$package.'::'.$name} = $code;
+            add_meta($package, $name, 'kind', 'cumulative (bottom up)');
         }
     }
 }
@@ -70,7 +72,7 @@ sub generate_CUMULATIVE :Private
 
 # Returns a closure back to initialize() that is used to setup CUMULATIVE
 # and CUMULATIVE(BOTTOM UP) methods for a particular method name.
-sub create_CUMULATIVE :Private
+sub create_CUMULATIVE :Sub(Private)
 {
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
@@ -123,18 +125,14 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 2.02;
+our $VERSION = 2.03;
 
-use Object::InsideOut 2.02;
+use Object::InsideOut 2.03;
+use Object::InsideOut::Metadata 2.03;
 
-my @VALUES  :Field;
-my @CLASSES :Field;
+my @VALUES  :Field :Arg(VALUES);
+my @CLASSES :Field :Arg(CLASSES);
 my @HASHES  :Field;
-
-my %init_args :InitArgs = (
-    'VALUES'  => { 'FIELD' => \@VALUES  },
-    'CLASSES' => { 'FIELD' => \@CLASSES }
-);
 
 sub as_string :Stringify
 {
@@ -169,9 +167,15 @@ sub as_hash :Hashify
     return ($HASHES[$$self]);
 }
 
+# Our metadata
+add_meta(__PACKAGE__, {
+    'new'          => {'hidden' => 1},
+    'create_field' => {'hidden' => 1},
+});
+
 }  # End of package's lexical scope
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

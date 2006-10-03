@@ -8,23 +8,23 @@ no warnings 'redefine';
 sub create_lvalue_accessor
 {
     if ($] < 5.008) {
-        my ($package, $set) = @_;
+        my ($pkg, $set) = @_;
         OIO::Code->die(
-            'message' => "Can't create 'lvalue' accessor method '$set' for package '$package'",
+            'message' => "Can't create 'lvalue' accessor method '$set' for package '$pkg'",
             'Info'    => q/'lvalue' accessors require Perl 5.8.0 or later/);
     }
 
     eval { require Want; };
     if ($@) {
-        my ($package, $set) = @_;
+        my ($pkg, $set) = @_;
         OIO::Code->die(
-            'message' => "Can't create 'lvalue' accessor method '$set' for package '$package'",
+            'message' => "Can't create 'lvalue' accessor method '$set' for package '$pkg'",
             'Info'    => q/Failure loading 'Want' module/,
             'Error'   => $@);
     } elsif ($Want::VERSION < 0.12) {
-        my ($package, $set) = @_;
+        my ($pkg, $set) = @_;
         OIO::Code->die(
-            'message' => "Can't create 'lvalue' accessor method '$set' for package '$package'",
+            'message' => "Can't create 'lvalue' accessor method '$set' for package '$pkg'",
             'Info'    => q/Requires 'Want' v0.12 or later/);
     }
 
@@ -35,7 +35,7 @@ sub create_lvalue_accessor
             OIO::Method->die('message' => "Can't call private subroutine 'Object::InsideOut::create_lvalue_accessor' from class '$caller'");
         }
 
-        my ($package, $set, $field_ref, $get, $type, $name, $return,
+        my ($pkg, $set, $field_ref, $get, $type, $name, $return,
             $private, $restricted, $weak, $pre) = @_;
 
         # Field string
@@ -45,8 +45,8 @@ sub create_lvalue_accessor
         my $obj_str = q/(Want::wantref() eq 'OBJECT')/;
 
         # Begin with subroutine declaration in the appropriate package
-        my $code = "*${package}::$set = sub :lvalue {\n"
-                 . preamble_code($package, $set, $private, $restricted)
+        my $code = "*${pkg}::$set = sub :lvalue {\n"
+                 . preamble_code($pkg, $set, $private, $restricted)
                  . "    my \$rv = !Want::want_lvalue(0);\n";
 
         # Add GET portion for combination accessor
@@ -60,7 +60,7 @@ sub create_lvalue_accessor
     my \$wobj = $obj_str;
     if ((\@_ < 2) && (\$rv || \$wobj)) {
         OIO::Args->die(
-            'message'  => q/Missing arg(s) to '$package->$set'/,
+            'message'  => q/Missing arg(s) to '$pkg->$set'/,
             'location' => [ caller() ]);
     }
 _CHECK_ARGS_
@@ -68,7 +68,7 @@ _CHECK_ARGS_
         }
 
         # Add field locking code if sharing
-        if (is_sharing($package)) {
+        if (is_sharing($pkg)) {
             $code .= "    lock(\$field);\n"
         }
 
@@ -100,7 +100,7 @@ _SET_
             if (\$@ || \@errs) {
                 my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
                 OIO::Code->die(
-                    'message' => q/Problem with preprocessing routine for '$package->$set'/,
+                    'message' => q/Problem with preprocessing routine for '$pkg->$set'/,
                     'Error'   => \$err);
             }
         }
@@ -118,12 +118,12 @@ _PRE_
             if (\$@ || \@errs) {
                 my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
                 OIO::Code->die(
-                    'message' => q/Problem with type check routine for '$package->$set'/,
+                    'message' => q/Problem with type check routine for '$pkg->$set'/,
                     'Error'   => \$err);
             }
             if (! \$ok) {
                 OIO::Args->die(
-                    'message'  => "Argument to '$package->$set' failed type check: $arg_str",
+                    'message'  => "Argument to '$pkg->$set' failed type check: $arg_str",
                     'location' => [ caller() ]);
             }
         }
@@ -136,7 +136,7 @@ _CODE_
         if (! ref($arg_str)) {
             OIO::Args->die(
                 'message'  => "Bad argument: $arg_str",
-                'Usage'    => q/Argument to '$package->$set' must be a reference/,
+                'Usage'    => q/Argument to '$pkg->$set' must be a reference/,
                 'location' => [ caller() ]);
         }
 _WEAK_
@@ -148,7 +148,7 @@ _WEAK_
         if (! Scalar::Util::looks_like_number($arg_str)) {
             OIO::Args->die(
                 'message'  => "Bad argument: $arg_str",
-                'Usage'    => q/Argument to '$package->$set' must be numeric/,
+                'Usage'    => q/Argument to '$pkg->$set' must be numeric/,
                 'location' => [ caller() ]);
         }
 _NUMERIC_
@@ -176,7 +176,7 @@ _ARRAY_
         } elsif (\@_ % 2 == 0) {
             OIO::Args->die(
                 'message'  => q/Odd number of arguments: Can't create hash ref/,
-                'Usage'    => q/'$package->$set' requires a hash ref or an even number of args (to make a hash ref)/,
+                'Usage'    => q/'$pkg->$set' requires a hash ref or an even number of args (to make a hash ref)/,
                 'location' => [ caller() ]);
         } else {
             my \@args = \@_;
@@ -200,7 +200,7 @@ _HASH_
         if (! Object::InsideOut::Util::is_it($arg_str, '$type')) {
             OIO::Args->die(
                 'message'  => q/Bad argument: Wrong type/,
-                'Usage'    => q/Argument to '$package->$set' must be of type '$type'/,
+                'Usage'    => q/Argument to '$pkg->$set' must be of type '$type'/,
                 'location' => [ caller() ]);
         }
 _REF_
@@ -212,7 +212,7 @@ _REF_
         }
 
         # Add actual 'set' code
-        $code .= (is_sharing($package))
+        $code .= (is_sharing($pkg))
               ? "        $fld_str = Object::InsideOut::Util::make_shared($arg_str);\n"
               : "        $fld_str = $arg_str;\n";
         if ($weak) {
@@ -251,5 +251,5 @@ _REF_
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

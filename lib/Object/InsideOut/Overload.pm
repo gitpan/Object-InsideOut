@@ -4,7 +4,7 @@ use strict;
 use warnings;
 no warnings 'redefine';
 
-sub generate_OVERLOAD :Private
+sub generate_OVERLOAD :Sub(Private)
 {
     my ($OVERLOAD, $TREE_TOP_DOWN) = @_;
 
@@ -19,13 +19,15 @@ sub generate_OVERLOAD :Private
         'CODIFY'    => q/&{}/,
     );
 
-    foreach my $package (keys(%{$OVERLOAD})) {
+    foreach my $pkg (keys(%{$OVERLOAD})) {
+        my %meta;
         # Generate code string
-        my $code = "package $package;\nuse overload (\n";
-        foreach my $operation (@{$$OVERLOAD{$package}}) {
+        my $code = "package $pkg;\nuse overload (\n";
+        while (my $operation = shift(@{$$OVERLOAD{$pkg}})) {
             my ($attr, $ref, $location) = @$operation;
             my $name = sub_name($ref, ":$attr", $location);
             $code .= sprintf('q/%s/ => sub { $_[0]->%s() },', $TYPE{$attr}, $name) . "\n";
+            $meta{$name}{'kind'} = 'overload';
         }
         $code .= q/'fallback' => 1);/;
 
@@ -36,26 +38,28 @@ sub generate_OVERLOAD :Private
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
             OIO::Internal->die(
-                'message'  => "Failure creating overloads for class '$package'",
+                'message'  => "Failure creating overloads for class '$pkg'",
                 'Error'    => $err,
                 'Code'     => $code,
                 'self'     => 1);
         }
+
+        add_meta($pkg, \%meta);
     }
 
     no strict 'refs';
 
-    foreach my $package (keys(%{$TREE_TOP_DOWN})) {
+    foreach my $pkg (keys(%{$TREE_TOP_DOWN})) {
         # Bless an object into every class
         # This works around an obscure 'overload' bug reported against
         # Class::Std (http://rt.cpan.org/NoAuth/Bug.html?id=14048)
-        bless(\do{ my $scalar; }, $package);
+        bless(\do{ my $scalar; }, $pkg);
 
         # Verify that scalar dereferencing is not overloaded in any class
-        if (exists(${$package.'::'}{'(${}'})) {
-            (my $file = $package . '.pm') =~ s/::/\//g;
+        if (exists(${$pkg.'::'}{'(${}'})) {
+            (my $file = $pkg . '.pm') =~ s/::/\//g;
             OIO::Code->die(
-                'location' => [ $package, $INC{$file} || '', '' ],
+                'location' => [ $pkg, $INC{$file} || '', '' ],
                 'message'  => q/Overloading scalar dereferencing '${}' is not allowed/,
                 'Info'     => q/The scalar of an object is its object ID, and can't be redefined/);
         }
@@ -66,5 +70,5 @@ sub generate_OVERLOAD :Private
 
 
 # Ensure correct versioning
-my $VERSION = 2.02;
-($Object::InsideOut::VERSION == 2.02) or die("Version mismatch\n");
+my $VERSION = 2.03;
+($Object::InsideOut::VERSION == 2.03) or die("Version mismatch\n");

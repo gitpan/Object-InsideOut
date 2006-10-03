@@ -1,5 +1,11 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.03 Tue Oct  3 14:40:26 EDT 2006
+	- Added introspection
+	- Document My::Class->create_field()
+	- Added examples/YAPI.pm
+	- Added POD tests
+
 2.02 Sat Sep 23 17:57:11 EST 2006
 	- Completed redesign on field attributes
 	  (Backwards compatibility maintained.  See POD for details.)

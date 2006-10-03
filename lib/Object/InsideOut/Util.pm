@@ -5,8 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.02;
+BEGIN {
+    our $VERSION = 2.03;
+}
 
+use Object::InsideOut::Metadata 2.03;
 
 ### Module Initialization ###
 
@@ -30,21 +33,26 @@ sub import
 
     # Exportable subroutines
     my %EXPORT_OK;
-    @EXPORT_OK{qw(create_object make_shared shared_copy hash_re is_it)} = undef;
+    @EXPORT_OK{qw(create_object hash_re is_it make_shared shared_copy)} = undef;
 
     # Handle entries in the import list
     my $caller = caller();
+    my %meta;
     while (my $sym = shift) {
         if (exists($EXPORT_OK{lc($sym)})) {
             # Export subroutine name
             no strict 'refs';
             *{$caller.'::'.$sym} = \&{lc($sym)};
+            $meta{$sym}{'hidden'} = 1;
         } else {
             OIO::Code->die(
                 'message' => "Symbol '$sym' is not exported by Object::InsideOut::Util",
                 'Info'    => 'Exportable symbols: ' . join(' ', keys(%EXPORT_OK)),
                 'ignore_package' => __PACKAGE__);
         }
+    }
+    if (%meta) {
+        add_meta($caller, \%meta);
     }
 }
 
