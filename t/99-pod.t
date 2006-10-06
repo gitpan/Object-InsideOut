@@ -31,6 +31,7 @@ SKIP: {
                             qr/^create_HIDDEN$/,
                             qr/^create_PRIVATE$/,
                             qr/^create_RESTRICTED$/,
+                            qr/^create_ARG_WRAP$/,
                             qr/^create_accessors$/,
                             qr/^create_field$/,
                             qr/^create_heritage$/,

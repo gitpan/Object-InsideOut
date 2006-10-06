@@ -13,8 +13,8 @@ sub generate_CUMULATIVE :Sub(Private)
     my (%cum, %cum_loc);
     foreach my $package (keys(%{$CUMULATIVE})) {
         while (my $info = shift(@{$$CUMULATIVE{$package}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':CUMULATIVE', $location);
+            my ($code, $location, $name) = @{$info};
+            $name ||= sub_name($code, ':CUMULATIVE', $location);
             $cum{$name}{$package} = $code;
             $cum_loc{$name}{$package} = $location;
         }
@@ -24,8 +24,8 @@ sub generate_CUMULATIVE :Sub(Private)
     my %anticum;
     foreach my $package (keys(%{$ANTICUMULATIVE})) {
         while (my $info = shift(@{$$ANTICUMULATIVE{$package}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':CUMULATIVE(BOTTOM UP)', $location);
+            my ($code, $location, $name) = @{$info};
+            $name ||= sub_name($code, ':CUMULATIVE(BOTTOM UP)', $location);
 
             # Check for conflicting definitions of $name
             if ($cum{$name}) {
@@ -125,9 +125,9 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 2.04;
+our $VERSION = 2.05;
 
-use Object::InsideOut 2.04;
+use Object::InsideOut 2.05;
 use Object::InsideOut::Metadata 2.03;
 
 my @VALUES  :Field :Arg(VALUES);
@@ -177,5 +177,5 @@ add_meta(__PACKAGE__, {
 
 
 # Ensure correct versioning
-my $VERSION = 2.04;
-($Object::InsideOut::VERSION == 2.04) or die("Version mismatch\n");
+my $VERSION = 2.05;
+($Object::InsideOut::VERSION == 2.05) or die("Version mismatch\n");

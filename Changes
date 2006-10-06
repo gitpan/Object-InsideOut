@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.05 Fri Oct  6 15:42:30 EDT 2006
+	- Implemented :MergeArgs for methods
+
 2.04 Tue Oct  3 15:01:30 EDT 2006
 	- Removed :lvalue method from meta tests
 

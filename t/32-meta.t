@@ -57,7 +57,9 @@ package Bar; {
 
     sub _internal { return; }
     sub bar :Method { return; }
-    add_meta(__PACKAGE__, 'bar', 'bork', 1)
+    add_meta(__PACKAGE__, 'bar', 'bork', 1);
+
+    sub bork :Method :MergeArgs(restricted) { return; }
 }
 
 
@@ -107,7 +109,8 @@ sub check_bar
 
     my %meths_are = (
           'new'   => { 'class' => 'Bar',
-                       'kind'  => 'constructor', },
+                       'kind'  => 'constructor',
+                       'merge_args' => 1 },
           'clone' => { 'class' => 'Bar',
                        'kind'  => 'object', },
           'meta'  => { 'class' => 'Bar' },
@@ -174,6 +177,10 @@ sub check_bar
 
           'bar' => { 'class' => 'Bar',
                      'bork'  => 1 },
+
+          'bork' => { 'class' => 'Bar',
+                      'merge_args' => 1,
+                      'restricted' => 1 },
     );
     if (! $HAVE_STORABLE) {
         delete($meths_are{'freeze'});

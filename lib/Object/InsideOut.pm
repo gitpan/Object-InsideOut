@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.04;
+our $VERSION = 2.05;
 
-use Object::InsideOut::Exception 2.04;
-use Object::InsideOut::Util 2.04 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.05;
+use Object::InsideOut::Util 2.05 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -306,6 +306,10 @@ my (%RESTRICTED, %PRIVATE);
 # an attribute called 'HIDDEN'.
 my %HIDDEN;
 
+# Methods that want merged args.  They are marked with an attribute called
+# 'MergeArgs'.
+my %ARG_WRAP;
+
 # Methods that are support overloading capabilities for objects.
 my %OVERLOAD;
 
@@ -431,6 +435,13 @@ sub MODIFY_CODE_ATTRIBUTES
                 push(@{$METHODS{$pkg}}, $info);
                 $DO_INIT = 1;
             }
+
+        } elsif ($attr =~ /^MERGE/) {
+            push(@{$ARG_WRAP{$pkg}}, $info);
+            if ($arg ne 'HIDDEN') {
+                push(@attrs, $arg) if $] > 5.006;
+            }
+            $DO_INIT = 1;
 
         } elsif ($attr =~ /^MOD(?:IFY)?_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
             install_ATTRIBUTES();
@@ -799,6 +810,111 @@ sub initialize :Sub(Private)
         install_UNIVERSAL();
     }
 
+    # Implement overload (-ify) operators
+    if (%OVERLOAD) {
+        generate_OVERLOAD();
+        undef(%OVERLOAD);
+    }
+
+    # Add metadata for methods
+    foreach my $pkg (keys(%METHODS)) {
+        my %meta;
+        while (my $info = shift(@{$METHODS{$pkg}})) {
+            my ($code, $location) = @{$info};
+            my $kind = pop(@{$info});
+            my $name = sub_name($code, ':METHOD', $location);
+            $info->[2] = $name;
+            $meta{$name}{'kind'} = lc($kind);
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%METHODS);
+
+    # Add metadata for subroutines
+    foreach my $pkg (keys(%SUBROUTINES)) {
+        my %meta;
+        while (my $info = shift(@{$SUBROUTINES{$pkg}})) {
+            my ($code, $location, $name) = @{$info};
+            if (! $name) {
+                $name = sub_name($code, ':SUB', $location);
+                $info->[2] = $name;
+            }
+            $meta{$name}{'hidden'} = 1;
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%SUBROUTINES);
+
+    # Implement merged argument methods
+    foreach my $pkg (keys(%ARG_WRAP)) {
+        my %meta;
+        while (my $info = shift(@{$ARG_WRAP{$pkg}})) {
+            my ($code, $location, $name) = @{$info};
+            if (! $name) {
+                $name = sub_name($code, ':MergeArgs', $location);
+                $info->[2] = $name;
+            }
+            my $new_code = create_ARG_WRAP($code);
+            *{$pkg.'::'.$name} = $new_code;
+            $info->[0] = $new_code;
+            $meta{$name}{'merge_args'} = 1;
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%ARG_WRAP);
+
+    # Implement restricted methods - only callable within hierarchy
+    foreach my $pkg (keys(%RESTRICTED)) {
+        my %meta;
+        while (my $info = shift(@{$RESTRICTED{$pkg}})) {
+            my ($code, $location, $name) = @{$info};
+            if (! $name) {
+                $name = sub_name($code, ':RESTRICTED', $location);
+                $info->[2] = $name;
+            }
+            my $new_code = create_RESTRICTED($pkg, $name, $code);
+            *{$pkg.'::'.$name} = $new_code;
+            $info->[0] = $new_code;
+            $meta{$name}{'restricted'} = 1;
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%RESTRICTED);
+
+    # Implement private methods - only callable from class itself
+    foreach my $pkg (keys(%PRIVATE)) {
+        my %meta;
+        while (my $info = shift(@{$PRIVATE{$pkg}})) {
+            my ($code, $location, $name) = @{$info};
+            if (! $name) {
+                $name = sub_name($code, ':PRIVATE', $location);
+                $info->[2] = $name;
+            }
+            my $new_code = create_PRIVATE($pkg, $name, $code);
+            *{$pkg.'::'.$name} = $new_code;
+            $info->[0] = $new_code;
+            $meta{$name}{'hidden'} = 1;
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%PRIVATE);
+
+    # Implement hidden methods - no longer callable by name
+    foreach my $pkg (keys(%HIDDEN)) {
+        my %meta;
+        while (my $info = shift(@{$HIDDEN{$pkg}})) {
+            my ($code, $location, $name) = @{$info};
+            if (! $name) {
+                $name = sub_name($code, ':HIDDEN', $location);
+                $info->[2] = $name;
+            }
+            *{$pkg.'::'.$name} = create_HIDDEN($pkg, $name);
+            $meta{$name}{'hidden'} = 1;
+        }
+        add_meta($pkg, \%meta);
+    }
+    undef(%HIDDEN);
+
     # Implement cumulative methods
     if (%CUMULATIVE || %ANTICUMULATIVE) {
         generate_CUMULATIVE();
@@ -812,75 +928,6 @@ sub initialize :Sub(Private)
         undef(%CHAINED);
         undef(%ANTICHAINED);
     }
-
-    # Implement overload (-ify) operators
-    if (%OVERLOAD) {
-        generate_OVERLOAD();
-        undef(%OVERLOAD);
-    }
-
-    # Implement restricted methods - only callable within hierarchy
-    foreach my $pkg (keys(%RESTRICTED)) {
-        my %meta;
-        while (my $info = shift(@{$RESTRICTED{$pkg}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':RESTRICTED', $location);
-            *{$pkg.'::'.$name} = create_RESTRICTED($pkg, $name, $code);
-            $meta{$name}{'restricted'} = 1;
-        }
-        add_meta($pkg, \%meta);
-    }
-    undef(%RESTRICTED);
-
-    # Implement private methods - only callable from class itself
-    foreach my $pkg (keys(%PRIVATE)) {
-        my %meta;
-        while (my $info = shift(@{$PRIVATE{$pkg}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':PRIVATE', $location);
-            *{$pkg.'::'.$name} = create_PRIVATE($pkg, $name, $code);
-            $meta{$name}{'hidden'} = 1;
-        }
-        add_meta($pkg, \%meta);
-    }
-    undef(%PRIVATE);
-
-    # Implement hidden methods - no longer callable by name
-    foreach my $pkg (keys(%HIDDEN)) {
-        my %meta;
-        while (my $info = shift(@{$HIDDEN{$pkg}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':HIDDEN', $location);
-            create_HIDDEN($pkg, $name);
-            $meta{$name}{'hidden'} = 1;
-        }
-        add_meta($pkg, \%meta);
-    }
-    undef(%HIDDEN);
-
-    # Add metadata for subroutines
-    foreach my $pkg (keys(%SUBROUTINES)) {
-        my %meta;
-        while (my $info = shift(@{$SUBROUTINES{$pkg}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':SUB', $location);
-            $meta{$name}{'hidden'} = 1;
-        }
-        add_meta($pkg, \%meta);
-    }
-    undef(%SUBROUTINES);
-
-    # Add metadata for methods
-    foreach my $pkg (keys(%METHODS)) {
-        my %meta;
-        while (my $info = shift(@{$METHODS{$pkg}})) {
-            my ($code, $location, $kind) = @{$info};
-            my $name = sub_name($code, ':METHOD', $location);
-            $meta{$name}{'kind'} = lc($kind);
-        }
-        add_meta($pkg, \%meta);
-    }
-    undef(%METHODS);
 
     # Export methods
     export_methods();
@@ -1130,7 +1177,8 @@ sub export_methods :Sub(Private)
 
                 # Add metadata
                 if ($sym eq 'new') {
-                    $meta{'new'}{'kind'} = 'constructor';
+                    $meta{'new'} = { 'kind' => 'constructor',
+                                     'merge_args' => 1 };
 
                 } elsif ($sym eq 'clone' || $sym eq 'dump') {
                     $meta{$sym}{'kind'} = 'object';
@@ -1375,9 +1423,9 @@ sub _args :Sub(Private)
 
 
 # Object Constructor
-sub new
+sub new :MergeArgs
 {
-    my $thing = shift;
+    my ($thing, $all_args) = @_;
     my $class = ref($thing) || $thing;
 
     # Can't call ->new() on this package
@@ -1387,26 +1435,6 @@ sub new
 
     # Perform package initialization, if required
     initialize() if ($DO_INIT);
-
-    # Gather arguments into a single hash ref
-    my $all_args = {};
-    while (my $arg = shift) {
-        if (ref($arg) eq 'HASH') {
-            # Add args from a hash ref
-            @{$all_args}{keys(%{$arg})} = values(%{$arg});
-        } elsif (ref($arg)) {
-            OIO::Args->die(
-                'message'  => "Bad initializer: @{[ref($arg)]} ref not allowed",
-                'Usage'    => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
-        } elsif (! @_) {
-            OIO::Args->die(
-                'message'  => "Bad initializer: Missing value for key '$arg'",
-                'Usage'    => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
-        } else {
-            # Add 'key => value' pair
-            $$all_args{$arg} = shift;
-        }
-    }
 
     # Create a new 'bare' object
     my $self = _obj($class);
@@ -2322,7 +2350,40 @@ _RESTRICTED_
 }
 
 
-### Method/subroutine Access Control ###
+### Method/subroutine Wrappers ###
+
+# Returns a 'wrapper' closure back to initialize() that adds merged argument
+# support for a method.
+sub create_ARG_WRAP :Sub(Private)
+{
+    my $code = shift;
+    return sub {
+        my $self = shift;
+
+        # Gather arguments into a single hash ref
+        my $args = {};
+        while (my $arg = shift) {
+            if (ref($arg) eq 'HASH') {
+                # Add args from a hash ref
+                @{$args}{keys(%{$arg})} = values(%{$arg});
+            } elsif (ref($arg)) {
+                OIO::Args->die(
+                    'message'  => "Bad initializer: @{[ref($arg)]} ref not allowed",
+                    'Usage'    => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
+            } elsif (! @_) {
+                OIO::Args->die(
+                    'message'  => "Bad initializer: Missing value for key '$arg'",
+                    'Usage'    => q/Args must be 'key=>val' pair(s) and\/or hash ref(s)/);
+            } else {
+                # Add 'key => value' pair
+                $$args{$arg} = shift;
+            }
+        }
+
+        @_ = ($self, $args);
+        goto $code;
+    };
+}
 
 # Returns a 'wrapper' closure back to initialize() that restricts a method
 # to being only callable from within its class hierarchy
@@ -2330,12 +2391,12 @@ sub create_RESTRICTED :Sub(Private)
 {
     my ($pkg, $method, $code) = @_;
     return sub {
-        my $caller = caller();
         # Caller must be in class hierarchy
-        if ($caller->$UNIV_ISA($pkg) || $pkg->$UNIV_ISA($caller)) {
-            goto $code;
+        my $caller = caller();
+        if (! ($caller->$UNIV_ISA($pkg) || $pkg->$UNIV_ISA($caller))) {
+            OIO::Method->die('message' => "Can't call restricted method '$pkg->$method' from class '$caller'");
         }
-        OIO::Method->die('message' => "Can't call restricted method '$pkg->$method' from class '$caller'");
+        goto $code;
     };
 }
 
@@ -2346,43 +2407,23 @@ sub create_PRIVATE :Sub(Private)
 {
     my ($pkg, $method, $code) = @_;
     return sub {
-        my $caller = caller();
         # Caller must be in the package
-        if ($caller eq $pkg) {
-            goto $code;
+        my $caller = caller();
+        if ($caller ne $pkg) {
+            OIO::Method->die('message' => "Can't call private method '$pkg->$method' from class '$caller'");
         }
-        OIO::Method->die('message' => "Can't call private method '$pkg->$method' from class '$caller'");
+        goto $code;
     };
 }
 
 
-# Redefines a subroutine to make it uncallable - with the original code ref
-# stored elsewhere, of course.
+# Returns a 'wrapper' closure back to initialize() that makes a subroutine
+# uncallable - with the original code ref stored elsewhere, of course.
 sub create_HIDDEN :Sub(Private)
 {
     my ($pkg, $method) = @_;
-
-    # Create new code that hides the original method
-    my $code = <<"_CODE_";
-sub ${pkg}::$method {
-    OIO::Method->die('message' => q/Can't call hidden method '$pkg->$method'/);
-}
-_CODE_
-
-    # Eval the new code
-    my @errs;
-    local $SIG{'__WARN__'} = sub { push(@errs, @_); };
-    no warnings 'redefine';
-
-    eval $code;
-
-    if ($@ || @errs) {
-        my ($err) = split(/ at /, $@ || join(" | ", @errs));
-        OIO::Internal->die(
-            'message'  => "Failure hiding '$pkg->$method'",
-            'Error'    => $err,
-            'Code'     => $code,
-            'self'     => 1);
+    return sub {
+        OIO::Method->die('message' => "Can't call hidden method '$pkg->$method'");
     }
 }
 
@@ -2594,7 +2635,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.04
+This document describes Object::InsideOut version 2.05
 
 =head1 SYNOPSIS
 
@@ -3933,7 +3974,13 @@ C<format_name> method, and the methods will be chained together automatically:
 So passing in someone's name to C<format_name> in C<Customer> would cause
 leading and trailing whitespace to be removed, then the name to be properly
 cased, and finally whitespace to be compressed to a single space.  The
-resulting C<$name> would be returned to the caller.
+resulting C<$name> would be returned to the caller:
+
+ my ($name) = $obj->format_name($name_raw);
+
+Unlike C<:Cumulative> methods, C<:Chained> methods B<always> returns an array
+- even if there is only one value returned.  Therefore, C<:Chained>
+methods should always be called in an array context, as illustrated above.
 
 The default direction is to chain methods from the parent classes at the top
 of the class hierarchy down through the child classes.  You may use the
@@ -3944,8 +3991,52 @@ chained methods are called starting with the object's class and working
 upwards through the parent classes in the class hierarchy, similar to how
 S<C<:Cumulative(bottom up)>> works.
 
-Unlike C<:Cumulative> methods, C<:Chained> methods return a scalar when used
-in a scalar context; not a results object.
+=head1 ARGUMENT MERGING
+
+As mentioned under L<"OBJECT CREATION">, the C<-E<gt>new()> method can take
+parameters that are passed in as combinations of S<C<key =E<gt> value>> pairs
+and/or hash refs:
+
+ my $obj = My::Class->new(
+     'param_X' => 'value_X',
+     'param_Y' => 'value_Y',
+     {
+         'param_A' => 'value_A',
+         'param_B' => 'value_B',
+     },
+     {
+         'param_Q' => 'value_Q',
+     },
+ );
+
+The parameters are I<merged> into a single hash ref before they are processed.
+
+Adding the C<:MergeArgs> attribute to your methods gives them a similar
+capability.  Your method will then get two arguments:  The object and a single
+hash ref of the I<merged> arguments.  For example:
+
+ package Foo; {
+     use Object::InsideOut;
+
+     ...
+
+     sub my_method :MergeArgs {
+         my ($self, $args) = @_;
+
+         my $param = $args->{'param'};
+         my $data  = $args->{'data'};
+         my $flag  = $args->{'flag'};
+         ...
+     }
+ }
+
+ package main;
+
+ my $obj = Foo->new(...);
+
+ $obj->my_method( { 'data' => 42,
+                    'flag' => 'true' },
+                   'param' => 'foo' );
 
 =head1 AUTOMETHODS
 
@@ -4276,7 +4367,7 @@ arguments.  This is done by adding the C<:Deep> attribute to the field:
 
  my @data :Field :Deep;
 
-=head1 C<:Weak> FIELDS
+=head1 WEAK FIELDS
 
 Frequently, it is useful to store L<weaken|Scalar::Util/"weaken REF">ed
 references to data or objects in a field.  Such a field can be declared as
@@ -5264,7 +5355,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.04/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.05/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

@@ -13,8 +13,8 @@ sub generate_CHAINED :Sub(Private)
     my (%chain, %chain_loc);
     foreach my $package (keys(%{$CHAINED})) {
         while (my $info = shift(@{$$CHAINED{$package}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':CHAINED', $location);
+            my ($code, $location, $name) = @{$info};
+            $name ||= sub_name($code, ':CHAINED', $location);
             $chain{$name}{$package} = $code;
             $chain_loc{$name}{$package} = $location;
         }
@@ -24,8 +24,8 @@ sub generate_CHAINED :Sub(Private)
     my %antichain;
     foreach my $package (keys(%{$ANTICHAINED})) {
         while (my $info = shift(@{$$ANTICHAINED{$package}})) {
-            my ($code, $location) = @{$info};
-            my $name = sub_name($code, ':CHAINED(BOTTOM UP)', $location);
+            my ($code, $location, $name) = @{$info};
+            $name ||= sub_name($code, ':CHAINED(BOTTOM UP)', $location);
 
             # Check for conflicting definitions of $name
             if ($chain{$name}) {
@@ -103,5 +103,5 @@ sub create_CHAINED :Sub(Private)
 
 
 # Ensure correct versioning
-my $VERSION = 2.04;
-($Object::InsideOut::VERSION == 2.04) or die("Version mismatch\n");
+my $VERSION = 2.05;
+($Object::InsideOut::VERSION == 2.05) or die("Version mismatch\n");
