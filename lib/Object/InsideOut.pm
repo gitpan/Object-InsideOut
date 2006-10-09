@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.05;
+our $VERSION = 2.06;
 
-use Object::InsideOut::Exception 2.05;
-use Object::InsideOut::Util 2.05 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.06;
+use Object::InsideOut::Util 2.06 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -70,6 +70,9 @@ my $THREAD_ID = 0;
 # Contains flags as to whether or not a class is sharing objects between
 # threads
 my %IS_SHARING;
+
+# Contains flags for classes that must only use hashes for fields
+my %HASH_ONLY;
 
 # Workaround for Perl's "in cleanup" bug
 my $TERMINATING = 0;
@@ -139,6 +142,12 @@ sub import
         if ($pkg =~ /^:(NOT?_?|!)?SHAR/i) {
             my $sharing = (defined($1)) ? 0 : 1;
             set_sharing($class, $sharing, (caller())[1..2]);
+            next;
+        }
+
+        # Handle hash fields only flag
+        if ($pkg =~ /^:HASH/i) {
+            $HASH_ONLY{$class} = [ $class, (caller())[1,2] ];
             next;
         }
 
@@ -975,6 +984,26 @@ sub process_fields :Sub(Private)
         }
     }
     undef(%NEW_FIELDS);  # No longer needed
+
+    # Verify any 'hash field only' classes
+    foreach my $ho (keys(%HASH_ONLY)) {
+        CHECK:
+        foreach my $class (keys(%TREE_TOP_DOWN)) {
+            foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
+                if ($pkg eq $ho) {
+                    if (grep { ref ne 'HASH' } @{$FIELDS{$class}}) {
+                        my $loc = ((caller())[1] =~ /Dynamic/)
+                                    ? [ (caller(2))[0..2] ] : $HASH_ONLY{$ho};
+                        OIO::Code->die(
+                            'location' => $loc,
+                            'message'  => "Can't combine 'hash only' classes ($ho) with array-based classes ($class) in the same class tree",
+                            'Info'     => "Class '$ho' was declared as ':hash_only', but class '$class' has array-based fields");
+                    }
+                    next CHECK;
+                }
+            }
+        }
+    }
 }
 
 
@@ -2635,7 +2664,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.05
+This document describes Object::InsideOut version 2.06
 
 =head1 SYNOPSIS
 
@@ -3027,8 +3056,8 @@ Object data fields may also be hashes:
  my %data :Field;
 
 However, as array access is as much as 40% faster than hash access, you should
-stick to using arrays.  (See L</"Object ID"> concerning when hashes may be
-required.)
+stick to using arrays.  See L</"HASH ONLY CLASSES"> for more information on
+when hashes may be required.
 
 =head2 Getting Data
 
@@ -4412,6 +4441,9 @@ to the attribute list.  For example:
                                  ":Acc(obj)",
                                  ":Weak");
 
+Field creation will fail if you try to create an array field within a class
+whose hierarchy has been declared L<:hash_only|/"HASH ONLY CLASSES">.
+
 Here's an example of an C<:Automethod> subroutine that uses dynamic field
 creation:
 
@@ -4594,7 +4626,7 @@ subroutine labelled with the C<:ID> attribute can be specified:
 The ID returned by your subroutine can be any kind of I<regular> scalar (e.g.,
 a string or a number).  However, if the ID is something other than a
 low-valued integer, then you will have to architect B<all> your classes using
-hashes for the object fields.
+hashes for the object fields.  See L<HASH ONLY CLASSES> for details.
 
 Within any class hierarchy, only one class may specify an C<:ID> subroutine.
 
@@ -5031,6 +5063,60 @@ Here is a complete example with thread object sharing enabled:
  # I.e., this shows that the object was indeed shared between threads
  print(join(', ', @{$obj->data()}), "\n");       # "bar, baz, zooks"
 
+=head1 HASH ONLY CLASSES
+
+For performance considerations, it is recommended that arrays be used for
+class fields whenever possible.  The only time when hash-bases fields are
+required is when a class must provide its own L<object ID/"Object ID">, and
+those IDs are something other than low-valued integers.  In this case, hashes
+must be used for fields not only in the class that defines the object ID
+subroutine, but also in every class in any class hierarchy that include such a
+class.
+
+The I<hash only> requirement can be enforced by adding the C<:HASH_ONLY> flag
+to a class's S<C<use Object::InsideOut ...>> declaration:
+
+ package My::Class; {
+     use Object::InsideOut ':hash_only';
+
+     ...
+ }
+
+This will cause Object::Inside to check every class in any class hierarchy
+that includes such flagged classes to make sure their fields are hashes and
+not arrays.  It will also fail any L<-E<gt>create_field()|/"DYNAMIC FIELD
+CREATION"> call that tries to create an array-based field in any such class.
+
+=head1 SECURITY
+
+In the default case where Object::InsideOut provides object IDs that are
+sequential integers, it is possible to I<hack together> a I<fake>
+Object::InsideOut object, and so gain access to another object's data:
+
+ my $fake = bless(\do{my $scalar}, 'Some::Class');
+ $$fake = 86;   # ID of another object
+ my $stolen = $fake->get_data();
+
+Why anyone would try to do this is unknown.  How this could be used for any
+sort of malicious exploitation is also unknown.  However, if preventing this
+sort of I<security> issue is a requirement, it can be accomplished by giving
+your objects a random ID, and thus prevent other code from creating fake
+objects by I<guessing> at the IDs.
+
+To do this, your class must provide an L<:ID subroutine|/"Object ID"> that
+returns I<random values>, and the class must be flagged as L<:HASH_ONLY|/"HASH
+ONLY CLASSES">.  One simple way of providing random IDs it to use random
+integers provided by L<Math::Random::MT::Auto>, as illustrated below:
+
+ package My::Class; {
+     use Object::InsideOut ':HASH_ONLY';
+     use Math::Random::MT::Auto 'irand';
+
+     sub _id :ID { irand(); }
+
+     ...
+ }
+
 =head1 ATTRIBUTE HANDLERS
 
 Object::InsideOut uses I<attribute 'modify' handlers> as described in
@@ -5248,17 +5334,6 @@ If a I<set> accessor accepts scalars, then you can store any inside-out
 object type in it.  If its C<Type> is set to C<HASH>, then it can store any
 I<blessed hash> object.
 
-It is possible to I<hack together> a I<fake> Object::InsideOut object, and so
-gain access to another object's data:
-
- my $fake = bless(\do{my $scalar}, 'Some::Class');
- $$fake = 86;   # ID of another object
- my $stolen = $fake->get_data();
-
-Why anyone would try to do this is unknown.  How this could be used for any
-sort of malicious exploitation is also unknown.  However, if preventing this
-sort of I<security> issue is a requirement, then do not use Object::InsideOut.
-
 Returning objects from threads does not work:
 
  my $obj = threads->create(sub { return (Foo->new()); })->join();  # BAD
@@ -5355,7 +5430,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.05/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.06/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

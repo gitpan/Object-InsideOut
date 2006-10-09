@@ -6,7 +6,7 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 2.05;
+    our $VERSION = 2.06;
 }
 
 use Object::InsideOut::Metadata 2.03;

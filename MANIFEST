@@ -59,6 +59,7 @@ t/29-non_lvalue.t
 t/30-all.t
 t/31-attr.t
 t/32-meta.t
+t/33-hash_only.t
 t/99-pod.t
 t/A.pm
 t/B.pm

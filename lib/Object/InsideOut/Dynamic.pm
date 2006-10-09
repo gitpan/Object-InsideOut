@@ -38,7 +38,7 @@ sub create_field
             $attr = join(',', @attrs);
             $attr =~ s/[\r\n]/ /sg;
             $attr =~ s/,\s*,/,/g;
-            $attr =~ s/\)\s*,\s*:/) :/g;
+            $attr =~ s/\s*,\s*:/ :/g;
             if ($attr !~ /^\s*:/) {
                 $attr = ":Field($attr)";
             }
@@ -81,5 +81,5 @@ sub create_field
 
 
 # Ensure correct versioning
-my $VERSION = 2.05;
-($Object::InsideOut::VERSION == 2.05) or die("Version mismatch\n");
+my $VERSION = 2.06;
+($Object::InsideOut::VERSION == 2.06) or die("Version mismatch\n");
