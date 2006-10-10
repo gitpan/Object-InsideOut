@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.06;
+our $VERSION = 2.07;
 
-use Object::InsideOut::Exception 2.06;
-use Object::InsideOut::Util 2.06 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.07;
+use Object::InsideOut::Util 2.07 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -149,6 +149,11 @@ sub import
         if ($pkg =~ /^:HASH/i) {
             $HASH_ONLY{$class} = [ $class, (caller())[1,2] ];
             next;
+        }
+
+        # Handle secure flag
+        if ($pkg =~ /^:SECUR/i) {
+            $pkg = 'Object::InsideOut::Secure';
         }
 
         # Load the package, if needed
@@ -333,7 +338,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.03;
+use Object::InsideOut::Metadata 2.07;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -950,9 +955,27 @@ sub process_fields :Sub(Private)
     my $use_want = (defined($Want::VERSION) && ($Want::VERSION >= 0.12));
 
     # Process field attributes
+    FIELD:
     foreach my $pkg (keys(%NEW_FIELDS)) {
         foreach my $item (@{$NEW_FIELDS{$pkg}}) {
             my ($fld, $attr) = @{$item};
+
+            # Verify not a 'hash field only' class
+            if (ref($fld) eq 'ARRAY') {
+                foreach my $ho (keys(%HASH_ONLY)) {
+                    foreach my $class (@{$TREE_TOP_DOWN{$pkg}}) {
+                        if ($class eq $ho) {
+                            undef(%NEW_FIELDS);
+                            my $loc = ((caller())[1] =~ /Dynamic/)
+                                        ? [ (caller(2))[0..2] ] : $HASH_ONLY{$ho};
+                            OIO::Code->die(
+                                'location' => $loc,
+                                'message'  => "Can't combine 'hash only' classes ($ho) with array-based classes ($class) in the same class tree",
+                                'Info'     => "Class '$ho' was declared as ':hash_only', but class '$class' has array-based fields");
+                        }
+                    }
+                }
+            }
 
             # Share the field, if applicable
             if (is_sharing($pkg) && !threads::shared::_id($fld)) {
@@ -984,26 +1007,6 @@ sub process_fields :Sub(Private)
         }
     }
     undef(%NEW_FIELDS);  # No longer needed
-
-    # Verify any 'hash field only' classes
-    foreach my $ho (keys(%HASH_ONLY)) {
-        CHECK:
-        foreach my $class (keys(%TREE_TOP_DOWN)) {
-            foreach my $pkg (@{$TREE_TOP_DOWN{$class}}) {
-                if ($pkg eq $ho) {
-                    if (grep { ref ne 'HASH' } @{$FIELDS{$class}}) {
-                        my $loc = ((caller())[1] =~ /Dynamic/)
-                                    ? [ (caller(2))[0..2] ] : $HASH_ONLY{$ho};
-                        OIO::Code->die(
-                            'location' => $loc,
-                            'message'  => "Can't combine 'hash only' classes ($ho) with array-based classes ($class) in the same class tree",
-                            'Info'     => "Class '$ho' was declared as ':hash_only', but class '$class' has array-based fields");
-                    }
-                    next CHECK;
-                }
-            }
-        }
-    }
 }
 
 
@@ -1741,8 +1744,18 @@ sub DESTROY
                     # If sharing, then must lock object field
                     lock($fld) if ($is_sharing);
                     if (ref($fld) eq 'HASH') {
+                        if ($is_sharing) {
+                            # Workaround for Perl's "in cleanup" bug
+                            eval { my $bug = keys(%{$fld}); };
+                            next if ($@);
+                        }
                         delete($$fld{$$self});
                     } else {
+                        if ($is_sharing) {
+                            # Workaround (?) for Perl's "in cleanup" bug
+                            eval { my $bug = @{$fld}; };
+                            next if ($@);
+                        }
                         delete($$fld[$$self]);
                     }
                 }
@@ -2664,7 +2677,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.06
+This document describes Object::InsideOut version 2.07
 
 =head1 SYNOPSIS
 
@@ -5090,7 +5103,7 @@ CREATION"> call that tries to create an array-based field in any such class.
 =head1 SECURITY
 
 In the default case where Object::InsideOut provides object IDs that are
-sequential integers, it is possible to I<hack together> a I<fake>
+sequential integers, it is possible to hack together a I<fake>
 Object::InsideOut object, and so gain access to another object's data:
 
  my $fake = bless(\do{my $scalar}, 'Some::Class');
@@ -5099,23 +5112,28 @@ Object::InsideOut object, and so gain access to another object's data:
 
 Why anyone would try to do this is unknown.  How this could be used for any
 sort of malicious exploitation is also unknown.  However, if preventing this
-sort of I<security> issue is a requirement, it can be accomplished by giving
-your objects a random ID, and thus prevent other code from creating fake
-objects by I<guessing> at the IDs.
-
-To do this, your class must provide an L<:ID subroutine|/"Object ID"> that
-returns I<random values>, and the class must be flagged as L<:HASH_ONLY|/"HASH
-ONLY CLASSES">.  One simple way of providing random IDs it to use random
-integers provided by L<Math::Random::MT::Auto>, as illustrated below:
+sort of security issue is a requirement, it can be accomplished by adding the
+C<:SECURE> flag to a class's S<C<use Object::InsideOut ...>> declaration:
 
  package My::Class; {
-     use Object::InsideOut ':HASH_ONLY';
-     use Math::Random::MT::Auto 'irand';
-
-     sub _id :ID { irand(); }
+     use Object::InsideOut ':SECURE';
 
      ...
  }
+
+This places the module C<Object::InsideOut::Secure> in the class hierarchy.
+Object::InsideOut::Secure provides an L<:ID subroutine|/"Object ID"> that
+generates random integers for object IDs, thus preventing other code from
+being able to create fake objects by I<guessing> at IDs.
+
+Using C<:SECURE> mode requires L<Math::Random::MT::Auto> (v5.04 or later).
+
+Because the object IDs used with C<:SECURE> mode are large random values,
+the L<:HASH_ONLY|/"HASH ONLY CLASSES"> flag is forced on all the classes in
+the hierarchy.
+
+For efficiency, it is recommended that the C<:SECURE> flag be added to the
+topmost class(es) in a hierarchy.
 
 =head1 ATTRIBUTE HANDLERS
 
@@ -5422,7 +5440,10 @@ that supports its C<XS> code.
 
 L<Test::More> v0.50 or later (for installation)
 
-Optionally, L<Want> for L</":lvalue Accessors">.
+Optionally, L<Want> (v0.12 or later) for L</":lvalue Accessors">.
+
+Optionally, L<Math::Random::MT::Auto> (v5.04 or later) for
+L<:SECURE mode|/"SECURITY">.
 
 =head1 SEE ALSO
 
@@ -5430,7 +5451,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.06/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.07/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
@@ -5440,7 +5461,8 @@ Chapters 15 and 16 of I<Perl Best Practices> by Damian Conway
 
 L<Object::InsideOut::Metadata>
 
-L<Storable>, L<Exception:Class>, L<Want>, L<attributes>, L<overload>
+L<Storable>, L<Exception:Class>, L<Want>, L<Math::Random::MT::Auto>,
+L<attributes>, L<overload>
 
 =head1 ACKNOWLEDGEMENTS
 

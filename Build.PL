@@ -26,7 +26,7 @@ if ($@) {
 my %more_recommends = ();
 if ($] >= 5.008) {
     %more_recommends = (
-        'threads'             => 1.42,
+        'threads'             => 1.43,
         'threads::shared'     => 1.03,
     );
 }
@@ -55,10 +55,11 @@ Module::Build->new(
                         },
 
     'recommends'     => {
-                            'Want'                => 0.12,
-                            'Storable'            => 2.15,
-                            'Test::Pod'           => 1.26,
-                            'Test::Pod::Coverage' => 1.08,
+                            'Want'                      => 0.12,
+                            'Storable'                  => 2.15,
+                            'Test::Pod'                 => 1.26,
+                            'Test::Pod::Coverage'       => 1.08,
+                            'Math::Random::MT::Auto'    => 5.04,
                             %more_recommends
                         },
 )->create_build_script();

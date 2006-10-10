@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.07 Tue Oct 10 15:47:44 EDT 2006
+	- Added :SECURE mode
+
 2.06 Mon Oct  9 16:04:09 EDT 2006
 	- Added :hash_only flag
 	- Added SECURITY section to POD

@@ -13,6 +13,7 @@ lib/Object/InsideOut/Exception.pm
 lib/Object/InsideOut/Foreign.pm
 lib/Object/InsideOut/Metadata.pm
 lib/Object/InsideOut/Overload.pm
+lib/Object/InsideOut/Secure.pm
 lib/Object/InsideOut/Universal.pm
 lib/Object/InsideOut/Util.pm
 lib/Object/InsideOut/attributes.pm
@@ -60,6 +61,8 @@ t/30-all.t
 t/31-attr.t
 t/32-meta.t
 t/33-hash_only.t
+t/34-secure.t
+t/34a-secure.t
 t/99-pod.t
 t/A.pm
 t/B.pm

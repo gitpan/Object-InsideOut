@@ -1,4 +1,4 @@
-Object-InsideOut version 2.06
+Object-InsideOut version 2.07
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -130,6 +130,10 @@ Using the :lvalue accessor feature of this module requires the following
 module from CPAN:
 
   Want (0.12 or later)
+
+For :SECURE mode, this module requires the following module from CPAN:
+
+  Math::Random::MT::Auto (5.04 or later)
 
 COPYRIGHT AND LICENCE
 

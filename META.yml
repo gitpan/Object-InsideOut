@@ -1,10 +1,9 @@
 --- #YAML:1.0
 name:                Object-InsideOut
-version:             2.06
+version:             2.07
 abstract:            Comprehensive inside-out object support module
 license:             perl
-generated_by:        ExtUtils::MakeMaker version 6.30_04
-author:              Jerry D. Hedden <jdhedden AT cpan DOT org>
+generated_by:        ExtUtils::MakeMaker version 6.31
 distribution_type:   module
 requires:     
     attributes:                    0
@@ -18,5 +17,7 @@ requires:
     Test::More:                    0.5
     warnings:                      0
 meta-spec:
-    url: http://module-build.sourceforge.net/META-spec-new.html
-    version: 1.1
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
+author:
+    - Jerry D. Hedden <jdhedden AT cpan DOT org>

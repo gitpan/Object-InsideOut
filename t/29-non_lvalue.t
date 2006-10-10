@@ -4,7 +4,7 @@ use warnings;
 BEGIN {
     eval { require Want; };
     if ($@ || $Want::VERSION < 0.12) {
-        print("1..0 # Skip Needs Want 0.12 or later\n");
+        print("1..0 # Skip Needs Want v0.12 or later\n");
         exit(0);
     }
 }

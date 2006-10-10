@@ -57,6 +57,31 @@ _WANT_
 }
 
 
+# Check for MRMA
+eval { require Math::Random::MT::Auto; };
+if ($@) {
+    print(<<_MRMA_);
+
+Checking prerequisites...
+ * Optional prerequisite Math::Random::MT::Auto is not installed
+
+ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
+of the modules indicated above before proceeding with this installation
+
+_MRMA_
+} elsif ($Math::Random::MT::Auto::VERSION < 5.04) {
+    print(<<_MRMA_);
+
+Checking prerequisites...
+ * Math::Random::MT::Auto ($Math::Random::MT::Auto::VERSION) is installed, but we prefer to have 5.04 or later
+
+ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
+of the modules indicated above before proceeding with this installation
+
+_MRMA_
+}
+
+
 # Construct make file
 WriteMakefile(
     'NAME'          => 'Object::InsideOut',
@@ -86,47 +111,9 @@ sub MY::postamble
 {
     if ($^O eq 'cygwin') {
         return <<'_EXTRAS_';
-# Check version strings in various files
-vcheck:
-	@echo "Version is $(VERSION)"
-	@if ! head -3 Changes | tail -1 | grep ^$(VERSION) >/dev/null; then echo "Version error in Changes"; fi
-	@if ! head -1 README | grep $(VERSION)$ >/dev/null; then echo "Version error in README"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
-	@if ! grep "Exception $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
-	@if ! grep "Util $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in InsideOut.pm"; fi
-	@if ! grep "version $(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in POD of InsideOut.pm"; fi
-	@if ! grep "Object-InsideOut-$(VERSION)" lib/Object/InsideOut.pm >/dev/null; then echo "Version error in Anno link in InsideOut.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Autoload.pm >/dev/null; then echo "Version error in Autoload.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Chained.pm >/dev/null; then echo "Version error in Chained.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Chained.pm >/dev/null; then echo "Version error in Chained.pm"; fi
-	@if ! grep "InsideOut $(VERSION)" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
-	@if ! grep 'our $$VERSION = $(VERSION)' lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
-	@if ! grep 'my $$VERSION = $(VERSION)' lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Cumulative.pm >/dev/null; then echo "Version error in Cumulative.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Dump.pm >/dev/null; then echo "Version error in Dump.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Dump.pm >/dev/null; then echo "Version error in Dump.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Dynamic.pm >/dev/null; then echo "Version error in Dynamic.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Dynamic.pm >/dev/null; then echo "Version error in Dynamic.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Exception.pm >/dev/null; then echo "Version error in Exception.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Foreign.pm >/dev/null; then echo "Version error in Foreign.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Foreign.pm >/dev/null; then echo "Version error in Foreign.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Overload.pm >/dev/null; then echo "Version error in Overload.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Overload.pm >/dev/null; then echo "Version error in Overload.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Universal.pm >/dev/null; then echo "Version error in Universal.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/Universal.pm >/dev/null; then echo "Version error in Universal.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Util.pm >/dev/null; then echo "Version error in lib/Object/InsideOut/Util.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/attributes.pm >/dev/null; then echo "Version error in attributes.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/lvalue.pm >/dev/null; then echo "Version error in lvalue.pm"; fi
-	@if ! grep "VERSION == $(VERSION)" lib/Object/InsideOut/lvalue.pm >/dev/null; then echo "Version error in lvalue.pm"; fi
-	@if ! grep "VERSION = $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
-	@if ! grep "::Util $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
-	@if ! grep "::InsideOut $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
-	@if ! grep "version $(VERSION)" lib/Object/InsideOut/Metadata.pm >/dev/null; then echo "Version error in Metadata.pm"; fi
-
-chmod:
+misc:
 	@$(CHMOD) 644 Build.PL `cat MANIFEST`
+	@dos2unix `cat MANIFEST`
 _EXTRAS_
     }
 }
