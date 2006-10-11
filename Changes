@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.08 Wed Oct 11 15:18:36 EDT 2006
+	- Runtime inheritance with ->add_class
+
 2.07 Tue Oct 10 15:47:44 EDT 2006
 	- Added :SECURE mode
 

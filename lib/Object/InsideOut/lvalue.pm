@@ -251,5 +251,5 @@ _REF_
 
 
 # Ensure correct versioning
-my $VERSION = 2.07;
-($Object::InsideOut::VERSION == 2.07) or die("Version mismatch\n");
+my $VERSION = 2.08;
+($Object::InsideOut::VERSION == 2.08) or die("Version mismatch\n");

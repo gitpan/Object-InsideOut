@@ -125,10 +125,10 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 2.07;
+our $VERSION = 2.08;
 
-use Object::InsideOut 2.07;
-use Object::InsideOut::Metadata 2.07;
+use Object::InsideOut 2.08;
+use Object::InsideOut::Metadata 2.08;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -171,11 +171,12 @@ sub as_hash :Hashify
 add_meta(__PACKAGE__, {
     'new'          => {'hidden' => 1},
     'create_field' => {'hidden' => 1},
+    'add_class'    => {'hidden' => 1},
 });
 
 }  # End of package's lexical scope
 
 
 # Ensure correct versioning
-my $VERSION = 2.07;
-($Object::InsideOut::VERSION == 2.07) or die("Version mismatch\n");
+my $VERSION = 2.08;
+($Object::InsideOut::VERSION == 2.08) or die("Version mismatch\n");

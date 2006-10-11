@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.07;
+our $VERSION = 2.08;
 
-use Object::InsideOut::Exception 2.07;
-use Object::InsideOut::Util 2.07 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.08;
+use Object::InsideOut::Util 2.08 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -338,7 +338,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.07;
+use Object::InsideOut::Metadata 2.08;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -1310,8 +1310,7 @@ sub _args :Sub(Private)
             if (ref($args) ne 'HASH') {
                 OIO::Args->die(
                     'message' => "Bad class initializer for '$class'",
-                    'Usage'   => q/Class initializers must be a hash ref/,
-                    'ignore_package' => __PACKAGE__);
+                    'Usage'   => q/Class initializers must be a hash ref/);
             }
             # Loop back to process class-specific arguments
             redo EXTRACT;
@@ -1338,8 +1337,7 @@ sub _args :Sub(Private)
             if (ref($pre) ne 'CODE') {
                 OIO::Code->die(
                     'message' => q/Can't handle argument/,
-                    'Info'    => "'Preprocess' is not a code ref for initializer '$key' for class '$class'",
-                    'ignore_package' => __PACKAGE__);
+                    'Info'    => "'Preprocess' is not a code ref for initializer '$key' for class '$class'");
             }
 
             my (@errs);
@@ -1352,8 +1350,7 @@ sub _args :Sub(Private)
                 my ($err) = split(/ at /, $@ || join(" | ", @errs));
                 OIO::Code->die(
                     'message' => "Problem with preprocess routine for initializer '$key' for class '$class",
-                    'Error'   => $err,
-                    'ignore_package' => __PACKAGE__);
+                    'Error'   => $err);
             }
         }
 
@@ -1362,8 +1359,7 @@ sub _args :Sub(Private)
             # Complain if mandatory
             if (hash_re($spec_item, qr/^(?:MAND|REQ)/i)) {
                 OIO::Args->die(
-                    'message' => "Missing mandatory initializer '$key' for class '$class'",
-                    'ignore_package' => __PACKAGE__);
+                    'message' => "Missing mandatory initializer '$key' for class '$class'");
             }
 
             # Assign default value
@@ -1385,8 +1381,7 @@ sub _args :Sub(Private)
                 if (ref($type) ne 'CODE') {
                     OIO::Code->die(
                         'message' => q/Can't validate argument/,
-                        'Info'    => "'Type' is not a code ref or string for initializer '$key' for class '$class'",
-                        'ignore_package' => __PACKAGE__);
+                        'Info'    => "'Type' is not a code ref or string for initializer '$key' for class '$class'");
                 }
 
                 my ($ok, @errs);
@@ -1399,13 +1394,11 @@ sub _args :Sub(Private)
                     my ($err) = split(/ at /, $@ || join(" | ", @errs));
                     OIO::Code->die(
                         'message' => "Problem with type check routine for initializer '$key' for class '$class",
-                        'Error'   => $err,
-                        'ignore_package' => __PACKAGE__);
+                        'Error'   => $err);
                 }
                 if (! $ok) {
                     OIO::Args->die(
-                        'message' => "Initializer '$key' for class '$class' failed type check: $found{$key}",
-                        'ignore_package' => __PACKAGE__);
+                        'message' => "Initializer '$key' for class '$class' failed type check: $found{$key}");
                 }
             }
 
@@ -1414,8 +1407,7 @@ sub _args :Sub(Private)
                 if (! Scalar::Util::looks_like_number($found{$key})) {
                 OIO::Args->die(
                     'message' => "Bad value for initializer '$key': $found{$key}",
-                    'Usage'   => "Initializer '$key' for class '$class' must be a number",
-                    'ignore_package' => __PACKAGE__);
+                    'Usage'   => "Initializer '$key' for class '$class' must be a number");
                 }
             }
 
@@ -1435,8 +1427,7 @@ sub _args :Sub(Private)
                 if (! is_it($found{$key}, $type)) {
                     OIO::Args->die(
                         'message' => "Bad value for initializer '$key': $found{$key}",
-                        'Usage'   => "Initializer '$key' for class '$class' must be an object or ref of type '$type'",
-                        'ignore_package' => __PACKAGE__);
+                        'Usage'   => "Initializer '$key' for class '$class' must be an object or ref of type '$type'");
                 }
             }
         }
@@ -2642,7 +2633,20 @@ sub create_field :Method(Class)
     push(@EXPORT, 'create_field');
     $DO_INIT = 1;
 
-    unshift(@_, $UNIV_ISA);
+    @_ = ($UNIV_ISA, \%TREE_TOP_DOWN, \%TREE_BOTTOM_UP, \%HERITAGE,
+          'create_field', @_);
+
+    goto &create_field;
+}
+
+sub add_class :Method(Class)
+{
+    load('Dynamic');
+
+    push(@EXPORT, 'create_field');
+
+    @_ = ($UNIV_ISA, \%TREE_TOP_DOWN, \%TREE_BOTTOM_UP, \%HERITAGE,
+          'add_class', @_);
 
     goto &create_field;
 }
@@ -2677,7 +2681,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.07
+This document describes Object::InsideOut version 2.08
 
 =head1 SYNOPSIS
 
@@ -2830,7 +2834,8 @@ matching, and much more.
 
 Supports classes that may be loaded at runtime (i.e., using
 S<C<eval { require ...; };>>).  This makes it usable from within L<mod_perl>,
-as well.  Also supports dynamic creation of object fields during runtime.
+as well.  Also supports additions to class hierarchies, and dynamic creation
+of object fields during runtime.
 
 =item * Perl 5.6 and 5.8
 
@@ -4484,6 +4489,26 @@ creation:
      }
  }
 
+=head2 RUNTIME INHERITANCE
+
+The class method C<-E<gt>add_class()> provides the capability to to
+dynamically add classes to a class hierarchy at runtime.
+
+For example, suppose you had a simple I<state> class:
+
+ package Trait::State; {
+     use Object::InsideOut;
+
+     my %state :Field :Set(state);
+ }
+
+This could be added to another class at runtime by with:
+
+ My::Class->add_class('Trait::State');
+
+This permits, for example, application code to dynamically modify a class
+without having it create an actual subclass.
+
 =head1 PREPROCESSING
 
 =head2 Parameter Preprocessing
@@ -5451,7 +5476,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.07/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.08/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

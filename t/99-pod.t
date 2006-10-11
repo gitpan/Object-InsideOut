@@ -22,6 +22,8 @@ SKIP: {
                             qr/^clone$/,
                             qr/^set$/,
                             qr/^meta$/,
+                            qr/^create_field$/,
+                            qr/^add_class$/,
                         ],
                         'private' => [
                             qr/^STORABLE_freeze$/,
@@ -33,7 +35,6 @@ SKIP: {
                             qr/^create_RESTRICTED$/,
                             qr/^create_ARG_WRAP$/,
                             qr/^create_accessors$/,
-                            qr/^create_field$/,
                             qr/^create_heritage$/,
                             qr/^create_lvalue_accessor$/,
                             qr/^export_methods$/,

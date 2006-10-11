@@ -63,6 +63,7 @@ t/32-meta.t
 t/33-hash_only.t
 t/34-secure.t
 t/34a-secure.t
+t/35-add_class.t
 t/99-pod.t
 t/A.pm
 t/B.pm

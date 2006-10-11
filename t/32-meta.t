@@ -125,6 +125,8 @@ sub check_bar
 
           'create_field' => { 'class' => 'Object::InsideOut',
                               'kind'  => 'class', },
+          'add_class'    => { 'class' => 'Object::InsideOut',
+                              'kind'  => 'class', },
 
           'inherit'    => { 'class' => 'Bar',
                             'kind'  => 'object',

@@ -1,4 +1,4 @@
-Object-InsideOut version 2.07
+Object-InsideOut version 2.08
 =============================
 
 This module provides comprehensive support for implementing classes using the
@@ -64,7 +64,8 @@ matching, and more.
 
 Supports classes that may be loaded at runtime (i.e., using "eval { require
 ...; };").  This makes it usable from within mod_perl, as well.  Also supports
-dynamic creation of object fields during runtime.
+additions to class hierarchies, and dynamic creation of object fields during
+runtime.
 
 * Perl 5.6
 
