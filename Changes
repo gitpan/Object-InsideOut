@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.09 Fri Oct 13 12:01:24 EDT 2006
+	- Restrict metadata to Perl 5.6.1 or later
+
 2.08 Wed Oct 11 15:18:36 EDT 2006
 	- Runtime inheritance with ->add_class
 

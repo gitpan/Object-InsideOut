@@ -8,7 +8,7 @@ BEGIN {
         exit(0);
     }
     if ($] == 5.008) {
-        print("1..0 # Skip Thread sharing support not working for Perl 5.8.0\n");
+        print("1..0 # Skip Can't test under Perl 5.8.0\n");
         exit(0);
     }
 

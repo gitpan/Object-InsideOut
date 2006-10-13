@@ -26,7 +26,7 @@ package MyBase; {
         },
     );
 
-    sub init :Init
+    sub init :Init(private)
     {
         my ($self, $args) = @_;
 
@@ -73,7 +73,7 @@ package Der; {
         },
     );
 
-    sub init :Init
+    sub init :Init(public)
     {
         my ($self, $args) = @_;
 

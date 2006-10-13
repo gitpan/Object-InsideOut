@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.08;
+our $VERSION = 2.09;
 
-use Object::InsideOut::Exception 2.08;
-use Object::InsideOut::Util 2.08 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.09;
+use Object::InsideOut::Util 2.09 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -338,7 +338,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.08;
+use Object::InsideOut::Metadata 2.09;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -376,28 +376,28 @@ sub MODIFY_CODE_ATTRIBUTES
 
         if ($attr eq 'ID') {
             $ID_SUBS{$pkg} = [ $code, @{$$info[1]} ];
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
             $DO_INIT = 1;
 
         } elsif ($attr eq 'PREINIT') {
             $PREINITORS{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr eq 'INIT') {
             $INITORS{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr =~ /^REPL(?:ICATE)?$/) {
             $REPLICATORS{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr =~ /^DEST(?:ROY)?$/) {
             $DESTROYERS{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr =~ /^AUTO(?:METHOD)?$/) {
             $AUTOMETHODS{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
             $DO_INIT = 1;
 
         } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
@@ -418,11 +418,11 @@ sub MODIFY_CODE_ATTRIBUTES
 
         } elsif ($attr =~ /^DUMP(?:ER)?$/) {
             $DUMPERS{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr =~ /^PUMP(?:ER)?$/) {
             $PUMPERS{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr =~ /^RESTRICT(?:ED)?$/) {
             push(@{$RESTRICTED{$pkg}}, $info);
@@ -439,7 +439,7 @@ sub MODIFY_CODE_ATTRIBUTES
         } elsif ($attr =~ /^SUB/) {
             push(@{$SUBROUTINES{$pkg}}, $info);
             if ($arg ne 'HIDDEN') {
-                push(@attrs, $arg) if $] > 5.006;
+                push(@attrs, $arg);
             }
             $DO_INIT = 1;
 
@@ -453,19 +453,19 @@ sub MODIFY_CODE_ATTRIBUTES
         } elsif ($attr =~ /^MERGE/) {
             push(@{$ARG_WRAP{$pkg}}, $info);
             if ($arg ne 'HIDDEN') {
-                push(@attrs, $arg) if $] > 5.006;
+                push(@attrs, $arg);
             }
             $DO_INIT = 1;
 
         } elsif ($attr =~ /^MOD(?:IFY)?_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
             install_ATTRIBUTES();
             $ATTR_HANDLERS{'MOD'}{$1}{$pkg} = $code;
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr =~ /^FETCH_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
             install_ATTRIBUTES();
             push(@{$ATTR_HANDLERS{'FETCH'}{$1}}, $code);
-            push(@attrs, $arg) if $] > 5.006;
+            push(@attrs, $arg);
 
         } elsif ($attr eq 'SCALARIFY') {
             OIO::Attribute->die(
@@ -2681,7 +2681,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.08
+This document describes Object::InsideOut version 2.09
 
 =head1 SYNOPSIS
 
@@ -3695,15 +3695,6 @@ C<Restricted> or C<Private> attribute parameters:
      ...
  }
 
-NOTE:  A bug in Perl 5.6.0 prevents using these access attribute parameters.
-As such, subroutines marked with the above attributes will be left with
-I<public> access.
-
-NOTE:  The above cannot be accomplished by using the corresponding permission
-attributes.  For example:
-
- # sub _init :Init :Private    # Wrong syntax - doesn't work
-
 =head1 TYPE CHECKING
 
 Object::InsideOut can be directed to add type-checking code to the
@@ -4040,7 +4031,7 @@ S<C<:Cumulative(bottom up)>> works.
 
 =head1 ARGUMENT MERGING
 
-As mentioned under L<"OBJECT CREATION">, the C<-E<gt>new()> method can take
+As mentioned under L<"Object Creation">, the C<-E<gt>new()> method can take
 parameters that are passed in as combinations of S<C<key =E<gt> value>> pairs
 and/or hash refs:
 
@@ -4491,8 +4482,8 @@ creation:
 
 =head2 RUNTIME INHERITANCE
 
-The class method C<-E<gt>add_class()> provides the capability to to
-dynamically add classes to a class hierarchy at runtime.
+The class method C<-E<gt>add_class()> provides the capability to dynamically
+add classes to a class hierarchy at runtime.
 
 For example, suppose you had a simple I<state> class:
 
@@ -4931,8 +4922,9 @@ reason not to.  If it doesn't work, then try S<C<use base>>.
 
 =head1 INTROSPECTION
 
-Object::InsideOut provides an introspection API that allow you to obtain
-metadata on a class's hierarchy, constructor parameters, and methods.
+For Perl 5.6.1 and later, Object::InsideOut provides an introspection API that
+allow you to obtain metadata on a class's hierarchy, constructor parameters,
+and methods.
 
 =over
 
@@ -5105,7 +5097,7 @@ Here is a complete example with thread object sharing enabled:
 
 For performance considerations, it is recommended that arrays be used for
 class fields whenever possible.  The only time when hash-bases fields are
-required is when a class must provide its own L<object ID/"Object ID">, and
+required is when a class must provide its own L<object ID|/"Object ID">, and
 those IDs are something other than low-valued integers.  In this case, hashes
 must be used for fields not only in the class that defines the object ID
 subroutine, but also in every class in any class hierarchy that include such a
@@ -5392,6 +5384,21 @@ There are bugs associated with L<threads::shared> that may prevent you from
 using foreign inheritance with shared objects, or storing objects inside of
 shared objects.
 
+Due to internal complexities, the following actions are not supported in code
+that uses L<threads::shared> while there are any threads active:
+
+=over
+
+=item * Runtime loading of Object::InsideOut classes
+
+=item * Using L<-E<gt>add_class()|/"RUNTIME INHERITANCE">
+
+=back
+
+It is recommended that such activities, if needed, be performed in the main
+application code before any threads are created (or at least while there are
+no active threads).
+
 For Perl 5.6.0 through 5.8.0, a Perl bug prevents package variables (e.g.,
 object attribute arrays/hashes) from being referenced properly from subroutine
 refs returned by an C<:Automethod> subroutine.  For Perl 5.8.0 there is no
@@ -5476,7 +5483,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.08/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.09/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

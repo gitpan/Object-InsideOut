@@ -1,10 +1,12 @@
 package Object::InsideOut::Metadata; {
 
+require 5.006001;
+
 use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 2.08;
+    our $VERSION = 2.09;
 }
 
 
@@ -88,8 +90,8 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 2.08 qw(hash_re);
-use Object::InsideOut 2.08;
+use Object::InsideOut::Util 2.09 qw(hash_re);
+use Object::InsideOut 2.09;
 
 my @CLASSES       :Field :Arg(CLASSES);
 my @FOREIGN       :Field :Arg(FOREIGN);
@@ -236,7 +238,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 2.08
+This document describes Object::InsideOut::Metadata version 2.09
 
 =head1 SYNOPSIS
 
@@ -741,6 +743,10 @@ If adding metadata for multiple methods, another level of hash may be used:
 
 Provide filtering capabilities on the method information returned by
 C<-E<gt>get_methods()>.
+
+=head1 REQUIREMENTS
+
+Perl 5.6.1 or later
 
 =head1 SEE ALSO
 

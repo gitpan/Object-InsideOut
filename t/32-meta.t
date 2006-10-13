@@ -3,6 +3,11 @@ use warnings;
 
 my $HAVE_STORABLE;
 BEGIN {
+    if ($] == 5.006) {
+        print("1..0 # Skip Introspection doesn't work under Perl 5.6.0\n");
+        exit(0);
+    }
+
     eval { require Storable; };
     $HAVE_STORABLE = !$@;
 }
@@ -16,7 +21,7 @@ package Foo; {
     my @get  :Field :Get('name' => 'fooget', 'perm' => 'restricted');
 
     my $id = 1;
-    sub id : ID {
+    sub id :ID(restricted) {
         return ($id++);
     }
 
@@ -117,6 +122,9 @@ sub check_bar
           'set'   => { 'class' => 'Bar',
                        'kind'  => 'object',
                        'restricted' => 1 },
+
+          'id' => { 'class' => 'Foo',
+                    'restricted' => 1 },
 
           'dump' => { 'class' => 'Object::InsideOut',
                       'kind'  => 'object', },
