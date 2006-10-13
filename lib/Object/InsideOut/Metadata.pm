@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 2.11;
+    our $VERSION = 2.12;
 }
 
 
@@ -61,10 +61,17 @@ sub add_meta
 # It's done this way because of circular dependencies with OIO.
 sub AUTOLOAD
 {
+    # Need 5.8.0 or later
+    if ($] < 5.008) {
+        OIO::Code->die('message' => q/Introspection API requires Perl 5.8.0 or later/,
+                       'ignore_package' => __PACKAGE__);
+    }
+
     # It's a bug if not invoked by ->new()
     # This should only ever happen once
     if (our $AUTOLOAD ne __PACKAGE__.'::new') {
-        die("BUG: Object::InsideOut::Metadata does not support AUTOLOAD of $AUTOLOAD\n");
+        OIO::Method->die('message' => "Object::InsideOut::Metadata does not support AUTOLOAD of $AUTOLOAD",
+                         'ignore_package' => __PACKAGE__);
     }
 
     # Workaround to get %METADATA into our scope
@@ -88,8 +95,8 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 2.11 qw(hash_re);
-use Object::InsideOut 2.11;
+use Object::InsideOut::Util 2.12 qw(hash_re);
+use Object::InsideOut 2.12;
 
 my @CLASSES       :Field :Arg(CLASSES);
 my @FOREIGN       :Field :Arg(FOREIGN);
@@ -236,7 +243,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 2.11
+This document describes Object::InsideOut::Metadata version 2.12
 
 =head1 SYNOPSIS
 
@@ -742,10 +749,9 @@ If adding metadata for multiple methods, another level of hash may be used:
 Provide filtering capabilities on the method information returned by
 C<-E<gt>get_methods()>.
 
-=head1 BUGS AND LIMITATIONS
+=head1 REQUIREMENTS
 
-The introspection API does not work properly under Perl 5.6.0 due to bugs in
-the Perl interpreter.
+Perl 5.8.0 or later
 
 =head1 SEE ALSO
 

@@ -3,8 +3,8 @@ use warnings;
 
 my $HAVE_STORABLE;
 BEGIN {
-    if ($] == 5.006) {
-        print("1..0 # Skip Introspection doesn't work under Perl 5.6.0\n");
+    if ($] < 5.008) {
+        print("1..0 # Skip Introspection requires Perl 5.8.0 or later\n");
         exit(0);
     }
 

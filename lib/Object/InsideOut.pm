@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.11;
+our $VERSION = 2.12;
 
-use Object::InsideOut::Exception 2.11;
-use Object::InsideOut::Util 2.11 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.12;
+use Object::InsideOut::Util 2.12 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -338,7 +338,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.11;
+use Object::InsideOut::Metadata 2.12;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -2681,7 +2681,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.11
+This document describes Object::InsideOut version 2.12
 
 =head1 SYNOPSIS
 
@@ -4922,7 +4922,7 @@ reason not to.  If it doesn't work, then try S<C<use base>>.
 
 =head1 INTROSPECTION
 
-For Perl 5.6.1 and later, Object::InsideOut provides an introspection API that
+For Perl 5.8.0 and later, Object::InsideOut provides an introspection API that
 allow you to obtain metadata on a class's hierarchy, constructor parameters,
 and methods.
 
@@ -5444,8 +5444,8 @@ CPAN, especially if you encounter other problems associated with threads.
 For Perl 5.8.4 and 5.8.5, the L</"Storable"> feature does not work due to a
 Perl bug.  Use Object::InsideOut v1.33 if needed.
 
-The introspection API (i.e. C<-E<gt>meta()>, etc.) does not work properly
-under Perl 5.6.0 due to bugs in the Perl interpreter.
+Due to bugs in the Perl interpreter, using the introspection API (i.e.
+C<-E<gt>meta()>, etc.) requires Perl 5.8.0 or later.
 
 L<Devel::StackTrace> (used by L<Exception::Class>) makes use of the I<DB>
 namespace.  As a consequence, Object::InsideOut thinks that S<C<package DB>>
@@ -5486,7 +5486,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.11/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.12/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
