@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.12;
+our $VERSION = 2.13;
 
-use Object::InsideOut::Exception 2.12;
-use Object::InsideOut::Util 2.12 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.13;
+use Object::InsideOut::Util 2.13 qw(create_object hash_re is_it make_shared);
 
 use B;
 use Scalar::Util 1.10;
@@ -230,6 +230,8 @@ sub import
     # Save the trees
     $TREE_TOP_DOWN{$class} = \@tree;
     @{$TREE_BOTTOM_UP{$class}} = reverse(@tree);
+
+    $DO_INIT = 1;   # Need to initialize
 }
 
 
@@ -338,7 +340,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.12;
+use Object::InsideOut::Metadata 2.13;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -722,7 +724,8 @@ sub sub_name :Sub(Private)
 # Perform much of the 'magic' for this module
 sub initialize :Sub(Private)
 {
-    $DO_INIT = 0;   # Clear initialization flag
+    return if (! $DO_INIT);
+    $DO_INIT = 0;
 
     no warnings 'redefine';
     no strict 'refs';
@@ -1007,15 +1010,6 @@ sub process_fields :Sub(Private)
         }
     }
     undef(%NEW_FIELDS);  # No longer needed
-}
-
-
-# Initialize as part of the CHECK phase
-{
-    no warnings 'void';
-    CHECK {
-        initialize();
-    }
 }
 
 
@@ -1457,7 +1451,7 @@ sub new :MergeArgs
     }
 
     # Perform package initialization, if required
-    initialize() if ($DO_INIT);
+    initialize();
 
     # Create a new 'bare' object
     my $self = _obj($class);
@@ -1575,7 +1569,7 @@ sub meta
     }
 
     # Perform package initialization, if required
-    initialize() if ($DO_INIT);
+    initialize();
 
     # Get all foreign classes
     my %foreign;
@@ -2669,6 +2663,20 @@ sub create_lvalue_accessor :Sub(Private)
     goto &create_lvalue_accessor;
 }
 
+
+### Initialize Package ###
+
+# Initialize the package after loading
+initialize();
+
+{
+    # Initialize as part of the CHECK phase
+    no warnings 'void';
+    CHECK {
+        initialize();
+    }
+}
+
 }  # End of package's lexical scope
 
 1;
@@ -2681,7 +2689,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.12
+This document describes Object::InsideOut version 2.13
 
 =head1 SYNOPSIS
 
@@ -5486,7 +5494,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.12/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.13/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

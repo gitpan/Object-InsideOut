@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.13 Tue Oct 17 10:09:39 EDT 2006
+	- Fix bug with 'require' on empty classes
+
 2.12 Fri Oct 13 14:42:50 EDT 2006
 	- Metadata requires Perl 5.8.0 or later
 
