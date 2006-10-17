@@ -6,8 +6,8 @@ use Test::More 'no_plan';
 package main;
 MAIN:
 {
-    use t::A;
-    use t::B;
+    use t::Imp1;
+    use t::Imp2;
 
     is_deeply( \@main::ISA, [], 
             '@main::ISA result=' . join(', ', @main::ISA));

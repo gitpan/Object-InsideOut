@@ -133,5 +133,5 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-my $VERSION = 2.13;
-($Object::InsideOut::VERSION == 2.13) or die("Version mismatch\n");
+my $VERSION = 2.14;
+($Object::InsideOut::VERSION == 2.14) or die("Version mismatch\n");
