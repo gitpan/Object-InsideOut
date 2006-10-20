@@ -43,6 +43,7 @@ t/12-super.t
 t/13-pump.t
 t/14-auto_cc.t
 t/15-type.t
+t/15a-type.t
 t/16-return.t
 t/17-dynamic.t
 t/18-inherit.t
