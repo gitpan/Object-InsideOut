@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.16 Mon Oct 23 13:30:32 EDT 2006
+	- Another fix for the :Type attribute
+	- Noted in POD that the PPM version of Want is bad
+
 2.15 Fri Oct 20 15:46:06 EDT 2006
 	- Fixed bug with :Type attribute
 

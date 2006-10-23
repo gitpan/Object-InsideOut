@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.15;
+our $VERSION = 2.16;
 
-use Object::InsideOut::Exception 2.15;
-use Object::InsideOut::Util 2.15 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.16;
+use Object::InsideOut::Util 2.16 qw(create_object hash_re is_it make_shared);
 
 use B ();
 use Scalar::Util 1.10;
@@ -340,7 +340,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.15;
+use Object::InsideOut::Metadata 2.16;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -1827,14 +1827,8 @@ sub create_accessors :Sub(Private)
         OIO::Attribute->die(
             'message'   => "Missing declarations for attribute in package '$pkg'",
             'Attribute' => $attr);
-    } elsif ($decl !~ /=>/) {
-        if ($kind =~ /^Type/i) {
-            $decl = "{'$kind'=>$decl}";
-        } else {
-            OIO::Attribute->die(
-                'message'   => "Malformed attribute in package '$pkg'",
-                'Attribute' => $attr);
-        }
+    } elsif (($kind =~ /^Type/i) && ($decl =~ /^(?:sub|\\&)/)) {
+        $decl = "{'$kind'=>$decl}";
     } elsif ($kind !~ /^Field/i) {
         $decl =~ s/'?name'?\s*=>/'$kind'=>/i;
     }
@@ -2697,7 +2691,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.15
+This document describes Object::InsideOut version 2.16
 
 =head1 SYNOPSIS
 
@@ -5463,6 +5457,10 @@ Perl bug.  Use Object::InsideOut v1.33 if needed.
 Due to bugs in the Perl interpreter, using the introspection API (i.e.
 C<-E<gt>meta()>, etc.) requires Perl 5.8.0 or later.
 
+The version of L<Want> that is available via PPM for ActivePerl is defective,
+and causes failures when using C<:lvalue> accessors.  Remove it, and then
+download and install the L<Want> module using CPAN.
+
 L<Devel::StackTrace> (used by L<Exception::Class>) makes use of the I<DB>
 namespace.  As a consequence, Object::InsideOut thinks that S<C<package DB>>
 is already loaded.  Therefore, if you create a class called I<DB> that is
@@ -5502,7 +5500,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.15/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.16/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
