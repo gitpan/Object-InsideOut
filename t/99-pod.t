@@ -9,6 +9,7 @@ SKIP: {
 
     pod_file_ok('blib/lib/Object/InsideOut.pm');
     pod_file_ok('blib/lib/Object/InsideOut/Metadata.pm');
+    pod_file_ok('blib/lib/Bundle/Object/InsideOut.pm');
 }
 
 SKIP: {

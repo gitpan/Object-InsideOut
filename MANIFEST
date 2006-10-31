@@ -3,6 +3,7 @@ README
 Changes
 Makefile.PL
 Build.PL
+lib/Bundle/Object/InsideOut.pm
 lib/Object/InsideOut.pm
 lib/Object/InsideOut/Autoload.pm
 lib/Object/InsideOut/Chained.pm

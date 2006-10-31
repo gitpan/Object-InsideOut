@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.16;
+our $VERSION = 2.17;
 
-use Object::InsideOut::Exception 2.16;
-use Object::InsideOut::Util 2.16 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.17;
+use Object::InsideOut::Util 2.17 qw(create_object hash_re is_it make_shared);
 
 use B ();
 use Scalar::Util 1.10;
@@ -340,7 +340,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.16;
+use Object::InsideOut::Metadata 2.17;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -2691,7 +2691,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.16
+This document describes Object::InsideOut version 2.17
 
 =head1 SYNOPSIS
 
@@ -5477,22 +5477,40 @@ to: L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
 
 =head1 REQUIREMENTS
 
-Perl 5.6.0 or later
+=over
 
-L<Exception::Class> v1.22 or later
+=item Perl 5.6.0 or later
 
-L<Scalar::Util> v1.10 or later.  It is possible to install a I<pure perl>
-version of Scalar::Util, however, it will be missing the
-L<weaken()|Scalar::Util/"weaken REF"> function which is needed by
-Object::InsideOut.  You'll need to upgrade your version of Scalar::Util to one
-that supports its C<XS> code.
+=item L<Exception::Class> v1.22 or later
 
-L<Test::More> v0.50 or later (for installation)
+=item L<Scalar::Util> v1.10 or later
 
-Optionally, L<Want> (v0.12 or later) for L</":lvalue Accessors">.
+It is possible to install a I<pure perl> version of Scalar::Util, however, it
+will be missing the L<weaken()|Scalar::Util/"weaken REF"> function which is
+needed by Object::InsideOut.  You'll need to upgrade your version of
+Scalar::Util to one that supports its C<XS> code.
 
-Optionally, L<Math::Random::MT::Auto> (v5.04 or later) for
-L<:SECURE mode|/"SECURITY">.
+=item L<Test::More> v0.50 or later
+
+Needed for testing during installation.
+
+=item L<Want> v0.12 or later
+
+Optional.  Provides support for L</":lvalue Accessors">.
+
+=item L<Math::Random::MT::Auto> v5.04 or later)
+
+Optional.  Provides support for L<:SECURE mode|/"SECURITY">.
+
+=back
+
+To cover all of the above requirements and more, it is recommended that you
+install L<Bundle::Object::InsideOut> using CPAN:
+
+ perl -MCPAN -e 'install Bundle::Object::InsideOut'
+
+This will install the latest versions of all the required and optional modules
+needed for full support of all of the features provided by Object::InsideOut.
 
 =head1 SEE ALSO
 
@@ -5500,7 +5518,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.16/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.17/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
@@ -5535,5 +5553,11 @@ Copyright 2005, 2006 Jerry D. Hedden. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.
+
+=head1 TRANSLATIONS
+
+A Janapese translation of this documentation by
+TSUJII, Naofumi S<E<lt>tsun DOT nt AT gmail DOT comE<gt>>
+is available at L<http://perldoc.jp/docs/modules/>.
 
 =cut
