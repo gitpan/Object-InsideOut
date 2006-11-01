@@ -168,5 +168,5 @@ sub create_field
 
 
 # Ensure correct versioning
-my $VERSION = 2.17;
-($Object::InsideOut::VERSION == 2.17) or die("Version mismatch\n");
+my $VERSION = 2.18;
+($Object::InsideOut::VERSION == 2.18) or die("Version mismatch\n");

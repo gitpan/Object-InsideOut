@@ -1,6 +1,6 @@
 package Bundle::Object::InsideOut;
 
-our $VERSION = 2.17;
+our $VERSION = 2.18;
 
 1;
 
@@ -20,7 +20,7 @@ Test::More 0.64                 - Used for module testing
 
 Test::Pod 1.26                  - Checks POD syntax
 
-Devel-Symdump 2.0604            - Used by Test::Pod::Coverage
+Devel::Symdump 2.0604           - Used by Test::Pod::Coverage
 
 Pod::Coverage 0.18              - Used by Test::Pod::Coverage
 
@@ -34,19 +34,19 @@ Storable 2.15                   - Object serialization support
 
 LWP::UserAgent 2.033            - Used by Math::Random::MT::Auto
 
-Win32::API 0.41                 - Used by Math::Random::MT::Auto
+Win32::API 0.41                 - Used by Math::Random::MT::Auto (Win32 only)
 
 threads 1.47                    - Support for threads
 
-threads-shared 1.05             - Support for sharing objects between threads
+threads::shared 1.05            - Support for sharing objects between threads
 
-Devel-StackTrace 1.13           - Used by Exception::Class
+Devel::StackTrace 1.13          - Used by Exception::Class
 
-Class-Data-Inheritable 0.06     - Used by Exception::Class
+Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 2.17          - Inside-out object support
+Object::InsideOut 2.18          - Inside-out object support
 
 Math::Random::MT::Auto 5.04     - Support for :SECURE mode
 
