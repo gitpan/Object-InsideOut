@@ -163,5 +163,5 @@ sub AUTOLOAD
 
 
 # Ensure correct versioning
-my $VERSION = 2.18;
-($Object::InsideOut::VERSION == 2.18) or die("Version mismatch\n");
+my $VERSION = 2.19;
+($Object::InsideOut::VERSION == 2.19) or die("Version mismatch\n");

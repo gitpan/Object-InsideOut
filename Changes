@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.19 Thu Nov  2 14:07:17 EST 2006
+	- Added more dependencies to Bundle::Object::InsideOut
+
 2.18 Wed Nov  1 07:51:27 EST 2006
 	- Fixes to Bundle::Object::InsideOut syntax
 

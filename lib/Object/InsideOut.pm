@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.18;
+our $VERSION = 2.19;
 
-use Object::InsideOut::Exception 2.18;
-use Object::InsideOut::Util 2.18 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.19;
+use Object::InsideOut::Util 2.19 qw(create_object hash_re is_it make_shared);
 
 use B ();
 use Scalar::Util 1.10;
@@ -340,7 +340,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.18;
+use Object::InsideOut::Metadata 2.19;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -2691,7 +2691,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.18
+This document describes Object::InsideOut version 2.19
 
 =head1 SYNOPSIS
 
@@ -5518,7 +5518,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.18/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.19/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
