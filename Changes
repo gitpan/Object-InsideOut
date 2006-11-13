@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.21 Mon Nov 13 10:09:24 EST 2006
+	- Added subtype-checking for list/array/array_ref
+	- Improvments to Term::YAPI in examples dir
+
 2.19 Thu Nov  2 14:07:17 EST 2006
 	- Added more dependencies to Bundle::Object::InsideOut
 

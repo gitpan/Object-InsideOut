@@ -48,6 +48,7 @@ SKIP: {
                             qr/^is_sharing$/,
                             qr/^load$/,
                             qr/^preamble_code$/,
+                            qr/^type_code$/,
                             qr/^process_fields$/,
                             qr/^set_sharing$/,
                             qr/^sub_name$/,

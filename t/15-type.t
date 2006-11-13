@@ -15,6 +15,7 @@ package My::Class; {
     }
 
     my @aa : Field('acc'=>'aa', 'type' => 'array');
+    my @as : Field('acc'=>'as', 'type' => 'array(My::Class)');
     my @ar : Field('acc'=>'ar', 'type' => 'array_ref');
     my @cc : Field({'acc'=>'cc', 'type' => sub{ shift > 0 } });
     my @hh : Field('acc'=>'hh', 'type' => 'hash');
@@ -49,6 +50,19 @@ MAIN:
     is_deeply($obj->aa(), ['zero', 5]           => 'Array multiple values');
     $obj->aa(['x', 42, 'z']);
     is_deeply($obj->aa(), ['x', 42, 'z']        => 'Array ref value');
+
+    {
+        my $a = My::Class->new();
+        my $b = My::Class->new();
+        my $c = My::Class->new();
+
+        $obj->as($a);
+        is_deeply($obj->as(), [$a]              => 'Array single class');
+        $obj->as($a, $b, $c);
+        is_deeply($obj->as(), [$a, $b, $c]      => 'Array multiple class');
+        $obj->as([$c, $a, $b]);
+        is_deeply($obj->as(), [$c, $a, $b]      => 'Array ref class');
+    }
 
     eval { $obj->ar('test'); };
     like($@->message, qr/Wrong type/            => 'Not array ref');

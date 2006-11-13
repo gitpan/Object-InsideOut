@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 2.19;
+    our $VERSION = 2.21;
 }
 
 
@@ -95,8 +95,8 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 2.19 qw(hash_re);
-use Object::InsideOut 2.19;
+use Object::InsideOut::Util 2.21 qw(hash_re);
+use Object::InsideOut 2.21;
 
 my @CLASSES       :Field :Arg(CLASSES);
 my @FOREIGN       :Field :Arg(FOREIGN);
@@ -161,12 +161,24 @@ sub get_args
                     }
                     if (my $type = hash_re($hash, qr/^TYPE$/i)) {
                         if (!ref($type)) {
-                            if ($type =~ /^num/i) {
+                            $type =~ s/\s//g;
+                            my $subtype;
+                            if ($type =~ /^(.*)\((.+)\)$/i) {
+                                $type = $1;
+                                $subtype = $2;
+                                if ($subtype =~ /^num(?:ber|eric)?$/i) {
+                                    $subtype = 'numeric';
+                                }
+                            }
+                            if ($type =~ /^num(?:ber|eric)?$/i) {
                                 $type = 'numeric';
-                            } elsif ($type =~ /^list$/i) {
+                            } elsif ($type =~ /^(?:list|array)$/i) {
                                 $type = 'list';
-                            }elsif ($type =~ /^(array|hash)(?:_?ref)?$/i) {
+                            } elsif ($type =~ /^(array|hash)(?:_?ref)?$/i) {
                                 $type = uc($1);
+                            }
+                            if ($subtype) {
+                                $type .= "($subtype)";
                             }
                         }
                         $args{$pkg}{$arg}{'type'} = $type;
@@ -243,7 +255,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 2.19
+This document describes Object::InsideOut::Metadata version 2.21
 
 =head1 SYNOPSIS
 
@@ -397,7 +409,7 @@ with the metadata object.  Here's an example of such a hash:
      'My::Class' => {
          'data' => {
              'field' => 1,
-             'type' => numeric,
+             'type' => 'numeric',
          },
          'misc' => {
              'mandatory' => 1,
@@ -444,7 +456,7 @@ See L<Object::InsideOut/"Parameter Preprocessing">
 =item type
 
 The form of type checking performed on the parameter.
-See L<Object::InsideOut/"TYPE CHECKING">
+See L<Object::InsideOut/"TYPE CHECKING"> for more details.
 
 =over
 
@@ -455,13 +467,39 @@ L<Scalar::Util::looks_like_number()|Scalar::Util/"looks_like_number EXPR">.
 
 =item 'list'
 
+=item 'list(_subtype_)'
+
 Parameter takes a single value (which is then placed in an array ref) or an
 array ref.
 
+When specified, the contents of the resulting array ref must be of the
+specified subtype:
+
+=over
+
+=item 'numeric'
+
+Same as for the basic type above.
+
 =item A class name
 
-Parameter takes an object of a specified class, or one of its sub-classes
-as recognized by C<-E<gt>isa()>.
+Same as for the basic type below.
+
+=item A reference type
+
+Any reference type as returned by L<ref()|perlfunc/"ref EXPR">).
+
+=back
+
+=item 'ARRAY(_subtype_)'
+
+Parameter takes an array ref with contents of the specified subtype as per the
+above.
+
+=item A class name
+
+Parameter takes an object of a specified class, or one of its sub-classes as
+recognized by C<-E<gt>isa()>.
 
 =item Other reference type
 

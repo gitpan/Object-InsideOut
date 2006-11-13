@@ -18,7 +18,10 @@ package Foo; {
     use Object::InsideOut;
 
     my @data :Field :Type(num) :All(data);
-    my @get  :Field :Get('name' => 'fooget', 'perm' => 'restricted');
+    my @get  :Field
+             :Type(\&Foo::my_sub)
+             :Set(setget)
+             :Get('name' => 'fooget', 'perm' => 'restricted');
 
     my $id = 1;
     sub id :ID(restricted) {
@@ -50,8 +53,12 @@ package Bar; {
     use Object::InsideOut qw(Foo);
     use Object::InsideOut::Metadata;
 
-    my @info :Field :Type(list) :All(info);
-    my @set  :Field :Set('name' => 'barset', 'ret' => 'old');
+    my @info :Field :Type(list(num)) :All(info);
+    my @more :Field :Type(ARRAY(Foo)) :Arg(more);
+    my @set
+        :Field
+        :Type(sub { $_[0]->isa('UNIVERSAL') })
+        :Set('name' => 'barset', 'ret' => 'old');
 
     sub cu :Cumulative   { return ('Bar cumulative'); }
     sub ch :Chain(Bottom up)
@@ -100,9 +107,13 @@ sub check_bar
         },
         'Bar' => {
             'info' => {
-                'type' => 'list',
+                'type' => 'list(numeric)',
                 'field' => 1,
             },
+            'more' => {
+                'type' => 'list(Foo)',
+                'field' => 1,
+            }
         },
     );
 
@@ -156,8 +167,12 @@ sub check_bar
                       'type'   => 'numeric',
                       'return' => 'new' },
 
-          'fooget' => { 'class' => 'Foo',
-                        'kind'  => 'get',
+          'setget' => { 'class'  => 'Foo',
+                        'kind'   => 'set',
+                        'type'   => '\&Foo::my_sub',
+                        'return' => 'new' },
+          'fooget' => { 'class'  => 'Foo',
+                        'kind'   => 'get',
                         'restricted' => 1 },
 
           'my_foo' => { 'class' => 'Foo',
@@ -172,11 +187,12 @@ sub check_bar
 
           'info' => { 'class'  => 'Bar',
                       'kind'   => 'accessor',
-                      'type'   => 'ARRAY',
+                      'type'   => 'list(numeric)',
                       'return' => 'new' },
 
           'barset' => { 'class'  => 'Bar',
                         'kind'   => 'set',
+                        'type'   => q/sub { $_[0]->isa('UNIVERSAL') }/,
                         'return' => 'old' },
 
           'cu' => { 'class'  => 'Bar',

@@ -35,8 +35,8 @@ sub create_lvalue_accessor
             OIO::Method->die('message' => "Can't call private subroutine 'Object::InsideOut::create_lvalue_accessor' from class '$caller'");
         }
 
-        my ($pkg, $set, $field_ref, $get, $type, $name, $return,
-            $private, $restricted, $weak, $pre) = @_;
+        my ($pkg, $set, $field_ref, $get, $type, $ah_ref, $subtype,
+            $name, $return, $private, $restricted, $weak, $pre) = @_;
 
         # Field string
         my $fld_str = (ref($field_ref) eq 'HASH') ? "\$field->\{\${\$_[0]}}" : "\$field->\[\${\$_[0]}]";
@@ -108,103 +108,9 @@ _PRE_
         }
 
         # Add data type checking
-        my $arg_str = '$_[1]';
-        if (ref($type)) {
-            $code .= <<"_CODE_";
-        {
-            my (\$arg, \$ok, \@errs);
-            local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
-            eval { \$ok = \$type_check->($arg_str) };
-            if (\$@ || \@errs) {
-                my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
-                OIO::Code->die(
-                    'message' => q/Problem with type check routine for '$pkg->$set'/,
-                    'Error'   => \$err);
-            }
-            if (! \$ok) {
-                OIO::Args->die(
-                    'message'  => "Argument to '$pkg->$set' failed type check: $arg_str",
-                    'location' => [ caller() ]);
-            }
-        }
-_CODE_
-
-        } elsif ($type eq 'NONE') {
-            # For 'weak' fields, the data must be a ref
-            if ($weak) {
-                $code .= <<"_WEAK_";
-        if (! ref($arg_str)) {
-            OIO::Args->die(
-                'message'  => "Bad argument: $arg_str",
-                'Usage'    => q/Argument to '$pkg->$set' must be a reference/,
-                'location' => [ caller() ]);
-        }
-_WEAK_
-            }
-
-        } elsif ($type eq 'NUMERIC') {
-            # One numeric argument
-            $code .= <<"_NUMERIC_";
-        if (! Scalar::Util::looks_like_number($arg_str)) {
-            OIO::Args->die(
-                'message'  => "Bad argument: $arg_str",
-                'Usage'    => q/Argument to '$pkg->$set' must be numeric/,
-                'location' => [ caller() ]);
-        }
-_NUMERIC_
-
-        } elsif ($type eq 'ARRAY') {
-            # List/array - 1+ args or array ref
-            $code .= <<'_ARRAY_';
-        my $arg;
-        if (@_ == 2 && ref($_[1]) eq 'ARRAY') {
-            $arg = $_[1];
-        } else {
-            my @args = @_;
-            shift(@args);
-            $arg = \@args;
-        }
-_ARRAY_
-            $arg_str = '$arg';
-
-        } elsif ($type eq 'HASH') {
-            # Hash - pairs of args or hash ref
-            $code .= <<"_HASH_";
-        my \$arg;
-        if (\@_ == 2 && ref(\$_[1]) eq 'HASH') {
-            \$arg = \$_[1];
-        } elsif (\@_ % 2 == 0) {
-            OIO::Args->die(
-                'message'  => q/Odd number of arguments: Can't create hash ref/,
-                'Usage'    => q/'$pkg->$set' requires a hash ref or an even number of args (to make a hash ref)/,
-                'location' => [ caller() ]);
-        } else {
-            my \@args = \@_;
-            shift(\@args);
-            my \%args = \@args;
-            \$arg = \\\%args;
-        }
-_HASH_
-            $arg_str = '$arg';
-
-        } else {
-            # Support explicit specification of array refs and hash refs
-            if (uc($type) =~ /^ARRAY_?REF$/) {
-                $type = 'ARRAY';
-            } elsif (uc($type) =~ /^HASH_?REF$/) {
-                $type = 'HASH';
-            }
-
-            # One object or ref arg - exact spelling and case required
-            $code .= <<"_REF_";
-        if (! Object::InsideOut::Util::is_it($arg_str, '$type')) {
-            OIO::Args->die(
-                'message'  => q/Bad argument: Wrong type/,
-                'Usage'    => q/Argument to '$pkg->$set' must be of type '$type'/,
-                'location' => [ caller() ]);
-        }
-_REF_
-        }
+        my ($type_code, $arg_str) = type_code($pkg, $set, $weak,
+                                              $type, $ah_ref, $subtype);
+        $code .= $type_code;
 
         # Grab 'OLD' value
         if ($return eq 'OLD') {
@@ -251,5 +157,5 @@ _REF_
 
 
 # Ensure correct versioning
-my $VERSION = 2.19;
-($Object::InsideOut::VERSION == 2.19) or die("Version mismatch\n");
+my $VERSION = 2.21;
+($Object::InsideOut::VERSION == 2.21) or die("Version mismatch\n");

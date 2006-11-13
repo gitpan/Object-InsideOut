@@ -35,6 +35,9 @@ package My::Class; {
     my @nn :Field
            :Acc(nn)
            :Type(num);
+    my @ns :Field
+           :Acc(ns)
+           :Type(list(num));
     my @ss :Field
            :Acc(ss)
            :Type(\&My::Class::is_scalar);
@@ -50,6 +53,19 @@ package My::Class; {
         'BAD' => {
             'Type'  => sub { shift > 0 }
         },
+    );
+}
+
+package Foo; {
+    use Object::InsideOut;
+
+    my @foo :Field :Acc(foo);
+
+    my %init_args :InitArgs = (
+        'FOO' => {
+            'field' => \@foo,
+            'type' => 'ARRAYref(UNIVERSAL)'
+        }
     );
 }
 
@@ -103,6 +119,13 @@ MAIN:
     eval { $obj->nn('x'); };
     like($@->message, qr/Bad argument/          => 'Numeric failure');
 
+    $obj->ns(86);
+    is_deeply($obj->ns(), [86]                  => 'Array single num');
+    $obj->ns(1, 2.5, 5);
+    is_deeply($obj->ns(), [1, 2.5, 5]           => 'Array multiple num');
+    $obj->ns([42, 0, -1]);
+    is_deeply($obj->ns(), [42, 0, -1]           => 'Array ref num');
+
     $obj->ss('hello');
     is($obj->ss(), 'hello'                      => 'Scalar');
     eval { $obj->ss([1]); };
@@ -116,6 +139,10 @@ MAIN:
 
     eval { $obj2 = My::Class->new('BAD' => ''); };
     like($@->message, qr/Problem with type check routine/  => 'Type sub failure');
+
+    my $foo = Foo->new();
+    my $foo2 = Foo->new('FOO' => [ $foo, $obj ]);
+    is_deeply($foo2->foo(), [ $foo, $obj ]      => 'InitArgs type arrayref(UNIV)');
 }
 
 exit(0);

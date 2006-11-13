@@ -47,6 +47,11 @@ package Foo; {
     my @num2 :Field('lv' => 'num2', 'Return' => 'old', 'Type' => 'num');
     my @num3 :Field('lv' => 'num3', 'Return' => 'obj', 'Type' => 'num');
 
+    my @bork
+        :Field
+        :Type(Array_Ref(HASH))
+        :LV(bork);
+
     sub me
     {
         my $self = shift;
@@ -582,6 +587,10 @@ MAIN:
     $val = $obj->num3(7)->me();
     is($val, 'Foo(1)'                   => 'chain self');
     is($obj->num3(), 7                  => 'chain set');
+
+    $obj->bork() = [ {a=>5,b=>'foo'}, {}, {99=>'bork'} ];
+    is_deeply($obj->bork(), [ {a=>5,b=>'foo'}, {}, {99=>'bork'} ]
+                                        => 'lv array_ref subtype=hash');
 }
 
 exit(0);

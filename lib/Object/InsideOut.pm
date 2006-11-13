@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.19;
+our $VERSION = 2.21;
 
-use Object::InsideOut::Exception 2.19;
-use Object::InsideOut::Util 2.19 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.21;
+use Object::InsideOut::Util 2.21 qw(create_object hash_re is_it make_shared);
 
 use B ();
 use Scalar::Util 1.10;
@@ -340,7 +340,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.19;
+use Object::InsideOut::Metadata 2.21;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -1370,6 +1370,8 @@ sub _args :Sub(Private)
 
         # Check for correct type
         if (my $type = hash_re($spec_item, qr/^TYPE$/i)) {
+            my $subtype;
+
             # Custom type checking
             if (ref($type)) {
                 if (ref($type) ne 'CODE') {
@@ -1397,7 +1399,7 @@ sub _args :Sub(Private)
             }
 
             # Is it supposed to be a number
-            elsif ($type =~ /^num/i) {
+            elsif ($type =~ /^num(?:ber|eric)?$/i) {
                 if (! Scalar::Util::looks_like_number($found{$key})) {
                 OIO::Args->die(
                     'message' => "Bad value for initializer '$key': $found{$key}",
@@ -1406,7 +1408,10 @@ sub _args :Sub(Private)
             }
 
             # For 'LIST', turn anything not an array ref into an array ref
-            elsif ($type =~ /^list$/i) {
+            elsif ($type =~ /^(?:list|array)\s*(?:\(\s*(\S+)\s*\))*$/i) {
+                if (defined($1)) {
+                    $subtype = $1;
+                }
                 if (ref($found{$key}) ne 'ARRAY') {
                     $found{$key} = [ $found{$key} ];
                 }
@@ -1415,13 +1420,38 @@ sub _args :Sub(Private)
             # Otherwise, check for a specific class or ref type
             # Exact spelling and case required
             else {
-                if ($type =~ /^(array|hash)(?:_?ref)?$/i) {
+                if ($type =~ /^(array|hash)(?:_?ref)?\s*(?:\(\s*(\S+)\s*\))*$/i) {
                     $type = uc($1);
+                    if (defined($2)) {
+                        $subtype = $2;
+                    }
                 }
                 if (! is_it($found{$key}, $type)) {
                     OIO::Args->die(
                         'message' => "Bad value for initializer '$key': $found{$key}",
                         'Usage'   => "Initializer '$key' for class '$class' must be an object or ref of type '$type'");
+                }
+            }
+
+            # Check type of each element in array
+            if (defined($subtype)) {
+                if ($subtype =~ /^num(?:ber|eric)?$/i) {
+                    # Numeric elements
+                    foreach my $elem (@{$found{$key}}) {
+                        if (! Scalar::Util::looks_like_number($elem)) {
+                        OIO::Args->die(
+                            'message' => "Bad value for initializer '$key': $elem",
+                            'Usage'   => "Values making up initializer '$key' for class '$class' must numeric");
+                        }
+                    }
+                } else {
+                    foreach my $elem (@{$found{$key}}) {
+                        if (! is_it($elem, $subtype)) {
+                            OIO::Args->die(
+                                'message' => "Bad value for initializer '$key': $elem",
+                                'Usage'   => "Values making up Initializer '$key' for class '$class' must be objects or refs of type '$subtype'");
+                        }
+                    }
                 }
             }
         }
@@ -1816,8 +1846,9 @@ sub create_accessors :Sub(Private)
 
     # Extract info from attribute
     my ($kind) = $attr =~ /^(\w+)/;
-    my ($name) = $attr =~ /^\w+\s*[(]\s*'?([\w:]*)'?\s*[)]/;
-    my ($decl) = $attr =~ /^\w+\s*[(]\s*(.*)\s*[)]/;
+    my ($name) = $attr =~ /^\w+\s*\(\s*'?([\w:()]*)'?\s*\)$/;
+    my ($decl) = $attr =~ /^\w+\s*\(\s*(.*)\s*\)/;
+    my $type_code;
 
     if ($name) {
         $decl = "{'$kind'=>'$name'}";
@@ -1828,6 +1859,7 @@ sub create_accessors :Sub(Private)
             'message'   => "Missing declarations for attribute in package '$pkg'",
             'Attribute' => $attr);
     } elsif (($kind =~ /^Type/i) && ($decl =~ /^(?:sub|\\&)/)) {
+        $type_code = $decl;
         $decl = "{'$kind'=>$decl}";
     } elsif ($kind !~ /^Field/i) {
         $decl =~ s/'?name'?\s*=>/'$kind'=>/i;
@@ -1916,16 +1948,31 @@ sub create_accessors :Sub(Private)
                         'Info'      => q/Bad 'Type' specifier: Must be a 'string' or code ref/,
                         'Attribute' => $attr);
                 }
-                if (!ref($val)) {
-                    if ($val =~ /^num(?:ber|eric)?/i) {
-                        $val = 'NUMERIC';
-                    } elsif (uc($val) eq 'LIST' || uc($val) eq 'ARRAY') {
-                        $val = 'LIST';
+                # Normalize type declaration
+                if (! ref($val)) {
+                    $val =~ s/\s//g;
+                    my $subtype;
+                    if ($val =~ /^(.*)\((.+)\)$/i) {
+                        $val = $1;
+                        $subtype = $2;
+                        if ($subtype =~ /^num(?:ber|eric)?$/i) {
+                            $subtype = 'numeric';
+                        }
+                    }
+                    if ($val =~ /^num(?:ber|eric)?$/i) {
+                        $val = 'numeric';
+                    } elsif ($val =~ /^(?:list|array)$/i) {
+                        $val = 'list';
                     } elsif (uc($val) eq 'HASH') {
                         $val = 'HASH';
+                    } elsif ($val =~ /^(hash|array)_?ref$/i) {
+                        $val = uc($1) . '_ref';
+                    }
+                    if ($subtype) {
+                        $val .= "($subtype)";
                     }
                 }
-                $FIELD_TYPE{$field_ref} = $val;
+                $FIELD_TYPE{$field_ref} = [ $val, $type_code ];
                 push(@FIELD_TYPE_INFO, [ $field_ref, $val ]);
                 next;
             }
@@ -1997,10 +2044,10 @@ sub create_accessors :Sub(Private)
         }
         $INIT_ARGS{$pkg}{$arg}{'FIELD'} = $field_ref;
         # Add type to :InitArgs
-        if (my $type = $FIELD_TYPE{$field_ref}) {
-            if (! hash_re($INIT_ARGS{$pkg}{$arg}, qr/^TYPE$/i)) {
-                $INIT_ARGS{$pkg}{$arg}{'TYPE'} = $type;
-            }
+        if ($FIELD_TYPE{$field_ref} &&
+            ! hash_re($INIT_ARGS{$pkg}{$arg}, qr/^TYPE$/i))
+        {
+            $INIT_ARGS{$pkg}{$arg}{'TYPE'} = $FIELD_TYPE{$field_ref}[0];
         }
     }
 
@@ -2090,7 +2137,26 @@ sub create_accessors :Sub(Private)
     }
 
     # Get type checking (if any)
-    my $type = $FIELD_TYPE{$field_ref} || 'NONE';
+    my ($type, $subtype, $ah_ref) = ('NONE', '', 0);
+    if ($FIELD_TYPE{$field_ref}) {
+        $type = $FIELD_TYPE{$field_ref}[0];
+        if (! ref($type)) {
+            if ($type =~ /^(.*)\((.+)\)$/i) {
+                $type = $1;
+                $subtype = $2;
+            }
+            if ($type =~ /^(HASH|ARRAY)_ref$/) {
+                $type = $1;
+                $ah_ref = 1;
+            }
+        }
+    }
+    if ($subtype && ($type ne 'list' && $type ne 'ARRAY')) {
+        OIO::Attribute->die(
+            'message'   => "Invalid type specification for package '$pkg'",
+            'Info'      => "Type '$type' cannot have subtypes",
+            'Attribute' => $attr);
+    }
 
     # Metadata
     my %meta;
@@ -2100,24 +2166,21 @@ sub create_accessors :Sub(Private)
             $meta{$set}{'lvalue'} = 1;
         }
         $meta{$set}{'return'} = lc($return);
+        # Type
+        if (ref($type)) {
+            $meta{$set}{'type'} = $FIELD_TYPE{$field_ref}[1];
+        } elsif ($type ne 'NONE') {
+            $meta{$set}{'type'} = $type;
+        }
+        if ($subtype) {
+            $meta{$set}{'type'} .= "($subtype)";
+        }
     }
     if ($get && (!$set || ($get ne $set))) {
         $meta{$get}{'kind'} = 'get';
     }
     foreach my $meth ($get, $set) {
         next if (! $meth);
-        # Type
-        if (ref($type)) {
-            $meta{$meth}{'type'} = $type;
-        } elsif ($type eq 'NUMERIC') {
-            $meta{$meth}{'type'} = 'numeric';
-        } elsif ($type eq 'LIST' || $type =~ /^array(?:_?ref)?$/i) {
-            $meta{$meth}{'type'} = 'ARRAY';
-        } elsif ($type =~ /^hash(?:_?ref)?$/i) {
-            $meta{$meth}{'type'} = 'HASH';
-        } elsif ($type ne 'NONE') {
-            $meta{$meth}{'type'} = $type;
-        }
         # Permissions
         if ($private) {
             $meta{$meth}{'hidden'} = 1;
@@ -2133,7 +2196,8 @@ sub create_accessors :Sub(Private)
     # Create an :lvalue accessor
     if ($lvalue) {
         $code .= create_lvalue_accessor($pkg, $set, $field_ref, $get,
-                                        $type, $name, $return, $private,
+                                        $type, $ah_ref, $subtype,
+                                        $name, $return, $private,
                                         $restricted, $WEAK{$field_ref}, $pre);
     }
 
@@ -2183,103 +2247,9 @@ _PRE_
         }
 
         # Add data type checking
-        my $arg_str = '$_[1]';
-        if (ref($type)) {
-            $code .= <<"_CODE_";
-    {
-        my (\$ok, \@errs);
-        local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
-        eval { \$ok = \$type_check->($arg_str) };
-        if (\$@ || \@errs) {
-            my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
-            OIO::Code->die(
-                'message' => q/Problem with type check routine for '$pkg->$set'/,
-                'Error'   => \$err);
-        }
-        if (! \$ok) {
-            OIO::Args->die(
-                'message'  => "Argument to '$pkg->$set' failed type check: $arg_str",
-                'location' => [ caller() ]);
-        }
-    }
-_CODE_
-
-        } elsif ($type eq 'NONE') {
-            # For 'weak' fields, the data must be a ref
-            if ($WEAK{$field_ref}) {
-                $code .= <<"_WEAK_";
-    if (! ref($arg_str)) {
-        OIO::Args->die(
-            'message'  => "Bad argument: $arg_str",
-            'Usage'    => q/Argument to '$pkg->$set' must be a reference/,
-            'location' => [ caller() ]);
-    }
-_WEAK_
-            }
-
-        } elsif ($type eq 'NUMERIC') {
-            # One numeric argument
-            $code .= <<"_NUMERIC_";
-    if (! Scalar::Util::looks_like_number($arg_str)) {
-        OIO::Args->die(
-            'message'  => "Bad argument: $arg_str",
-            'Usage'    => q/Argument to '$pkg->$set' must be numeric/,
-            'location' => [ caller() ]);
-    }
-_NUMERIC_
-
-        } elsif ($type eq 'LIST') {
-            # List/array - 1+ args or array ref
-            $code .= <<'_ARRAY_';
-    my $arg;
-    if (@_ == 2 && ref($_[1]) eq 'ARRAY') {
-        $arg = $_[1];
-    } else {
-        my @args = @_;
-        shift(@args);
-        $arg = \@args;
-    }
-_ARRAY_
-            $arg_str = '$arg';
-
-        } elsif ($type eq 'HASH') {
-            # Hash - pairs of args or hash ref
-            $code .= <<"_HASH_";
-    my \$arg;
-    if (\@_ == 2 && ref(\$_[1]) eq 'HASH') {
-        \$arg = \$_[1];
-    } elsif (\@_ % 2 == 0) {
-        OIO::Args->die(
-            'message'  => q/Odd number of arguments: Can't create hash ref/,
-            'Usage'    => q/'$pkg->$set' requires a hash ref or an even number of args (to make a hash ref)/,
-            'location' => [ caller() ]);
-    } else {
-        my \@args = \@_;
-        shift(\@args);
-        my \%args = \@args;
-        \$arg = \\\%args;
-    }
-_HASH_
-            $arg_str = '$arg';
-
-        } else {
-            # Support explicit specification of array refs and hash refs
-            if (uc($type) =~ /^ARRAY_?REF$/) {
-                $type = 'ARRAY';
-            } elsif (uc($type) =~ /^HASH_?REF$/) {
-                $type = 'HASH';
-            }
-
-            # One object or ref arg - exact spelling and case required
-            $code .= <<"_REF_";
-    if (! Object::InsideOut::Util::is_it($arg_str, '$type')) {
-        OIO::Args->die(
-            'message'  => q/Bad argument: Wrong type/,
-            'Usage'    => q/Argument to '$pkg->$set' must be of type '$type'/,
-            'location' => [ caller() ]);
-    }
-_REF_
-        }
+        my ($type_code, $arg_str) = type_code($pkg, $set, $WEAK{$field_ref},
+                                              $type, $ah_ref, $subtype);
+        $code .= $type_code;
 
         # Add field locking code if sharing
         if (is_sharing($pkg)) {
@@ -2360,14 +2330,14 @@ sub preamble_code :Sub(Private)
 
     # Permission checking code
     if ($private) {
-        $code .= <<"_PRIVATE_";
+        $code = <<"_PRIVATE_";
     my \$caller = caller();
     if (\$caller ne '$pkg') {
         OIO::Method->die('message' => "Can't call private method '$pkg->$name' from class '\$caller'");
     }
 _PRIVATE_
     } elsif ($restricted) {
-        $code .= <<"_RESTRICTED_";
+        $code = <<"_RESTRICTED_";
     my \$caller = caller();
     if (! \$caller->isa('$pkg') && ! $pkg->isa(\$caller)) {
         OIO::Method->die('message'  => "Can't call restricted method '$pkg->$name' from class '\$caller'");
@@ -2378,6 +2348,133 @@ _RESTRICTED_
     return ($code);
 }
 
+# Generate type checking code
+sub type_code :Sub(Private)
+{
+    my ($pkg, $name, $weak, $type, $ah_ref, $subtype) = @_;
+    my $code = '';
+    my $arg_str = '$_[1]';
+
+    # Type checking code
+    if (ref($type)) {
+        $code = <<"_CODE_";
+    {
+        my (\$ok, \@errs);
+        local \$SIG{'__WARN__'} = sub { push(\@errs, \@_); };
+        eval { \$ok = \$type_check->($arg_str) };
+        if (\$@ || \@errs) {
+            my (\$err) = split(/ at /, \$@ || join(" | ", \@errs));
+            OIO::Code->die(
+                'message' => q/Problem with type check routine for '$pkg->$name'/,
+                'Error'   => \$err);
+        }
+        if (! \$ok) {
+            OIO::Args->die(
+                'message'  => "Argument to '$pkg->$name' failed type check: $arg_str",
+                'location' => [ caller() ]);
+        }
+    }
+_CODE_
+
+    } elsif ($type eq 'NONE') {
+        # For 'weak' fields, the data must be a ref
+        if ($weak) {
+            $code = <<"_WEAK_";
+    if (! ref($arg_str)) {
+        OIO::Args->die(
+            'message'  => "Bad argument: $arg_str",
+            'Usage'    => q/Argument to '$pkg->$name' must be a reference/,
+            'location' => [ caller() ]);
+    }
+_WEAK_
+        }
+
+    } elsif ($type eq 'numeric') {
+        # One numeric argument
+        $code = <<"_NUMERIC_";
+    if (! Scalar::Util::looks_like_number($arg_str)) {
+        OIO::Args->die(
+            'message'  => "Bad argument: $arg_str",
+            'Usage'    => q/Argument to '$pkg->$name' must be numeric/,
+            'location' => [ caller() ]);
+    }
+_NUMERIC_
+
+    } elsif ($type eq 'list') {
+        # List/array - 1+ args or array ref
+        $code = <<'_ARRAY_';
+    my $arg;
+    if (@_ == 2 && ref($_[1]) eq 'ARRAY') {
+        $arg = $_[1];
+    } else {
+        my @args = @_;
+        shift(@args);
+        $arg = \@args;
+    }
+_ARRAY_
+        $arg_str = '$arg';
+
+    } elsif ($type eq 'HASH' && !$ah_ref) {
+        # Hash - pairs of args or hash ref
+        $code = <<"_HASH_";
+    my \$arg;
+    if (\@_ == 2 && ref(\$_[1]) eq 'HASH') {
+        \$arg = \$_[1];
+    } elsif (\@_ % 2 == 0) {
+        OIO::Args->die(
+            'message'  => q/Odd number of arguments: Can't create hash ref/,
+            'Usage'    => q/'$pkg->$name' requires a hash ref or an even number of args (to make a hash ref)/,
+            'location' => [ caller() ]);
+    } else {
+        my \@args = \@_;
+        shift(\@args);
+        my \%args = \@args;
+        \$arg = \\\%args;
+    }
+_HASH_
+        $arg_str = '$arg';
+
+    } else {
+        # One object or ref arg - exact spelling and case required
+        $code = <<"_REF_";
+    if (! Object::InsideOut::Util::is_it($arg_str, '$type')) {
+        OIO::Args->die(
+            'message'  => q/Bad argument: Wrong type/,
+            'Usage'    => q/Argument to '$pkg->$name' must be of type '$type'/,
+            'location' => [ caller() ]);
+    }
+_REF_
+    }
+
+    # Subtype checking code
+    if ($subtype) {
+        if ($subtype =~ /^num(?:ber|eric)?$/i) {
+            $code .= <<"_NUM_SUBTYPE_";
+    foreach my \$elem (\@{\$arg}) {
+        if (! Scalar::Util::looks_like_number(\$elem)) {
+            OIO::Args->die(
+                'message'  => q/Bad argument: Wrong type/,
+                'Usage'    => q/Values to '$pkg->$name' must be numeric/,
+                'location' => [ caller() ]);
+        }
+    }
+_NUM_SUBTYPE_
+        } else {
+            $code .= <<"_SUBTYPE_";
+    foreach my \$elem (\@{\$arg}) {
+        if (! Object::InsideOut::Util::is_it(\$elem, '$subtype')) {
+            OIO::Args->die(
+                'message'  => q/Bad argument: Wrong type/,
+                'Usage'    => q/Values to '$pkg->$name' must be of type '$subtype'/,
+                'location' => [ caller() ]);
+        }
+    }
+_SUBTYPE_
+        }
+    }
+
+    return ($code, $arg_str);
+}
 
 ### Method/subroutine Wrappers ###
 
@@ -2691,7 +2788,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.19
+This document describes Object::InsideOut version 2.21
 
 =head1 SYNOPSIS
 
@@ -2702,7 +2799,7 @@ This document describes Object::InsideOut version 2.19
      #   With combined get+set accessor
      my @data
             :Field
-            :Type(Numeric)
+            :Type(numeric)
             :Accessor(data);
 
      # Takes 'INPUT' (or 'input', etc.) as a mandatory parameter to ->new()
@@ -2710,7 +2807,7 @@ This document describes Object::InsideOut version 2.19
          'INPUT' => {
              'Regex'     => qr/^input$/i,
              'Mandatory' => 1,
-             'Type'      => 'NUMERIC',
+             'Type'      => 'numeriC',
          },
      );
 
@@ -3716,7 +3813,9 @@ object initialization parameters.
 Type checking for a field can be specified by adding the C<:Type> attribute to
 the field declaration:
 
- my @data :Field :Type(Numeric);
+ my @count :Field :Type(numeric);
+
+ my @objs :Field :Type(List(My::Class));
 
 The C<:Type> attribute results in type checking code being added to
 I<set/combined> accessors generated by Object::InsideOut, and will perform
@@ -3727,13 +3826,15 @@ Available Types are:
 
 =over
 
-=item Numeric
+=item 'numeric'
 
 Can also be specified as C<Num> or C<Number>.  This uses
 L<Scalar::Util::looks_like_number()|Scalar::Util/"looks_like_number EXPR"> to
 test the input value.
 
-=item List or Array
+=item 'list' or 'array'
+
+=item 'list(_subtype_)' or 'array(_subtype_)'
 
 This type permits an accessor to accept multiple values (which are then
 placed in an array ref) or a single array ref.
@@ -3741,28 +3842,54 @@ placed in an array ref) or a single array ref.
 For object initialization parameters, it permits a single value (which is then
 placed in an array ref) or an array ref.
 
-=item Array_ref
+When specified, the contents of the resulting array ref are checked against
+the specified subtype:
+
+=over
+
+=item 'numeric'
+
+Same as for the basic type above.
+
+=item A class name
+
+Same as for the basic type below.
+
+=item A reference type
+
+Any reference type (in all caps) as returned by L<ref()|perlfunc/"ref EXPR">).
+
+=back
+
+=item 'ARRAY_ref'
+
+=item 'ARRAY_ref(_subtype_)'
 
 This specifies that only a single array reference is permitted.  Can also be
-specified as C<Arrayref>.
+specified as C<ARRAYref>.
 
-=item Hash
+When specified, the contents of the array ref are checked against the
+specified subtype as per the above.
+
+=item 'HASH'
 
 This type permits an accessor to accept multiple S<C<key =E<gt> value>> pairs
 (which are then placed in a hash ref) or a single hash ref.
 
 For object initialization parameters, only a single ref is permitted.
 
-=item Hash_ref
+=item 'HASH_ref'
 
 This specifies that only a single hash reference is permitted.  Can also be
-specified as C<Hashref>.
+specified as C<HASHref>.
 
 =item A class name
 
 This permits only an object of the specified class, or one of its sub-classes
 (i.e., type checking is done using C<-E<gt>isa()>).  For example,
-C<My::Class>.
+C<My::Class>.  The class name C<UNIVERSAL> permits any object.  The class name
+C<Object::InsideOut> permits any object generated by an Object::InsideOut
+class.
 
 =item Other reference type
 
@@ -3806,8 +3933,11 @@ C<:InitArgs> hash for that parameter using the same types as specified in the
 previous section.  For example:
 
  my %init_args :InitArgs = (
-     'DATA' => {
-         'Type' => 'Numeric',
+     'COUNT' => {
+         'Type' => 'numeric',
+     },
+     'OBJS' => {
+         'Type' => 'list(My::Class)',
      },
  );
 
@@ -5518,7 +5648,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.19/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.21/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
