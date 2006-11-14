@@ -4,37 +4,42 @@ use strict;
 use warnings;
 no warnings 'redefine';
 
+my %CUMULATIVE;
+my %ANTICUMULATIVE;
+my %RESTRICT;
+my $UNIV_ISA;
+
 sub generate_CUMULATIVE :Sub(Private)
 {
-    my ($CUMULATIVE,    $ANTICUMULATIVE,
-        $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
+    my ($cum, $anticum, $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
+
+    $UNIV_ISA = $u_isa;
 
     # Get names for :CUMULATIVE methods
-    my (%cum, %cum_loc, %cum_restrict);
-    foreach my $package (keys(%{$CUMULATIVE})) {
-        while (my $info = shift(@{$$CUMULATIVE{$package}})) {
+    my (%cum_loc);
+    foreach my $package (keys(%{$cum})) {
+        while (my $info = shift(@{$$cum{$package}})) {
             my ($code, $location, $name, $restrict) = @{$info};
             $name ||= sub_name($code, ':CUMULATIVE', $location);
-            $cum{$name}{$package} = $code;
+            $CUMULATIVE{$name}{$package} = $code;
             $cum_loc{$name}{$package} = $location;
             if ($restrict) {
-                $cum_restrict{$name} = $u_isa;
+                $RESTRICT{$package}{$name} = 1;
             }
         }
     }
 
     # Get names for :CUMULATIVE(BOTTOM UP) methods
-    my (%anticum, %anticum_restrict);
-    foreach my $package (keys(%{$ANTICUMULATIVE})) {
-        while (my $info = shift(@{$$ANTICUMULATIVE{$package}})) {
+    foreach my $package (keys(%{$anticum})) {
+        while (my $info = shift(@{$$anticum{$package}})) {
             my ($code, $location, $name, $restrict) = @{$info};
             $name ||= sub_name($code, ':CUMULATIVE(BOTTOM UP)', $location);
 
             # Check for conflicting definitions of $name
-            if ($cum{$name}) {
-                foreach my $other_package (keys(%{$cum{$name}})) {
-                    if ($other_package->$u_isa($package) ||
-                        $package->$u_isa($other_package))
+            if ($CUMULATIVE{$name}) {
+                foreach my $other_package (keys(%{$CUMULATIVE{$name}})) {
+                    if ($other_package->$UNIV_ISA($package) ||
+                        $package->$UNIV_ISA($other_package))
                     {
                         my ($pkg,  $file,  $line)  = @{$cum_loc{$name}{$other_package}};
                         my ($pkg2, $file2, $line2) = @{$location};
@@ -46,9 +51,30 @@ sub generate_CUMULATIVE :Sub(Private)
                 }
             }
 
-            $anticum{$name}{$package} = $code;
+            $ANTICUMULATIVE{$name}{$package} = $code;
             if ($restrict) {
-                $anticum_restrict{$name} = $u_isa;
+                $RESTRICT{$package}{$name} = 1;
+            }
+        }
+    }
+
+    # Propagate restrictions
+    my $reapply = 1;
+    while ($reapply) {
+        $reapply = 0;
+
+        foreach my $pkg (keys(%RESTRICT)) {
+            foreach my $class (keys(%{$TREE_TOP_DOWN})) {
+                if (grep { $_ eq $pkg } @{$$TREE_TOP_DOWN{$class}}) {
+                    foreach my $p (@{$$TREE_TOP_DOWN{$class}}) {
+                        foreach my $n (keys(%{$RESTRICT{$pkg}})) {
+                            if (! exists($RESTRICT{$p}{$n})) {
+                                $RESTRICT{$p}{$n} = 1;
+                                $reapply = 1;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -57,24 +83,24 @@ sub generate_CUMULATIVE :Sub(Private)
     no strict 'refs';
 
     # Implement :CUMULATIVE methods
-    foreach my $name (keys(%cum)) {
-        my $code = create_CUMULATIVE($TREE_TOP_DOWN, $cum{$name}, $cum_restrict{$name}, $name);
-        foreach my $package (keys(%{$cum{$name}})) {
+    foreach my $name (keys(%CUMULATIVE)) {
+        my $code = create_CUMULATIVE($name, $TREE_TOP_DOWN, $CUMULATIVE{$name});
+        foreach my $package (keys(%{$CUMULATIVE{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'cumulative');
-            if ($cum_restrict{$name}) {
+            if ($RESTRICT{$package}{$name}) {
                 add_meta($package, $name, 'restricted', 1);
             }
         }
     }
 
     # Implement :CUMULATIVE(BOTTOM UP) methods
-    foreach my $name (keys(%anticum)) {
-        my $code = create_CUMULATIVE($TREE_BOTTOM_UP, $anticum{$name}, $anticum_restrict{$name}, $name);
-        foreach my $package (keys(%{$anticum{$name}})) {
+    foreach my $name (keys(%ANTICUMULATIVE)) {
+        my $code = create_CUMULATIVE($name, $TREE_BOTTOM_UP, $ANTICUMULATIVE{$name});
+        foreach my $package (keys(%{$ANTICUMULATIVE{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'cumulative (bottom up)');
-            if ($anticum_restrict{$name}) {
+            if ($RESTRICT{$package}{$name}) {
                 add_meta($package, $name, 'restricted', 1);
             }
         }
@@ -86,11 +112,10 @@ sub generate_CUMULATIVE :Sub(Private)
 # and CUMULATIVE(BOTTOM UP) methods for a particular method name.
 sub create_CUMULATIVE :Sub(Private)
 {
+    # $name      - method name
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
-    # $restrict  - restricted method (trick: == $UNIV_ISA)
-    # $name      - method name
-    my ($tree, $code_refs, $restrict, $name) = @_;
+    my ($name, $tree, $code_refs) = @_;
 
     return sub {
         my $class = ref($_[0]) || $_[0];
@@ -98,9 +123,9 @@ sub create_CUMULATIVE :Sub(Private)
         my (@results, @classes);
 
         # Caller must be in class hierarchy
-        if ($restrict) {
+        if ($RESTRICT{$class}{$name}) {
             my $caller = caller();
-            if (! ($caller->$restrict($class) || $class->$restrict($caller))) {
+            if (! ($caller->$UNIV_ISA($class) || $class->$UNIV_ISA($caller))) {
                 OIO::Method->die('message' => "Can't call restricted method '$class->$name' from class '$caller'");
             }
         }
@@ -147,10 +172,10 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 2.22;
+our $VERSION = 2.23;
 
-use Object::InsideOut 2.22;
-use Object::InsideOut::Metadata 2.22;
+use Object::InsideOut 2.23;
+use Object::InsideOut::Metadata 2.23;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -200,5 +225,5 @@ add_meta(__PACKAGE__, {
 
 
 # Ensure correct versioning
-my $VERSION = 2.22;
-($Object::InsideOut::VERSION == 2.22) or die("Version mismatch\n");
+my $VERSION = 2.23;
+($Object::InsideOut::VERSION == 2.23) or die("Version mismatch\n");

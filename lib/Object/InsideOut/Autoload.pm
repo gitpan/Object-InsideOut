@@ -142,8 +142,8 @@ sub AUTOLOAD
         if ($code_type) {
             my $tree = ($code_dir eq 'bottom up') ? $TREE_BOTTOM_UP : $TREE_TOP_DOWN;
             my $code = ($code_type eq ':Cumulative')
-                            ? create_CUMULATIVE($tree, \%code_refs)
-                            : create_CHAINED($tree, \%code_refs);
+                            ? create_CUMULATIVE($method, $tree, \%code_refs)
+                            : create_CHAINED($method, $tree, \%code_refs);
             @_ = @_;   # Perl 5.8.5 bug workaround
             goto $code;
         }
@@ -163,5 +163,5 @@ sub AUTOLOAD
 
 
 # Ensure correct versioning
-my $VERSION = 2.22;
-($Object::InsideOut::VERSION == 2.22) or die("Version mismatch\n");
+my $VERSION = 2.23;
+($Object::InsideOut::VERSION == 2.23) or die("Version mismatch\n");

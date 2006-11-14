@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.23 Tue Nov 14 16:08:13 EST 2006
+	- Rework of :Cumulative/:Chained code
+
 2.22 Tue Nov 14 13:43:53 EST 2006
 	- Fixed using :Restricted with :Cumulative/:Chained
 
