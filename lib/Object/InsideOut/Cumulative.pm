@@ -10,21 +10,24 @@ sub generate_CUMULATIVE :Sub(Private)
         $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
 
     # Get names for :CUMULATIVE methods
-    my (%cum, %cum_loc);
+    my (%cum, %cum_loc, %cum_restrict);
     foreach my $package (keys(%{$CUMULATIVE})) {
         while (my $info = shift(@{$$CUMULATIVE{$package}})) {
-            my ($code, $location, $name) = @{$info};
+            my ($code, $location, $name, $restrict) = @{$info};
             $name ||= sub_name($code, ':CUMULATIVE', $location);
             $cum{$name}{$package} = $code;
             $cum_loc{$name}{$package} = $location;
+            if ($restrict) {
+                $cum_restrict{$name} = $u_isa;
+            }
         }
     }
 
     # Get names for :CUMULATIVE(BOTTOM UP) methods
-    my %anticum;
+    my (%anticum, %anticum_restrict);
     foreach my $package (keys(%{$ANTICUMULATIVE})) {
         while (my $info = shift(@{$$ANTICUMULATIVE{$package}})) {
-            my ($code, $location, $name) = @{$info};
+            my ($code, $location, $name, $restrict) = @{$info};
             $name ||= sub_name($code, ':CUMULATIVE(BOTTOM UP)', $location);
 
             # Check for conflicting definitions of $name
@@ -44,6 +47,9 @@ sub generate_CUMULATIVE :Sub(Private)
             }
 
             $anticum{$name}{$package} = $code;
+            if ($restrict) {
+                $anticum_restrict{$name} = $u_isa;
+            }
         }
     }
 
@@ -52,19 +58,25 @@ sub generate_CUMULATIVE :Sub(Private)
 
     # Implement :CUMULATIVE methods
     foreach my $name (keys(%cum)) {
-        my $code = create_CUMULATIVE($TREE_TOP_DOWN, $cum{$name});
+        my $code = create_CUMULATIVE($TREE_TOP_DOWN, $cum{$name}, $cum_restrict{$name}, $name);
         foreach my $package (keys(%{$cum{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'cumulative');
+            if ($cum_restrict{$name}) {
+                add_meta($package, $name, 'restricted', 1);
+            }
         }
     }
 
     # Implement :CUMULATIVE(BOTTOM UP) methods
     foreach my $name (keys(%anticum)) {
-        my $code = create_CUMULATIVE($TREE_BOTTOM_UP, $anticum{$name});
+        my $code = create_CUMULATIVE($TREE_BOTTOM_UP, $anticum{$name}, $anticum_restrict{$name}, $name);
         foreach my $package (keys(%{$anticum{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'cumulative (bottom up)');
+            if ($anticum_restrict{$name}) {
+                add_meta($package, $name, 'restricted', 1);
+            }
         }
     }
 }
@@ -76,12 +88,22 @@ sub create_CUMULATIVE :Sub(Private)
 {
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
-    my ($tree, $code_refs) = @_;
+    # $restrict  - restricted method (trick: == $UNIV_ISA)
+    # $name      - method name
+    my ($tree, $code_refs, $restrict, $name) = @_;
 
     return sub {
         my $class = ref($_[0]) || $_[0];
         my $list_context = wantarray;
         my (@results, @classes);
+
+        # Caller must be in class hierarchy
+        if ($restrict) {
+            my $caller = caller();
+            if (! ($caller->$restrict($class) || $class->$restrict($caller))) {
+                OIO::Method->die('message' => "Can't call restricted method '$class->$name' from class '$caller'");
+            }
+        }
 
         # Accumulate results
         foreach my $pkg (@{$$tree{$class}}) {
@@ -125,10 +147,10 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 2.21;
+our $VERSION = 2.22;
 
-use Object::InsideOut 2.21;
-use Object::InsideOut::Metadata 2.21;
+use Object::InsideOut 2.22;
+use Object::InsideOut::Metadata 2.22;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -178,5 +200,5 @@ add_meta(__PACKAGE__, {
 
 
 # Ensure correct versioning
-my $VERSION = 2.21;
-($Object::InsideOut::VERSION == 2.21) or die("Version mismatch\n");
+my $VERSION = 2.22;
+($Object::InsideOut::VERSION == 2.22) or die("Version mismatch\n");

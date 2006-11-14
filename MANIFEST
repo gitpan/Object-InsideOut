@@ -37,8 +37,10 @@ t/07a-dump.t
 t/08-access.t
 t/09-chained.t
 t/09a-chained.t
+t/09b-chained.t
 t/10-cumulative.t
 t/10a-cumulative.t
+t/10b-cumulative.t
 t/11-coercion.t
 t/12-super.t
 t/13-pump.t

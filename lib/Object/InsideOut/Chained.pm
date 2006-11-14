@@ -10,21 +10,24 @@ sub generate_CHAINED :Sub(Private)
         $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
 
     # Get names for :CHAINED methods
-    my (%chain, %chain_loc);
+    my (%chain, %chain_loc, %chain_restrict);
     foreach my $package (keys(%{$CHAINED})) {
         while (my $info = shift(@{$$CHAINED{$package}})) {
-            my ($code, $location, $name) = @{$info};
+            my ($code, $location, $name, $restrict) = @{$info};
             $name ||= sub_name($code, ':CHAINED', $location);
             $chain{$name}{$package} = $code;
             $chain_loc{$name}{$package} = $location;
+            if ($restrict) {
+                $chain_restrict{$name} = $u_isa;
+            }
         }
     }
 
     # Get names for :CHAINED(BOTTOM UP) methods
-    my %antichain;
+    my (%antichain, %antichain_restrict);
     foreach my $package (keys(%{$ANTICHAINED})) {
         while (my $info = shift(@{$$ANTICHAINED{$package}})) {
-            my ($code, $location, $name) = @{$info};
+            my ($code, $location, $name, $restrict) = @{$info};
             $name ||= sub_name($code, ':CHAINED(BOTTOM UP)', $location);
 
             # Check for conflicting definitions of $name
@@ -44,6 +47,9 @@ sub generate_CHAINED :Sub(Private)
             }
 
             $antichain{$name}{$package} = $code;
+            if ($restrict) {
+                $antichain_restrict{$name} = $u_isa;
+            }
         }
     }
 
@@ -52,19 +58,25 @@ sub generate_CHAINED :Sub(Private)
 
     # Implement :CHAINED methods
     foreach my $name (keys(%chain)) {
-        my $code = create_CHAINED($TREE_TOP_DOWN, $chain{$name});
+        my $code = create_CHAINED($TREE_TOP_DOWN, $chain{$name}, $chain_restrict{$name}, $name);
         foreach my $package (keys(%{$chain{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'chained');
+            if ($chain_restrict{$name}) {
+                add_meta($package, $name, 'restricted', 1);
+            }
         }
     }
 
     # Implement :CHAINED(BOTTOM UP) methods
     foreach my $name (keys(%antichain)) {
-        my $code = create_CHAINED($TREE_BOTTOM_UP, $antichain{$name});
+        my $code = create_CHAINED($TREE_BOTTOM_UP, $antichain{$name}, $antichain_restrict{$name}, $name);
         foreach my $package (keys(%{$antichain{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'chained (bottom up)');
+            if ($antichain_restrict{$name}) {
+                add_meta($package, $name, 'restricted', 1);
+            }
         }
     }
 }
@@ -76,7 +88,9 @@ sub create_CHAINED :Sub(Private)
 {
     # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
     # $code_refs - hash ref by package of code refs for a particular method name
-    my ($tree, $code_refs) = @_;
+    # $restrict  - restricted method (trick: == $UNIV_ISA)
+    # $name      - method name
+    my ($tree, $code_refs, $restrict, $name) = @_;
 
     return sub {
         my $thing = shift;
@@ -84,6 +98,14 @@ sub create_CHAINED :Sub(Private)
         my @args = @_;
         my $list_context = wantarray;
         my @classes;
+
+        # Caller must be in class hierarchy
+        if ($restrict) {
+            my $caller = caller();
+            if (! ($caller->$restrict($class) || $class->$restrict($caller))) {
+                OIO::Method->die('message' => "Can't call restricted method '$class->$name' from class '$caller'");
+            }
+        }
 
         # Chain results together
         foreach my $pkg (@{$$tree{$class}}) {
@@ -103,5 +125,5 @@ sub create_CHAINED :Sub(Private)
 
 
 # Ensure correct versioning
-my $VERSION = 2.21;
-($Object::InsideOut::VERSION == 2.21) or die("Version mismatch\n");
+my $VERSION = 2.22;
+($Object::InsideOut::VERSION == 2.22) or die("Version mismatch\n");

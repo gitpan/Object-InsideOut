@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.22 Tue Nov 14 13:43:53 EST 2006
+	- Fixed using :Restricted with :Cumulative/:Chained
+
 2.21 Mon Nov 13 10:09:24 EST 2006
 	- Added subtype-checking for list/array/array_ref
 	- Improvments to Term::YAPI in examples dir
