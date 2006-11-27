@@ -1,8 +1,8 @@
 package Object::InsideOut::Secure; {
 
-    our $VERSION = 2.23;
+    our $VERSION = 2.24;
 
-    use Object::InsideOut 2.23 ':hash_only';
+    use Object::InsideOut 2.24 ':hash_only';
 
     # Holds used IDs
     my %used :Field = ( 0 => undef );

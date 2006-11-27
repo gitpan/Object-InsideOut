@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+2.24 Mon Nov 27 14:58:01 EST 2006
+	- Catch missing 'name' param in field attributes
+
 2.23 Tue Nov 14 16:08:13 EST 2006
 	- Rework of :Cumulative/:Chained code
 

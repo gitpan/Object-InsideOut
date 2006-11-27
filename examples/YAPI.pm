@@ -328,7 +328,7 @@ work, but will not display an animated progress character.
 
 =head1 SEE ALSO
 
-L<Object::InsideOut>, L<threads>, L<Thread::Queue>, L<Win32::Console::ANSI>
+L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 
 =head1 AUTHOR
 
