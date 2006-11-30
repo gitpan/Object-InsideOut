@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 2.24;
+    our $VERSION = 2.25;
 }
 
 
@@ -95,8 +95,8 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 2.24 qw(hash_re);
-use Object::InsideOut 2.24;
+use Object::InsideOut::Util 2.25 qw(hash_re);
+use Object::InsideOut 2.25;
 
 my @CLASSES       :Field :Arg(CLASSES);
 my @FOREIGN       :Field :Arg(FOREIGN);
@@ -255,7 +255,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 2.24
+This document describes Object::InsideOut::Metadata version 2.25
 
 =head1 SYNOPSIS
 
@@ -711,7 +711,7 @@ method names.
 =head2 METADATA ATTRIBUTES
 
 Class authors may add the C<:Method> attribute to subroutines in their classes
-to specifically design them as OO-callable methods.  If a method is only a
+to specifically designate them as OO-callable methods.  If a method is only a
 I<class> method or only an I<object> method, this may be added as a parameter
 to the attribute:
 
@@ -722,7 +722,8 @@ to the attribute:
 The I<class> or I<object> parameter will appear in the metadata for the method
 when listed using C<-E<gt>get_methods()>.
 
-B<CAUTION:>  Be sure not to use C<:method> (all lowercase) as this is a Perl
+B<CAUTION:>  Be sure not to use C<:method> (all lowercase) except as
+appropriate (see L<Object::InsideOut/"ARGUMENT VALIDATION">) as this is a Perl
 reserved attribute.
 
 The C<:Sub> attribute can be used to designate subroutines that are not

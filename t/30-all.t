@@ -17,12 +17,12 @@ package My::Class; {
     my @data :Field('all'=>'data', 'type' => 'num');
     my @info :Field({ 'std'=>'info', 'arg'=>'scalar', 'type' => \&My::Class::is_scalar });
     my @foo  :Field
-             :acc(foo)
-             :arg(FOO) :type(name => \&My::Class::is_int);
+             :Acc(foo)
+             :Arg(FOO) :Type(name => \&My::Class::is_int);
     my @bar  :Field('all'=>'bar', 'type' => 'ARRAY');
     my @baz  :Field
-             :all(baz)
-             :type(hash);
+             :All(baz)
+             :Type(hash);
 }
 
 package main;

@@ -70,5 +70,5 @@ sub generate_OVERLOAD :Sub(Private)
 
 
 # Ensure correct versioning
-my $VERSION = 2.24;
-($Object::InsideOut::VERSION == 2.24) or die("Version mismatch\n");
+my $VERSION = 2.25;
+($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");

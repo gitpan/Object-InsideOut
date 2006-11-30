@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 2.24;
+our $VERSION = 2.25;
 
-use Object::InsideOut::Exception 2.24;
-use Object::InsideOut::Util 2.24 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Exception 2.25;
+use Object::InsideOut::Util 2.25 qw(create_object hash_re is_it make_shared);
 
 use B ();
 use Scalar::Util 1.10;
@@ -340,7 +340,7 @@ my %ATTR_HANDLERS;
 # Metadata
 my (%SUBROUTINES, %METHODS);
 
-use Object::InsideOut::Metadata 2.24;
+use Object::InsideOut::Metadata 2.25;
 
 add_meta(__PACKAGE__, {
     'import'                 => {'hidden' => 1},
@@ -381,38 +381,35 @@ sub MODIFY_CODE_ATTRIBUTES
     while (my $attribute = shift(@attrs)) {
         my ($attr, $arg) = $attribute =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
         $attr = uc($attr);
-        # Attribute may be followed by 'PUBLIC', 'PRIVATE' or 'RESTRICED'
-        # Default to 'HIDDEN' if none.
-        $arg = ($arg) ? uc($arg) : 'HIDDEN';
 
         if ($attr eq 'ID') {
             $ID_SUBS{$pkg} = [ $code, @{$$info[1]} ];
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
             $DO_INIT = 1;
 
         } elsif ($attr eq 'PREINIT') {
             $PREINITORS{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr eq 'INIT') {
             $INITORS{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr =~ /^REPL(?:ICATE)?$/) {
             $REPLICATORS{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr =~ /^DEST(?:ROY)?$/) {
             $DESTROYERS{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr =~ /^AUTO(?:METHOD)?$/) {
             $AUTOMETHODS{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
             $DO_INIT = 1;
 
         } elsif ($attr =~ /^CUM(?:ULATIVE)?$/) {
-            if ($arg =~ /BOTTOM\s+UP/) {
+            if ($arg && $arg =~ /BOTTOM/i) {
                 push(@{$ANTICUMULATIVE{$pkg}}, $info);
             } else {
                 push(@{$CUMULATIVE{$pkg}}, $info);
@@ -420,7 +417,7 @@ sub MODIFY_CODE_ATTRIBUTES
             $DO_INIT = 1;
 
         } elsif ($attr =~ /^CHAIN(?:ED)?$/) {
-            if ($arg =~ /BOTTOM\s+UP/) {
+            if ($arg && $arg =~ /BOTTOM/i) {
                 push(@{$ANTICHAINED{$pkg}}, $info);
             } else {
                 push(@{$CHAINED{$pkg}}, $info);
@@ -429,17 +426,23 @@ sub MODIFY_CODE_ATTRIBUTES
 
         } elsif ($attr =~ /^DUMP(?:ER)?$/) {
             $DUMPERS{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr =~ /^PUMP(?:ER)?$/) {
             $PUMPERS{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr =~ /^RESTRICT(?:ED)?$/) {
+            if ($arg) {
+                push(@{$info}, '', $arg);
+            }
             push(@{$RESTRICTED{$pkg}}, $info);
             $DO_INIT = 1;
 
         } elsif ($attr =~ /^PRIV(?:ATE)?$/) {
+            if ($arg) {
+                push(@{$info}, '', $arg);
+            }
             push(@{$PRIVATE{$pkg}}, $info);
             $DO_INIT = 1;
 
@@ -449,21 +452,21 @@ sub MODIFY_CODE_ATTRIBUTES
 
         } elsif ($attr =~ /^SUB/) {
             push(@{$SUBROUTINES{$pkg}}, $info);
-            if ($arg ne 'HIDDEN') {
+            if ($arg) {
                 push(@attrs, $arg);
             }
             $DO_INIT = 1;
 
-        } elsif ($attr =~ /^METHOD/) {
-            if ($arg ne 'HIDDEN') {
-                push(@$info, $arg);
+        } elsif ($attr =~ /^METHOD/ && $attribute ne 'method') {
+            if ($arg) {
+                push(@{$info}, uc($arg));
                 push(@{$METHODS{$pkg}}, $info);
                 $DO_INIT = 1;
             }
 
         } elsif ($attr =~ /^MERGE/) {
             push(@{$ARG_WRAP{$pkg}}, $info);
-            if ($arg ne 'HIDDEN') {
+            if ($arg) {
                 push(@attrs, $arg);
             }
             $DO_INIT = 1;
@@ -471,12 +474,12 @@ sub MODIFY_CODE_ATTRIBUTES
         } elsif ($attr =~ /^MOD(?:IFY)?_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
             install_ATTRIBUTES();
             $ATTR_HANDLERS{'MOD'}{$1}{$pkg} = $code;
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr =~ /^FETCH_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
             install_ATTRIBUTES();
             push(@{$ATTR_HANDLERS{'FETCH'}{$1}}, $code);
-            push(@attrs, $arg);
+            push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr eq 'SCALARIFY') {
             OIO::Attribute->die(
@@ -893,12 +896,20 @@ sub initialize :Sub(Private)
     foreach my $pkg (keys(%RESTRICTED)) {
         my %meta;
         while (my $info = shift(@{$RESTRICTED{$pkg}})) {
-            my ($code, $location, $name) = @{$info};
+            my ($code, $location, $name, $except) = @{$info};
             if (! $name) {
                 $name = sub_name($code, ':RESTRICTED', $location);
                 $info->[2] = $name;
             }
-            my $new_code = create_RESTRICTED($pkg, $name, $code);
+            if ($except) {
+                $except =~ s/[,']/ /g;
+                $except =~ s/^\s+//;
+                $except =~ s/\s+$//;
+                $except = [ split(/\s+/, $except) ];
+            } else {
+                $except = [];
+            }
+            my $new_code = create_RESTRICTED($pkg, $name, $code, $except);
             *{$pkg.'::'.$name} = $new_code;
             $info->[0] = $new_code;
             $meta{$name}{'restricted'} = 1;
@@ -911,12 +922,20 @@ sub initialize :Sub(Private)
     foreach my $pkg (keys(%PRIVATE)) {
         my %meta;
         while (my $info = shift(@{$PRIVATE{$pkg}})) {
-            my ($code, $location, $name) = @{$info};
+            my ($code, $location, $name, $except) = @{$info};
             if (! $name) {
                 $name = sub_name($code, ':PRIVATE', $location);
                 $info->[2] = $name;
             }
-            my $new_code = create_PRIVATE($pkg, $name, $code);
+            if ($except) {
+                $except =~ s/[,']/ /g;
+                $except =~ s/^\s+//;
+                $except =~ s/\s+$//;
+                $except = [ $pkg, split(/\s+/, $except) ];
+            } else {
+                $except = [ $pkg ];
+            }
+            my $new_code = create_PRIVATE($pkg, $name, $code, $except);
             *{$pkg.'::'.$name} = $new_code;
             $info->[0] = $new_code;
             $meta{$name}{'hidden'} = 1;
@@ -2528,11 +2547,15 @@ sub create_ARG_WRAP :Sub(Private)
 # to being only callable from within its class hierarchy
 sub create_RESTRICTED :Sub(Private)
 {
-    my ($pkg, $method, $code) = @_;
+    my ($pkg, $method, $code, $except) = @_;
+print("REST $method: ", join(' ', @$except), "\n");
     return sub {
-        # Caller must be in class hierarchy
+        # Caller must be in class hierarchy, or be specified as an exception
         my $caller = caller();
-        if (! ($caller->$UNIV_ISA($pkg) || $pkg->$UNIV_ISA($caller))) {
+        if (! ((grep { $_ eq $caller } @$except) ||
+               $caller->$UNIV_ISA($pkg)          ||
+               $pkg->$UNIV_ISA($caller)))
+        {
             OIO::Method->die('message' => "Can't call restricted method '$pkg->$method' from class '$caller'");
         }
         goto $code;
@@ -2544,11 +2567,11 @@ sub create_RESTRICTED :Sub(Private)
 # private (i.e., only callable from within its own class).
 sub create_PRIVATE :Sub(Private)
 {
-    my ($pkg, $method, $code) = @_;
+    my ($pkg, $method, $code, $except) = @_;
     return sub {
-        # Caller must be in the package
+        # Caller must be in the package, or be specified as an exception
         my $caller = caller();
-        if ($caller ne $pkg) {
+        if (! grep { $_ eq $caller } @$except) {
             OIO::Method->die('message' => "Can't call private method '$pkg->$method' from class '$caller'");
         }
         goto $code;
@@ -2801,7 +2824,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 2.24
+This document describes Object::InsideOut version 2.25
 
 =head1 SYNOPSIS
 
@@ -3736,18 +3759,15 @@ to using the separate attributes.  For example:
 
 =head1 PERMISSIONS
 
-=head2 Restricted and Private Methods
+=head2 Restricted and Private Accessors
 
-Access to certain methods can be narrowed by use of the C<:Restricted> and
-C<:Private> attributes.  C<:Restricted> methods can only be called from within
-the class's hierarchy.  C<:Private> methods can only be called from within the
-method's class.
+By default, L<automatically generated accessors|/"ACCESSOR GENERATION">, can
+be called at any time.  In other words, their access permission is I<public>.
 
-Without the above attributes, most methods have I<public> access.  If desired,
-you may explicitly label them with the C<:Public> attribute.
-
-You can also specify access permissions on L<automatically generated
-accessors|/"ACCESSOR GENERATION">:
+If desired, accessors can be made I<restricted> - in which case they can only
+be called from within the class's hierarchy - or I<private> - such that they
+can only be called from within the accessors's class.  Here are examples of
+the syntax for adding permissions:
 
  my @data     :Field :Std('Name' => 'data',     'Permission' => 'private');
  my @info     :Field :Set('Name' => 'set_info', 'Perm' => 'restricted');
@@ -3773,6 +3793,42 @@ attributes on the field.
 
 C<Permission> may be abbreviated to C<Perm>; C<Private> may be abbreviated to
 C<Priv>; and C<Restricted> may be abbreviated to C<Restrict>.
+
+=head2 Restricted and Private Methods
+
+In the same vein as describe above, access to methods can be narrowed by use
+of C<:Restricted> and C<:Private> attributes.
+
+ sub foo :Restricted
+ {
+     my $self = shift;
+     ...
+ }
+
+Without either of these attributes, most methods have I<public> access.  If
+desired, you may explicitly label them with the C<:Public> attribute.
+
+It is also possible to specify classes that are exempt from the C<:Restricted>
+and C<:Private> access permissions (i.e., the method may be called from those
+classes as well):
+
+ sub bar :Private(Some::Class, Another::Class)
+ {
+     my $self = shift;
+     ...
+ }
+
+An example of when this might be needed is with delegation mechanisms.
+
+EXCEPTION:  This class exemption mechanism cannot be used with C<:Restricted
+:Cumulative> or C<:Restricted :Chained> methods.  For example, the following
+will not work:
+
+ sub wont_work :Restricted(Outside::Class) :Cumulative
+ {
+     my $self = shift;
+     ...
+ }
 
 =head2 Hidden Methods
 
@@ -4227,7 +4283,51 @@ hash ref of the I<merged> arguments.  For example:
 
  $obj->my_method( { 'data' => 42,
                     'flag' => 'true' },
-                   'param' => 'foo' );
+                  'param' => 'foo' );
+
+=head1 ARGUMENT VALIDATION
+
+A number of users have asked about argument validation for methods:
+L<http://www.cpanforum.com/threads/3204>.  For this, I recommand using
+L<Params::Validate>:
+
+ package Foo; {
+     use Object::InsideOut;
+     use Params::Validate ':all';
+
+     sub foo
+     {
+         my $self = shift;
+         my %args = validate(@_, { bar => 1 });
+         my $bar = $args{bar};
+         ...
+     }
+ }
+
+Using L<Attribute::Params::Validate>, attributes are used for argument
+validation specifications:
+
+ package Foo; {
+     use Object::InsideOut;
+     use Attribute::Params::Validate;
+
+     sub foo :method :Validate(bar => 1)
+     {
+         my $self = shift;
+         my %args = @_;
+         my $bar = $args{bar};
+         ...
+     }
+ }
+
+Note that in the above, Perl's C<:method> attribute (in all lowercase) is
+needed.
+
+There is some incompatibility between Attribute::Params::Validate and some of
+Object::InsideOut's attributes.  Namely, you cannot use C<:Validate> with
+C<:Private>, C<:Restricted>, C<:Cumulative>, C<:Chained> or C<:MergeArgs>.
+In these cases, use the C<validate()> function from L<Params::Validate>
+instead.
 
 =head1 AUTOMETHODS
 
@@ -5661,7 +5761,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.24/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-2.25/lib/Object/InsideOut.pm>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,

@@ -26,6 +26,47 @@ package MyDer; {
     sub personal :PRIVATE    { my $self = shift; $self->SUPER::personal(); }
 }
 
+
+package Foo; {
+    use Object::InsideOut;
+
+    sub foo_priv :Private(Baz)
+    {
+        my $self = shift;
+        return ('okay');
+    }
+
+    sub foo_restr :Restricted(Baz)
+    {
+        my $self = shift;
+        return ('okay');
+    }
+}
+
+package Bar; {
+    use Object::InsideOut 'Foo';
+
+    sub bar
+    {
+        my $self = shift;
+        return ($self->foo_restr);
+    }
+}
+
+package Baz; {
+    use Object::InsideOut;
+
+    sub baz
+    {
+        my ($self, $bar, $foo) = @_;
+
+        Test::More::is($bar->bar,       'okay', ':Restricted');
+        Test::More::is($foo->foo_restr, 'okay', ':Restricted exception');
+        Test::More::is($foo->foo_priv,  'okay', ':Private exception');
+    }
+}
+
+
 package main;
 
 MAIN:
@@ -56,6 +97,8 @@ MAIN:
     ok(!eval { $der_obj->personal }   => 'External derived personal failed as expected');
     is($@->error(), q/Can't call private method 'MyDer->personal' from class 'main'/
                                           => '...with correct error message');
+
+    Baz->new()->baz(Bar->new(), Foo->new());
 }
 
 exit(0);
