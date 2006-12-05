@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 2.25;
+    our $VERSION = 3.01;
 }
 
 
@@ -43,14 +43,20 @@ sub add_meta
 
     if (@_ == 4) {
         $METADATA{$class}{$name}{$meta} = $value;
-    } elsif (@_ == 3) {
-        while (my ($m, $v) = each(%$meta)) {
-            $METADATA{$class}{$name}{$m} = $v;
-        }
     } else {
-        while (my ($n, $md) = each(%$name)) {
-            while (my ($m, $v) = each(%$md)) {
-                $METADATA{$class}{$n}{$m} = $v;
+        my $data;
+        if (@_ == 3) {
+            $$data{$class}{$name} = $meta;
+        } elsif (@_ == 2) {
+            $$data{$class} = $name;
+        } else {
+            $data = $class;
+        }
+        while (my ($c, $mn) = each(%$data)) {
+            while (my ($n, $md) = each(%$mn)) {
+                while (my ($m, $v) = each(%$md)) {
+                    $METADATA{$c}{$n}{$m} = $v;
+                }
             }
         }
     }
@@ -95,27 +101,36 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 2.25 qw(hash_re);
-use Object::InsideOut 2.25;
+use Object::InsideOut::Util 3.01 qw(hash_re);
+use Object::InsideOut 3.01;
 
-my @CLASSES       :Field :Arg(CLASSES);
-my @FOREIGN       :Field :Arg(FOREIGN);
+my @CLASSES :Field;
+my @FOREIGN :Field;
 
-my $INIT_ARGS;
-my $AUTOMETHODS;
+my $GBL;
 
-
-# Object Initialization
 my %init_args :InitArgs = (
-    'INIT_ARGS'   => '',
-    'AUTOMETHODS' => '',
+    'GBL'   => '',
+    'CLASS' => '',
 );
 
 sub _init :Init
 {
     my ($self, $args) = @_;
-    $INIT_ARGS   = $args->{'INIT_ARGS'};
-    $AUTOMETHODS = $args->{'AUTOMETHODS'};
+
+    $GBL = $args->{'GBL'};
+
+    my $class = $args->{'CLASS'};
+    $CLASSES[$$self] = $$GBL{'tree'}{'td'}{$class};
+
+    my %foreign;
+    my $herit = $$GBL{'heritage'};
+    foreach my $pkg (@{$$GBL{'tree'}{'bu'}{$class}}) {
+        if (exists($$herit{$pkg})) {
+            @foreign{keys(%{$$herit{$pkg}{'cl'}})} = undef;
+        }
+    }
+    $FOREIGN[$$self] = [ keys(%foreign) ];
 }
 
 
@@ -142,7 +157,7 @@ sub get_args
 
     my %args;
     foreach my $pkg (@{$CLASSES[$$self]}) {
-        if (my $ia = $$INIT_ARGS{$pkg}) {
+        if (my $ia = $$GBL{'args'}{$pkg}) {
             foreach my $arg (keys(%$ia)) {
                 my $hash = $$ia{$arg};
                 $args{$pkg}{$arg} = {};
@@ -228,7 +243,7 @@ sub get_methods
             }
         }
 
-        if ($$AUTOMETHODS{$pkg}) {
+        if ($$GBL{'sub'}{'auto'}{$pkg}) {
             $methods{'AUTOLOAD'} = { 'kind'  => 'automethod',
                                      'class' => $pkg };
         }
@@ -255,7 +270,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 2.25
+This document describes Object::InsideOut::Metadata version 3.01
 
 =head1 SYNOPSIS
 

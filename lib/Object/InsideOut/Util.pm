@@ -6,10 +6,10 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 2.25;
+    our $VERSION = 3.01;
 }
 
-use Object::InsideOut::Metadata 2.25;
+use Object::InsideOut::Metadata 3.01;
 
 ### Module Initialization ###
 
@@ -107,8 +107,10 @@ sub make_shared
 {
     my $in = $_[0];
 
-    # If already thread-shared, then just return the input
-    if (threads::shared::_id($in)) {
+    # If not sharing or already thread-shared, then just return the input
+    if (! $threads::shared::threads_shared ||
+        threads::shared::_id($in))
+    {
         return ($in);
     }
 

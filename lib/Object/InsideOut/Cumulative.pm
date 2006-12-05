@@ -4,75 +4,102 @@ use strict;
 use warnings;
 no warnings 'redefine';
 
-my %CUMULATIVE;
-my %ANTICUMULATIVE;
-my %RESTRICT;
-my $UNIV_ISA;
+my $GBL = {};
 
 sub generate_CUMULATIVE :Sub(Private)
 {
-    my ($cum, $anticum, $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
-
-    $UNIV_ISA = $u_isa;
+    ($GBL) = @_;
+    my $g_cu = $$GBL{'sub'}{'cumu'};
+    my $cumu_td = $$g_cu{'new'}{'td'} || [];
+    my $cumu_bu = $$g_cu{'new'}{'bu'} || [];
+    delete($$g_cu{'new'});
+    if (! exists($$g_cu{'td'})) {
+        $$GBL{'sub'}{'cumu'} = {
+            td => {},       # 'Top down'
+            bu => {},       # 'Bottom up'
+            restrict => {}, # :Restricted
+        };
+        $g_cu = $$GBL{'sub'}{'cumu'};
+    }
+    my $cu_td    = $$g_cu{'td'};
+    my $cu_bu    = $$g_cu{'bu'};
+    my $cu_restr = $$g_cu{'restrict'};
 
     # Get names for :CUMULATIVE methods
     my (%cum_loc);
-    foreach my $package (keys(%{$cum})) {
-        while (my $info = shift(@{$$cum{$package}})) {
-            my ($code, $location, $name, $restrict) = @{$info};
-            $name ||= sub_name($code, ':CUMULATIVE', $location);
-            $CUMULATIVE{$name}{$package} = $code;
-            $cum_loc{$name}{$package} = $location;
-            if ($restrict) {
-                $RESTRICT{$package}{$name} = 1;
-            }
+    while (my $info = shift(@{$cumu_td})) {
+        $$info{'name'} ||= sub_name($$info{'code'}, ':CUMULATIVE', $$info{'loc'});
+        my $package = $$info{'pkg'};
+        my $name    = $$info{'name'};
+
+        $cum_loc{$name}{$package} = $$info{'loc'};
+
+        $$cu_td{$name}{$package} = $$info{'wrap'};
+        if (exists($$info{'exempt'})) {
+            push(@{$$cu_restr{$package}{$name}},
+                    sort grep {$_} split(/[,'\s]+/, $$info{'exempt'} || ''));
         }
     }
 
     # Get names for :CUMULATIVE(BOTTOM UP) methods
-    foreach my $package (keys(%{$anticum})) {
-        while (my $info = shift(@{$$anticum{$package}})) {
-            my ($code, $location, $name, $restrict) = @{$info};
-            $name ||= sub_name($code, ':CUMULATIVE(BOTTOM UP)', $location);
+    while (my $info = shift(@{$cumu_bu})) {
+        $$info{'name'} ||= sub_name($$info{'code'}, ':CUMULATIVE(BOTTOM UP)', $$info{'loc'});
+        my $package = $$info{'pkg'};
+        my $name    = $$info{'name'};
 
-            # Check for conflicting definitions of $name
-            if ($CUMULATIVE{$name}) {
-                foreach my $other_package (keys(%{$CUMULATIVE{$name}})) {
-                    if ($other_package->$UNIV_ISA($package) ||
-                        $package->$UNIV_ISA($other_package))
-                    {
-                        my ($pkg,  $file,  $line)  = @{$cum_loc{$name}{$other_package}};
-                        my ($pkg2, $file2, $line2) = @{$location};
-                        OIO::Attribute->die(
-                            'location' => $location,
-                            'message'  => "Conflicting definitions for cumulative method '$name'",
-                            'Info'     => "Declared as :CUMULATIVE in class '$pkg' (file '$file', line $line), but declared as :CUMULATIVE(BOTTOM UP) in class '$pkg2' (file '$file2' line $line2)");
-                    }
+        # Check for conflicting definitions of 'name'
+        if ($$cu_td{$name}) {
+            foreach my $other_package (keys(%{$$cu_td{$name}})) {
+                if ($$GBL{'isa'}->($other_package, $package) ||
+                    $$GBL{'isa'}->($package, $other_package))
+                {
+                    my ($pkg,  $file,  $line)  = @{$cum_loc{$name}{$other_package}};
+                    my ($pkg2, $file2, $line2) = @{$$info{'loc'}};
+                    OIO::Attribute->die(
+                        'location' => $$info{'loc'},
+                        'message'  => "Conflicting definitions for cumulative method '$name'",
+                        'Info'     => "Declared as :CUMULATIVE in class '$pkg' (file '$file', line $line), but declared as :CUMULATIVE(BOTTOM UP) in class '$pkg2' (file '$file2' line $line2)");
                 }
             }
+        }
 
-            $ANTICUMULATIVE{$name}{$package} = $code;
-            if ($restrict) {
-                $RESTRICT{$package}{$name} = 1;
-            }
+        $$cu_bu{$name}{$package} = $$info{'wrap'};
+        if (exists($$info{'exempt'})) {
+            push(@{$$cu_restr{$package}{$name}},
+                    sort grep {$_} split(/[,'\s]+/, $$info{'exempt'} || ''));
         }
     }
 
     # Propagate restrictions
     my $reapply = 1;
+    my $trees = $$GBL{'tree'}{'td'};
     while ($reapply) {
         $reapply = 0;
-
-        foreach my $pkg (keys(%RESTRICT)) {
-            foreach my $class (keys(%{$TREE_TOP_DOWN})) {
-                if (grep { $_ eq $pkg } @{$$TREE_TOP_DOWN{$class}}) {
-                    foreach my $p (@{$$TREE_TOP_DOWN{$class}}) {
-                        foreach my $n (keys(%{$RESTRICT{$pkg}})) {
-                            if (! exists($RESTRICT{$p}{$n})) {
-                                $RESTRICT{$p}{$n} = 1;
+        foreach my $pkg (keys(%{$cu_restr})) {
+            foreach my $class (keys(%{$trees})) {
+                next if (! grep { $_ eq $pkg } @{$$trees{$class}});
+                foreach my $p (@{$$trees{$class}}) {
+                    foreach my $n (keys(%{$$cu_restr{$pkg}})) {
+                        if (exists($$cu_restr{$p}{$n})) {
+                            next if ($$cu_restr{$p}{$n} == $$cu_restr{$pkg}{$n});
+                            my $equal = (@{$$cu_restr{$p}{$n}} == @{$$cu_restr{$pkg}{$n}});
+                            if ($equal) {
+                                for (1..@{$$cu_restr{$p}{$n}}) {
+                                    if ($$cu_restr{$pkg}{$n}[$_-1] ne $$cu_restr{$p}{$n}[$_-1]) {
+                                        $equal = 0;
+                                        last;
+                                    }
+                                }
+                            }
+                            if (! $equal) {
+                                my %restr = map { $_ => 1 } @{$$cu_restr{$p}{$n}}, @{$$cu_restr{$pkg}{$n}};
+                                $$cu_restr{$pkg}{$n} = [ sort(keys(%restr)) ];
                                 $reapply = 1;
                             }
+                        } else {
+                            $reapply = 1;
                         }
+                        $$cu_restr{$p}{$n} = $$cu_restr{$pkg}{$n};
                     }
                 }
             }
@@ -83,25 +110,25 @@ sub generate_CUMULATIVE :Sub(Private)
     no strict 'refs';
 
     # Implement :CUMULATIVE methods
-    foreach my $name (keys(%CUMULATIVE)) {
-        my $code = create_CUMULATIVE($name, $TREE_TOP_DOWN, $CUMULATIVE{$name});
-        foreach my $package (keys(%{$CUMULATIVE{$name}})) {
+    foreach my $name (keys(%{$cu_td})) {
+        my $code = create_CUMULATIVE($name, $trees, $$cu_td{$name});
+        foreach my $package (keys(%{$$cu_td{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'cumulative');
-            if ($RESTRICT{$package}{$name}) {
-                add_meta($package, $name, 'restricted', 1);
+            if (exists($$cu_restr{$package}{$name})) {
+                add_meta($package, $name, 'restrict', 1);
             }
         }
     }
 
     # Implement :CUMULATIVE(BOTTOM UP) methods
-    foreach my $name (keys(%ANTICUMULATIVE)) {
-        my $code = create_CUMULATIVE($name, $TREE_BOTTOM_UP, $ANTICUMULATIVE{$name});
-        foreach my $package (keys(%{$ANTICUMULATIVE{$name}})) {
+    foreach my $name (keys(%{$cu_bu})) {
+        my $code = create_CUMULATIVE($name, $$GBL{'tree'}{'bu'}, $$cu_bu{$name});
+        foreach my $package (keys(%{$$cu_bu{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'cumulative (bottom up)');
-            if ($RESTRICT{$package}{$name}) {
-                add_meta($package, $name, 'restricted', 1);
+            if (exists($$cu_restr{$package}{$name})) {
+                add_meta($package, $name, 'restrict', 1);
             }
         }
     }
@@ -113,7 +140,7 @@ sub generate_CUMULATIVE :Sub(Private)
 sub create_CUMULATIVE :Sub(Private)
 {
     # $name      - method name
-    # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
+    # $tree      - either $GBL{'tree'}{'td'} or $GBL{'tree'}{'bu'}
     # $code_refs - hash ref by package of code refs for a particular method name
     my ($name, $tree, $code_refs) = @_;
 
@@ -123,9 +150,13 @@ sub create_CUMULATIVE :Sub(Private)
         my (@results, @classes);
 
         # Caller must be in class hierarchy
-        if ($RESTRICT{$class}{$name}) {
+        my $restr = $$GBL{'sub'}{'cumu'}{'restrict'};
+        if (exists($$restr{$class}{$name})) {
             my $caller = caller();
-            if (! ($caller->$UNIV_ISA($class) || $class->$UNIV_ISA($caller))) {
+            if (! ((grep { $_ eq $caller } @{$$restr{$class}{$name}}) ||
+                   $$GBL{'isa'}->($caller, $class) ||
+                   $$GBL{'isa'}->($class, $caller)))
+            {
                 OIO::Method->die('message' => "Can't call restricted method '$class->$name' from class '$caller'");
             }
         }
@@ -172,10 +203,10 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 2.25;
+our $VERSION = 3.01;
 
-use Object::InsideOut 2.25;
-use Object::InsideOut::Metadata 2.25;
+use Object::InsideOut 3.01;
+use Object::InsideOut::Metadata 3.01;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -183,7 +214,7 @@ my @HASHES  :Field;
 
 sub as_string :Stringify
 {
-    return (join('', grep { defined $_ } @{$VALUES[${$_[0]}]}));
+    return (join('', grep(defined, @{$VALUES[${$_[0]}]})));
 }
 
 sub count :Numerify
@@ -225,5 +256,5 @@ add_meta(__PACKAGE__, {
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

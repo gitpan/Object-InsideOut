@@ -28,7 +28,7 @@ package Base2; {
 package Base3; {
     use Object::InsideOut qw(Base1);
 
-    sub foo :Cumulative :MergedArgs :Restricted
+    sub foo :Cumulative :MergedArgs :Restricted( 'Outside', '')
     {
         my ($self, $args) = @_;
         my $pkg = __PACKAGE__;
@@ -86,6 +86,17 @@ package Reder1; {
     }
 }
 
+package Outside; {
+    use Object::InsideOut;
+
+    sub bar
+    {
+        my $self = shift;
+        my $obj  = shift;
+        return ($obj->foo(@_));
+    }
+}
+
 package main;
 
 MAIN:
@@ -98,6 +109,16 @@ MAIN:
     my @expected = ('foo', 'bar', 'baz', 'bing', 'bang', 'bong');
 
     my @got = $obj->get_foo( 'Base1'  => 'foo',
+                           { 'Base2'  => 'bar', },
+                           { 'Base3'  => 'baz',
+                             'Der1'   => 'bing', },
+                             'Der2'   => 'bang',
+                           { 'Reder1' => 'bong', } );
+
+    is_deeply(\@got, \@expected => 'Cumulative methods with merged args');
+
+    my $out = Outside->new();
+    @got = $out->bar($obj, 'Base1'  => 'foo',
                            { 'Base2'  => 'bar', },
                            { 'Base3'  => 'baz',
                              'Der1'   => 'bing', },

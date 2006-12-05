@@ -87,7 +87,7 @@ WriteMakefile(
     'NAME'          => 'Object::InsideOut',
     'AUTHOR'        => 'Jerry D. Hedden <jdhedden AT cpan DOT org>',
     'VERSION_FROM'  => 'lib/Object/InsideOut.pm',
-    'ABSTRACT_FROM' => 'lib/Object/InsideOut.pm',
+    'ABSTRACT_FROM' => 'lib/Object/InsideOut.pod',
     'PREREQ_PM'     => { 'strict'           => 0,
                          'warnings'         => 0,
                          'attributes'       => 0,

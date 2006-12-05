@@ -7,7 +7,9 @@ no warnings 'redefine';
 # Handles :Automethods and foreign inheritance
 sub AUTOLOAD
 {
-    my ($TREE_TOP_DOWN, $TREE_BOTTOM_UP, $HERITAGE, $AUTOMETHODS, @args) = @_;
+    my ($GBL, @args) = @_;
+    push(@{$$GBL{'export'}}, 'AUTOLOAD');
+    $$GBL{'init'} = 1;
 
     *Object::InsideOut::AUTOLOAD = sub
     {
@@ -23,21 +25,25 @@ sub AUTOLOAD
             $super = 1;
         }
 
+        my $heritage    = $$GBL{'heritage'};
+        my $automethods = $$GBL{'sub'}{'auto'};
+
         # Find a something to handle the method call
         my ($code_type, $code_dir, %code_refs);
-        foreach my $pkg (@{$$TREE_BOTTOM_UP{$class}}) {
+        foreach my $pkg (@{$$GBL{'tree'}{'bu'}{$class}}) {
             # Skip self's class if SUPER
             if ($super && $class eq $pkg) {
                 next;
             }
 
             # Check with heritage objects/classes
-            if (exists($$HERITAGE{$pkg})) {
-                my ($heritage, $classes) = @{$$HERITAGE{$pkg}};
+            if (exists($$heritage{$pkg})) {
+                my $objects = $$heritage{$pkg}{'obj'};
+                my $classes = $$heritage{$pkg}{'cl'};
                 if (Scalar::Util::blessed($thing)) {
-                    if (exists($$heritage{$$thing})) {
+                    if (exists($$objects{$$thing})) {
                         # Check objects
-                        foreach my $obj (@{$$heritage{$$thing}}) {
+                        foreach my $obj (@{$$objects{$$thing}}) {
                             if (my $code = $obj->can($method)) {
                                 shift;
                                 unshift(@_, $obj);
@@ -66,7 +72,7 @@ sub AUTOLOAD
             }
 
             # Check with Automethod
-            if (my $automethod = $$AUTOMETHODS{$pkg}) {
+            if (my $automethod = $$automethods{$pkg}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
@@ -140,7 +146,7 @@ sub AUTOLOAD
         }
 
         if ($code_type) {
-            my $tree = ($code_dir eq 'bottom up') ? $TREE_BOTTOM_UP : $TREE_TOP_DOWN;
+            my $tree = ($code_dir eq 'bottom up') ? $$GBL{'tree'}{'bu'} : $$GBL{'tree'}{'td'};
             my $code = ($code_type eq ':Cumulative')
                             ? create_CUMULATIVE($method, $tree, \%code_refs)
                             : create_CHAINED($method, $tree, \%code_refs);
@@ -163,5 +169,5 @@ sub AUTOLOAD
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

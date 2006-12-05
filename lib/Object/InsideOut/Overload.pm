@@ -6,7 +6,7 @@ no warnings 'redefine';
 
 sub generate_OVERLOAD :Sub(Private)
 {
-    my ($OVERLOAD, $TREE_TOP_DOWN) = @_;
+    my ($GBL) = @_;
 
     # Overload specifiers
     my %TYPE = (
@@ -19,37 +19,46 @@ sub generate_OVERLOAD :Sub(Private)
         'CODIFY'    => q/&{}/,
     );
 
-    foreach my $pkg (keys(%{$OVERLOAD})) {
-        my %meta;
-        # Generate code string
-        my $code = "package $pkg;\nuse overload (\n";
-        while (my $operation = shift(@{$$OVERLOAD{$pkg}})) {
-            my ($attr, $ref, $location) = @$operation;
-            my $name = sub_name($ref, ":$attr", $location);
-            $code .= sprintf('q/%s/ => sub { $_[0]->%s() },', $TYPE{$attr}, $name) . "\n";
-            $meta{$name}{'kind'} = 'overload';
-        }
-        $code .= q/'fallback' => 1);/;
+    my (%code, $code, %meta);
 
-        # Eval the code string
-        my @errs;
-        local $SIG{'__WARN__'} = sub { push(@errs, @_); };
-        eval $code;
-        if ($@ || @errs) {
-            my ($err) = split(/ at /, $@ || join(" | ", @errs));
-            OIO::Internal->die(
-                'message'  => "Failure creating overloads for class '$pkg'",
-                'Error'    => $err,
-                'Code'     => $code,
-                'self'     => 1);
-        }
+    # Generate overload strings
+    while (my $info = shift(@{$$GBL{'sub'}{'ol'}})) {
+        $$info{'name'} ||= sub_name($$info{'code'}, ":$$info{'ify'}", $$info{'loc'});
+        my $pkg = $$info{'pkg'};
+        my $name = $$info{'name'};
 
-        add_meta($pkg, \%meta);
+        push(@{$code{$pkg}}, "\tq/$TYPE{$$info{'ify'}}/ => sub { \$_[0]->$name() },");
+
+        $meta{$pkg}{$name}{'kind'} = 'overload';
     }
+    delete($$GBL{'sub'}{'ol'});
+
+    # Generate entire code string
+    foreach my $pkg (keys(%code)) {
+        $code .= "package $pkg;\nuse overload (\n" .
+                 join("\n", @{$code{$pkg}}) .
+                 "\n\t'fallback' => 1);\n";
+    }
+
+    # Eval the code string
+    my @errs;
+    local $SIG{'__WARN__'} = sub { push(@errs, @_); };
+    eval $code;
+    if ($@ || @errs) {
+        my ($err) = split(/ at /, $@ || join(" | ", @errs));
+        OIO::Internal->die(
+            'message'  => "Failure creating overloads",
+            'Error'    => $err,
+            'Code'     => $code,
+            'self'     => 1);
+    }
+
+    # Add accumulated metadata
+    add_meta(\%meta);
 
     no strict 'refs';
 
-    foreach my $pkg (keys(%{$TREE_TOP_DOWN})) {
+    foreach my $pkg (keys(%{$$GBL{'tree'}{'td'}})) {
         # Bless an object into every class
         # This works around an obscure 'overload' bug reported against
         # Class::Std (http://rt.cpan.org/NoAuth/Bug.html?id=14048)
@@ -70,5 +79,5 @@ sub generate_OVERLOAD :Sub(Private)
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

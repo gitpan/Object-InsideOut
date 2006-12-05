@@ -6,7 +6,11 @@ no warnings 'redefine';
 
 sub create_field
 {
-    my ($u_isa, $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $HERITAGE, $call, @args) = @_;
+    my ($GBL, $call, @args) = @_;
+    push(@{$$GBL{'export'}}, 'create_field');
+    if ($call eq 'create_field') {
+        $$GBL{'init'} = 1;
+    }
 
     # Dynamically create a new object field
     *Object::InsideOut::create_field = sub
@@ -18,7 +22,7 @@ sub create_field
 
         my ($class, $field, @attrs) = @_;
         # Verify valid class
-        if (! $class->$u_isa(__PACKAGE__)) {
+        if (! $$GBL{'isa'}->($class, __PACKAGE__)) {
             OIO::Args->die(
                 'message' => 'Not an Object::InsideOut class',
                 'Arg'     => $class);
@@ -51,10 +55,6 @@ sub create_field
         local $SIG{'__WARN__'} = sub { push(@errs, @_); };
 
         my $code = "package $class; my $field $attr;";
-
-        # Inspect generated code
-        print("\n", $code, "\n\n") if $Object::InsideOut::DEBUG;
-
         eval $code;
         if (my $e = Exception::Class::Base->caught()) {
             die($e);
@@ -122,29 +122,32 @@ sub create_field
             }
         }
 
+        my $tree_bu = $$GBL{'tree'}{'bu'};
+        my $tree_td = $$GBL{'tree'}{'td'};
+
         # Foreign class added
-        if (! exists($$TREE_BOTTOM_UP{$pkg})) {
+        if (! exists($$tree_bu{$pkg})) {
             # Get inheritance 'classes' hash
-            if (! exists($$HERITAGE{$class})) {
+            if (! exists($$GBL{'heritage'}{$class})) {
                 create_heritage($class);
             }
             # Add package to inherited classes
-            $$HERITAGE{$class}[1]{$pkg} = undef;
+            $$GBL{'heritage'}{$class}{'cl'}{$pkg} = undef;
             return;
         }
 
         # Add to class trees
-        foreach my $cl (keys(%{$TREE_BOTTOM_UP})) {
-            next if (! grep { $_ eq $class } @{$$TREE_BOTTOM_UP{$cl}});
+        foreach my $cl (keys(%{$tree_bu})) {
+            next if (! grep { $_ eq $class } @{$$tree_bu{$cl}});
 
             # Splice in the added class's tree
             my @tree;
-            foreach (@{$$TREE_BOTTOM_UP{$cl}}) {
+            foreach (@{$$tree_bu{$cl}}) {
                 push(@tree, $_);
                 if ($_ eq $class) {
                     my %seen;
-                    @seen{@{$$TREE_BOTTOM_UP{$cl}}} = undef;
-                    foreach (@{$$TREE_BOTTOM_UP{$pkg}}) {
+                    @seen{@{$$tree_bu{$cl}}} = undef;
+                    foreach (@{$$tree_bu{$pkg}}) {
                         push(@tree, $_) if (! exists($seen{$_}));
                     }
                 }
@@ -154,8 +157,8 @@ sub create_field
             push(@{$cl.'::ISA'}, $pkg);
 
             # Save revised trees
-            $$TREE_BOTTOM_UP{$cl} = \@tree;
-            @{$$TREE_TOP_DOWN{$cl}} = reverse(@tree);
+            $$tree_bu{$cl} = \@tree;
+            @{$$tree_td{$cl}} = reverse(@tree);
         }
     };
 
@@ -168,5 +171,5 @@ sub create_field
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

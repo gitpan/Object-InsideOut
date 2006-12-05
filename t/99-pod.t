@@ -7,7 +7,7 @@ SKIP: {
     eval 'use Test::Pod 1.26';
     skip('Test::Pod 1.26 required for testing POD', 1) if $@;
 
-    pod_file_ok('blib/lib/Object/InsideOut.pm');
+    pod_file_ok('blib/lib/Object/InsideOut.pod');
     pod_file_ok('blib/lib/Object/InsideOut/Metadata.pm');
     pod_file_ok('blib/lib/Bundle/Object/InsideOut.pm');
 }
@@ -31,17 +31,16 @@ SKIP: {
                             qr/^STORABLE_thaw$/,
                             qr/^create_CHAINED$/,
                             qr/^create_CUMULATIVE$/,
-                            qr/^create_HIDDEN$/,
-                            qr/^create_PRIVATE$/,
-                            qr/^create_RESTRICTED$/,
-                            qr/^create_ARG_WRAP$/,
                             qr/^create_accessors$/,
                             qr/^create_heritage$/,
                             qr/^create_lvalue_accessor$/,
-                            qr/^export_methods$/,
                             qr/^generate_CHAINED$/,
                             qr/^generate_CUMULATIVE$/,
                             qr/^generate_OVERLOAD$/,
+                            qr/^wrap_HIDDEN$/,
+                            qr/^wrap_MERGE_ARGS$/,
+                            qr/^wrap_PRIVATE$/,
+                            qr/^wrap_RESTRICTED$/,
                             qr/^initialize$/,
                             qr/^install_ATTRIBUTES$/,
                             qr/^install_UNIVERSAL$/,

@@ -8,12 +8,7 @@ no warnings 'redefine';
 # foreign inheritance
 sub install_UNIVERSAL
 {
-    # $u_isa          - ref to the orginal UNIVERSAL::isa()
-    # $u_can          - ref to the orginal UNIVERSAL::can()
-    # $AUTOMETHODS    - ref to %AUTOMETHODS
-    # $HERITAGE       - ref to %HERITAGE
-    # $TREE_BOTTOM_UP - ref to %TREE_BOTTOM_UP
-    my ($u_isa, $u_can, $AUTOMETHODS, $HERITAGE, $TREE_BOTTOM_UP) = @_;
+    my ($GBL) = @_;
 
     *UNIVERSAL::can = sub
     {
@@ -30,9 +25,9 @@ sub install_UNIVERSAL
         if ($method =~ /^SUPER::/) {
             # Superclass WRT caller
             my $caller = caller();
-            $code = $u_can->($thing, $caller.'::'.$method);
+            $code = $$GBL{'can'}->($thing, $caller.'::'.$method);
         } else {
-            $code = $u_can->($thing, $method);
+            $code = $$GBL{'can'}->($thing, $method);
         }
         if ($code) {
             return ($code);
@@ -65,23 +60,23 @@ sub install_UNIVERSAL
         }
 
         # Next, check with heritage objects and Automethods
-        foreach my $package (@{$$TREE_BOTTOM_UP{$class}}) {
+        foreach my $package (@{$$GBL{'tree'}{'bu'}{$class}}) {
             # Skip self's class if SUPER
             if ($super && $class eq $package) {
                 next;
             }
 
             # Check heritage
-            if (exists($$HERITAGE{$package})) {
-                foreach my $pkg (keys(%{$$HERITAGE{$package}[1]})) {
-                    if ($code = $pkg->$u_can($method)) {
+            if (exists($$GBL{'heritage'}{$package})) {
+                foreach my $pkg (keys(%{$$GBL{'heritage'}{$package}{'cl'}})) {
+                    if ($code = $$GBL{'can'}->($pkg, $method)) {
                         return ($code);
                     }
                 }
             }
 
             # Check with the Automethods
-            if (my $automethod = $$AUTOMETHODS{$package}) {
+            if (my $automethod = $$GBL{'sub'}{'auto'}{$package}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
@@ -106,15 +101,15 @@ sub install_UNIVERSAL
         }
 
         # First, try the original UNIVERSAL::isa()
-        if (my $isa = $thing->$u_isa($type)) {
+        if (my $isa = $$GBL{'isa'}->($thing, $type)) {
             return ($isa);
         }
 
         # Next, check heritage
-        foreach my $package (@{$$TREE_BOTTOM_UP{ref($thing) || $thing}}) {
-            if (exists($$HERITAGE{$package})) {
-                foreach my $pkg (keys(%{$$HERITAGE{$package}[1]})) {
-                    if (my $isa = $pkg->$u_isa($type)) {
+        foreach my $package (@{$$GBL{'tree'}{'bu'}{ref($thing) || $thing}}) {
+            if (exists($$GBL{'heritage'}{$package})) {
+                foreach my $pkg (keys(%{$$GBL{'heritage'}{$package}{'cl'}})) {
+                    if (my $isa = $$GBL{'isa'}->($pkg, $type)) {
                         return ($isa);
                     }
                 }
@@ -133,5 +128,5 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

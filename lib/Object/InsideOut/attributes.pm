@@ -6,14 +6,14 @@ no warnings 'redefine';
 
 sub install_ATTRIBUTES
 {
-    my ($ATTR_HANDLERS, $TREE_BOTTOM_UP) = @_;
+    my ($GBL) = @_;
 
     *Object::InsideOut::MODIFY_SCALAR_ATTRIBUTES = sub
     {
         my ($pkg, $scalar, @attrs) = @_;
 
         # Call attribute handlers in the class tree
-        if (exists($$ATTR_HANDLERS{'MOD'}{'SCALAR'})) {
+        if (exists($$GBL{'attr'}{'MOD'}{'SCALAR'})) {
             @attrs = CHECK_ATTRS('SCALAR', $pkg, $scalar, @attrs);
         }
 
@@ -33,8 +33,8 @@ sub install_ATTRIBUTES
         my ($type, $pkg, $ref, @attrs) = @_;
 
         # Call attribute handlers in the class tree
-        foreach my $class (@{$$TREE_BOTTOM_UP{$pkg}}) {
-            if (my $handler = $$ATTR_HANDLERS{'MOD'}{$type}{$class}) {
+        foreach my $class (@{$$GBL{'tree'}{'bu'}{$pkg}}) {
+            if (my $handler = $$GBL{'attr'}{'MOD'}{$type}{$class}) {
                 local $SIG{'__DIE__'} = 'OIO::trap';
                 @attrs = $handler->($pkg, $ref, @attrs);
                 return if (! @attrs);
@@ -50,8 +50,8 @@ sub install_ATTRIBUTES
         my @attrs;
 
         # Call attribute handlers in the class tree
-        if (exists($$ATTR_HANDLERS{'FETCH'}{$type})) {
-            foreach my $handler (@{$$ATTR_HANDLERS{'FETCH'}{$type}}) {
+        if (exists($$GBL{'attr'}{'FETCH'}{$type})) {
+            foreach my $handler (@{$$GBL{'attr'}{'FETCH'}{$type}}) {
                 local $SIG{'__DIE__'} = 'OIO::trap';
                 push(@attrs, $handler->($stash, $ref));
             }
@@ -79,5 +79,5 @@ sub FETCH_CODE_ATTRIBUTES   :Sub { return (FETCH_ATTRS('CODE',   @_)); }
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

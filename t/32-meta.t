@@ -122,7 +122,6 @@ sub check_bar
     my $args = $meta->get_args();
     is_deeply($args, \%args_are, 'Bar args (ref)');
 
-
     my %meths_are = (
           'new'   => { 'class' => 'Bar',
                        'kind'  => 'constructor',
@@ -247,10 +246,8 @@ sub check_meta_meta
 
     my %meta_args = (
         'Object::InsideOut::Metadata' => {
-            'CLASSES'     => { 'field' => 1 },
-            'FOREIGN'     => { 'field' => 1 },
-            'INIT_ARGS'   => {},
-            'AUTOMETHODS' => {},
+            'GBL'   => {},
+            'CLASS' => {},
         },
     );
 
@@ -258,7 +255,6 @@ sub check_meta_meta
     is_deeply(\%args, \%meta_args, 'Meta args');
     my $args = $meta->get_args();
     is_deeply($args, \%meta_args, 'Meta args (ref)');
-
 
     my %meta_meths = (
           'clone' => { 'class' => 'Object::InsideOut::Metadata',

@@ -7,8 +7,9 @@ no warnings 'redefine';
 # Installs foreign inheritance methods
 sub inherit
 {
-    my ($u_isa, $HERITAGE, $DUMP_FIELDS, $FIELDS,
-        $call, @args) = @_;
+    my ($GBL, $call, @args) = @_;
+    push(@{$$GBL{'export'}}, qw(inherit heritage disinherit));
+    $$GBL{'init'} = 1;
 
     *Object::InsideOut::inherit = sub
     {
@@ -24,7 +25,7 @@ sub inherit
         my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $obj_class->$u_isa($pkg)) {
+        if (! $$GBL{'isa'}->($obj_class, $pkg)) {
             OIO::Method->die('message' => "Can't call restricted method 'inherit' from class '$pkg'");
         }
 
@@ -44,13 +45,15 @@ sub inherit
         }
 
         # Get 'heritage' field and 'classes' hash
-        if (! exists($$HERITAGE{$pkg})) {
+        my $herit = $$GBL{'heritage'};
+        if (! exists($$herit{$pkg})) {
             create_heritage($pkg);
         }
-        my ($heritage, $classes) = @{$$HERITAGE{$pkg}};
+        my $objects = $$herit{$pkg}{'obj'};
+        my $classes  = $$herit{$pkg}{'cl'};
 
         # Process args
-        my $objs = exists($$heritage{$$self}) ? $$heritage{$$self} : [];
+        my $objs = exists($$objects{$$self}) ? $$objects{$$self} : [];
         while (my $obj = shift(@arg_objs)) {
             # Must be an object
             my $arg_class = Scalar::Util::blessed($obj);
@@ -58,8 +61,8 @@ sub inherit
                 OIO::Args->die('message'  => q/Arg to '->inherit()' is not an object/);
             }
             # Must not be in class hierarchy
-            if ($obj_class->$u_isa($arg_class) ||
-                $arg_class->$u_isa($obj_class))
+            if ($$GBL{'isa'}->($obj_class, $arg_class) ||
+                $$GBL{'isa'}->($arg_class, $obj_class))
             {
                 OIO::Args->die('message'  => q/Args to '->inherit()' cannot be within class hierarchy/);
             }
@@ -69,7 +72,7 @@ sub inherit
             $$classes{$arg_class} = undef;
         }
         # Add objects to heritage field
-        $self->set($heritage, $objs);
+        $self->set($objects, $objs);
     };
 
 
@@ -87,13 +90,13 @@ sub inherit
         my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $obj_class->$u_isa($pkg)) {
+        if (! $$GBL{'isa'}->($obj_class, $pkg)) {
             OIO::Method->die('message' => "Can't call restricted method 'heritage' from class '$pkg'");
         }
 
         # Anything to return?
-        if (! exists($$HERITAGE{$pkg}) ||
-            ! exists($$HERITAGE{$pkg}[0]{$$self}))
+        if (! exists($$GBL{'heritage'}{$pkg}) ||
+            ! exists($$GBL{'heritage'}{$pkg}{'obj'}{$$self}))
         {
             return;
         }
@@ -104,10 +107,10 @@ sub inherit
             @objs = grep {
                         my $obj = $_;
                         grep { ref($obj) eq $_ } @_
-                    } @{$$HERITAGE{$pkg}[0]{$$self}};
+                    } @{$$GBL{'heritage'}{$pkg}{'obj'}{$$self}};
         } else {
             # Return entire list
-            @objs = @{$$HERITAGE{$pkg}[0]{$$self}};
+            @objs = @{$$GBL{'heritage'}{$pkg}{'obj'}{$$self}};
         }
 
         # Return results
@@ -135,7 +138,7 @@ sub inherit
         my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $class->$u_isa($pkg)) {
+        if (! $$GBL{'isa'}->($class, $pkg)) {
             OIO::Method->die('message' => "Can't call restricted method 'disinherit' from class '$pkg'");
         }
 
@@ -155,15 +158,15 @@ sub inherit
         }
 
         # Get 'heritage' field
-        if (! exists($$HERITAGE{$pkg})) {
+        if (! exists($$GBL{'heritage'}{$pkg})) {
             OIO::Code->die(
                 'message'  => 'Nothing to ->disinherit()',
                 'Info'     => "Class '$pkg' is currently not inheriting from any foreign classes");
         }
-        my $heritage = $$HERITAGE{$pkg}[0];
+        my $objects = $$GBL{'heritage'}{$pkg}{'obj'};
 
         # Get inherited objects
-        my @objs = exists($$heritage{$$self}) ? @{$$heritage{$$self}} : ();
+        my @objs = exists($$objects{$$self}) ? @{$$objects{$$self}} : ();
 
         # Check that object is inheriting all args
         foreach my $arg (@args) {
@@ -205,10 +208,10 @@ sub inherit
 
         # Set new object list
         if (@new_list) {
-            $self->set($heritage, \@new_list);
+            $self->set($objects, \@new_list);
         } else {
             # No objects left
-            delete($$heritage{$$self});
+            delete($$objects{$$self});
         }
     };
 
@@ -224,28 +227,34 @@ sub inherit
         my $pkg = shift;
 
         # Check if 'heritage' already exists
-        if (exists($$DUMP_FIELDS{$pkg}{'heritage'})) {
+        if (exists($$GBL{'dump'}{'fld'}{$pkg}{'heritage'})) {
             OIO::Attribute->die(
                 'message' => "Can't inherit into '$pkg'",
-                'Info'    => "'heritage' already specified for another field using '$$DUMP_FIELDS{$pkg}{'heritage'}[1]'");
+                'Info'    => "'heritage' already specified for another field using '$$GBL{'dump'}{'fld'}{$pkg}{'heritage'}{'src'}'");
         }
 
         # Create the heritage field
-        my $heritage = {};
+        my $objects = {};
 
         # Share the field, if applicable
         if (is_sharing($pkg)) {
-            threads::shared::share($heritage)
+            threads::shared::share($objects)
         }
 
         # Save the field's ref
-        push(@{$$FIELDS{$pkg}}, $heritage);
+        push(@{$$GBL{'fld'}{'ref'}{$pkg}}, $objects);
 
         # Save info for ->dump()
-        $$DUMP_FIELDS{$pkg}{'heritage'} = [ $heritage, 'Inherit' ];
+        $$GBL{'dump'}{'fld'}{$pkg}{'heritage'} = {
+            fld => $objects,
+            src => 'Inherit'
+        };
 
         # Save heritage info
-        $$HERITAGE{$pkg} = [ $heritage, {} ];
+        $$GBL{'heritage'}{$pkg} = {
+            obj => $objects,
+            cl  => {}
+        };
 
         # Set up UNIVERSAL::can/isa to handle foreign inheritance
         install_UNIVERSAL();
@@ -261,5 +270,5 @@ sub inherit
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

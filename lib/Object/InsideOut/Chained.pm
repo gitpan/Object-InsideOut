@@ -4,76 +4,102 @@ use strict;
 use warnings;
 no warnings 'redefine';
 
-my %CHAINED;
-my %ANTICHAINED;
-my %RESTRICT;
-my $UNIV_ISA;
+my $GBL = {};
 
 sub generate_CHAINED :Sub(Private)
 {
-    my ($chain, $antichain, $TREE_TOP_DOWN, $TREE_BOTTOM_UP, $u_isa) = @_;
-
-    $UNIV_ISA = $u_isa;
+    ($GBL) = @_;
+    my $g_ch = $$GBL{'sub'}{'chain'};
+    my $chain_td = $$g_ch{'new'}{'td'} || [];
+    my $chain_bu = $$g_ch{'new'}{'bu'} || [];
+    delete($$g_ch{'new'});
+    if (! exists($$g_ch{'td'})) {
+        $$GBL{'sub'}{'chain'} = {
+            td => {},       # 'Top down'
+            bu => {},       # 'Bottom up'
+            restrict => {}, # :Restricted
+        };
+        $g_ch = $$GBL{'sub'}{'chain'};
+    }
+    my $ch_td    = $$g_ch{'td'};
+    my $ch_bu    = $$g_ch{'bu'};
+    my $ch_restr = $$g_ch{'restrict'};
 
     # Get names for :CHAINED methods
     my (%chain_loc);
-    foreach my $package (keys(%{$chain})) {
-        while (my $info = shift(@{$$chain{$package}})) {
-            my ($code, $location, $name, $restrict) = @{$info};
-            $name ||= sub_name($code, ':CHAINED', $location);
-            $CHAINED{$name}{$package} = $code;
-            $chain_loc{$name}{$package} = $location;
-            if ($restrict) {
-                $RESTRICT{$package}{$name} = 1;
-            }
+    while (my $info = shift(@{$chain_td})) {
+        $$info{'name'} ||= sub_name($$info{'code'}, ':CHAINED', $$info{'loc'});
+        my $package = $$info{'pkg'};
+        my $name    = $$info{'name'};
+
+        $chain_loc{$name}{$package} = $$info{'loc'};
+
+        $$ch_td{$name}{$package} = $$info{'wrap'};
+        if (exists($$info{'exempt'})) {
+            push(@{$$ch_restr{$package}{$name}},
+                    sort grep {$_} split(/[,'\s]+/, $$info{'exempt'} || ''));
         }
     }
 
     # Get names for :CHAINED(BOTTOM UP) methods
-    my (%antichain, %antichain_restrict);
-    foreach my $package (keys(%{$antichain})) {
-        while (my $info = shift(@{$$antichain{$package}})) {
-            my ($code, $location, $name, $restrict) = @{$info};
-            $name ||= sub_name($code, ':CHAINED(BOTTOM UP)', $location);
+    while (my $info = shift(@{$chain_bu})) {
+        $$info{'name'} ||= sub_name($$info{'code'}, ':CHAINED(BOTTOM UP)', $$info{'loc'});
+        my $package = $$info{'pkg'};
+        my $name    = $$info{'name'};
 
-            # Check for conflicting definitions of $name
-            if ($CHAINED{$name}) {
-                foreach my $other_package (keys(%{$CHAINED{$name}})) {
-                    if ($other_package->$UNIV_ISA($package) ||
-                        $package->$UNIV_ISA($other_package))
-                    {
-                        my ($pkg,  $file,  $line)  = @{$chain_loc{$name}{$other_package}};
-                        my ($pkg2, $file2, $line2) = @{$location};
-                        OIO::Attribute->die(
-                            'location' => $location,
-                            'message'  => "Conflicting definitions for chained method '$name'",
-                            'Info'     => "Declared as :CHAINED in class '$pkg' (file '$file', line $line), but declared as :CHAINED(BOTTOM UP) in class '$pkg2' (file '$file2' line $line2)");
-                    }
+        # Check for conflicting definitions of 'name'
+        if ($$ch_td{$name}) {
+            foreach my $other_package (keys(%{$$ch_td{$name}})) {
+                if ($$GBL{'isa'}->($other_package, $package) ||
+                    $$GBL{'isa'}->($package, $other_package))
+                {
+                    my ($pkg,  $file,  $line)  = @{$chain_loc{$name}{$other_package}};
+                    my ($pkg2, $file2, $line2) = @{$$info{'loc'}};
+                    OIO::Attribute->die(
+                        'location' => $$info{'loc'},
+                        'message'  => "Conflicting definitions for chained method '$name'",
+                        'Info'     => "Declared as :CHAINED in class '$pkg' (file '$file', line $line), but declared as :CHAINED(BOTTOM UP) in class '$pkg2' (file '$file2' line $line2)");
                 }
             }
+        }
 
-            $ANTICHAINED{$name}{$package} = $code;
-            if ($restrict) {
-                $RESTRICT{$package}{$name} = 1;
-            }
+        $$ch_bu{$name}{$package} = $$info{'wrap'};
+        if (exists($$info{'exempt'})) {
+            push(@{$$ch_restr{$package}{$name}},
+                    sort grep {$_} split(/[,'\s]+/, $$info{'exempt'} || ''));
         }
     }
 
     # Propagate restrictions
     my $reapply = 1;
+    my $trees = $$GBL{'tree'}{'td'};
     while ($reapply) {
         $reapply = 0;
-
-        foreach my $pkg (keys(%RESTRICT)) {
-            foreach my $class (keys(%{$TREE_TOP_DOWN})) {
-                if (grep { $_ eq $pkg } @{$$TREE_TOP_DOWN{$class}}) {
-                    foreach my $p (@{$$TREE_TOP_DOWN{$class}}) {
-                        foreach my $n (keys(%{$RESTRICT{$pkg}})) {
-                            if (! exists($RESTRICT{$p}{$n})) {
-                                $RESTRICT{$p}{$n} = 1;
+        foreach my $pkg (keys(%{$ch_restr})) {
+            foreach my $class (keys(%{$trees})) {
+                next if (! grep { $_ eq $pkg } @{$$trees{$class}});
+                foreach my $p (@{$$trees{$class}}) {
+                    foreach my $n (keys(%{$$ch_restr{$pkg}})) {
+                        if (exists($$ch_restr{$p}{$n})) {
+                            next if ($$ch_restr{$p}{$n} == $$ch_restr{$pkg}{$n});
+                            my $equal = (@{$$ch_restr{$p}{$n}} == @{$$ch_restr{$pkg}{$n}});
+                            if ($equal) {
+                                for (1..@{$$ch_restr{$p}{$n}}) {
+                                    if ($$ch_restr{$pkg}{$n}[$_-1] ne $$ch_restr{$p}{$n}[$_-1]) {
+                                        $equal = 0;
+                                        last;
+                                    }
+                                }
+                            }
+                            if (! $equal) {
+                                my %restr = map { $_ => 1 } @{$$ch_restr{$p}{$n}}, @{$$ch_restr{$pkg}{$n}};
+                                $$ch_restr{$pkg}{$n} = [ sort(keys(%restr)) ];
                                 $reapply = 1;
                             }
+                        } else {
+                            $reapply = 1;
                         }
+                        $$ch_restr{$p}{$n} = $$ch_restr{$pkg}{$n};
                     }
                 }
             }
@@ -84,24 +110,24 @@ sub generate_CHAINED :Sub(Private)
     no strict 'refs';
 
     # Implement :CHAINED methods
-    foreach my $name (keys(%CHAINED)) {
-        my $code = create_CHAINED($name, $TREE_TOP_DOWN, $CHAINED{$name});
-        foreach my $package (keys(%{$CHAINED{$name}})) {
+    foreach my $name (keys(%{$ch_td})) {
+        my $code = create_CHAINED($name, $trees, $$ch_td{$name});
+        foreach my $package (keys(%{$$ch_td{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'chained');
-            if ($RESTRICT{$package}{$name}) {
+            if (exists($$ch_restr{$package}{$name})) {
                 add_meta($package, $name, 'restricted', 1);
             }
         }
     }
 
     # Implement :CHAINED(BOTTOM UP) methods
-    foreach my $name (keys(%ANTICHAINED)) {
-        my $code = create_CHAINED($name, $TREE_BOTTOM_UP, $ANTICHAINED{$name});
-        foreach my $package (keys(%{$ANTICHAINED{$name}})) {
+    foreach my $name (keys(%{$ch_bu})) {
+        my $code = create_CHAINED($name, $$GBL{'tree'}{'bu'}, $$ch_bu{$name});
+        foreach my $package (keys(%{$$ch_bu{$name}})) {
             *{$package.'::'.$name} = $code;
             add_meta($package, $name, 'kind', 'chained (bottom up)');
-            if ($RESTRICT{$package}{$name}) {
+            if (exists($$ch_restr{$package}{$name})) {
                 add_meta($package, $name, 'restricted', 1);
             }
         }
@@ -114,7 +140,7 @@ sub generate_CHAINED :Sub(Private)
 sub create_CHAINED :Sub(Private)
 {
     # $name      - method name
-    # $tree      - ref to either %TREE_TOP_DOWN or %TREE_BOTTOM_UP
+    # $tree      - either $GBL{'tree'}{'td'} or $GBL{'tree'}{'bu'}
     # $code_refs - hash ref by package of code refs for a particular method name
     my ($name, $tree, $code_refs) = @_;
 
@@ -126,9 +152,13 @@ sub create_CHAINED :Sub(Private)
         my @classes;
 
         # Caller must be in class hierarchy
-        if ($RESTRICT{$class}{$name}) {
+        my $restr = $$GBL{'sub'}{'chain'}{'restrict'};
+        if (exists($$restr{$class}{$name})) {
             my $caller = caller();
-            if (! ($caller->$UNIV_ISA($class) || $class->$UNIV_ISA($caller))) {
+            if (! ((grep { $_ eq $caller } @{$$restr{$class}{$name}}) ||
+                   $$GBL{'isa'}->($caller, $class) ||
+                   $$GBL{'isa'}->($class, $caller)))
+            {
                 OIO::Method->die('message' => "Can't call restricted method '$class->$name' from class '$caller'");
             }
         }
@@ -151,5 +181,5 @@ sub create_CHAINED :Sub(Private)
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");

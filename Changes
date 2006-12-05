@@ -1,5 +1,11 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.01 Tue Dec  5 16:36:42 EST 2006
+	- :Restricted/:Private classes
+	- Exemptions for :Restricted :Cumulative/:Chained
+	- Separate POD file
+	- Internal code rework
+
 2.25 Thu Nov 30 13:29:36 EST 2006
 	- Exemptions for :Restricted/:Private
 	- Partial compatibility with Attribute::Params::Validate

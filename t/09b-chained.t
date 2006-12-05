@@ -6,7 +6,7 @@ use Test::More 'no_plan';
 package Base1; {
     use Object::InsideOut;
 
-    sub foo :Chained :MergedArgs :Restricted
+    sub foo :Chained :MergedArgs :Restricted(Outside)
     {
         my ($self, $args) = @_;
         push(@{$args->{'list'}}, __PACKAGE__);
@@ -51,7 +51,7 @@ package Base4; {
 package Der1; {
     use Object::InsideOut qw(Base2 Base3 Base4);
 
-    sub foo :Chained :MergedArgs :Restricted
+    sub foo :Chained :MergedArgs :Restricted('', Prog)
     {
         my ($self, $args) = @_;
         push(@{$args->{'list'}}, __PACKAGE__);
@@ -88,6 +88,17 @@ package Reder1; {
     }
 }
 
+package Outside; {
+    use Object::InsideOut;
+
+    sub bar
+    {
+        my $self = shift;
+        my $obj  = shift;
+        return ($obj->foo());
+    }
+}
+
 package main;
 
 MAIN:
@@ -110,6 +121,11 @@ MAIN:
         };
 
     my ($got) = $obj->get_foo();
+
+    is_deeply($got, $expected => 'Chained methods with merged args');
+
+    my $out = Outside->new();
+    ($got) = $out->bar($obj);
 
     is_deeply($got, $expected => 'Chained methods with merged args');
 }

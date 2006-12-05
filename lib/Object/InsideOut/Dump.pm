@@ -7,39 +7,46 @@ no warnings 'redefine';
 # Installs object dumper and loader methods
 sub dump
 {
-    my ($DUMP_INITARGS, $DUMP_FIELDS, $DUMPERS, $PUMPERS,
-        $INIT_ARGS, $TREE_TOP_DOWN, $FIELDS, $WEAK, $call, @args) = @_;
+    my ($GBL, $call, @args) = @_;
+    push(@{$$GBL{'export'}}, 'dump');
+    $$GBL{'init'} = 1;
 
     *Object::InsideOut::dump = sub
     {
         my $self = shift;
 
+        my $d_flds =  $$GBL{'dump'}{'fld'};
+
         # Extract field info from any :InitArgs hashes
-        while (my $pkg = shift(@{$DUMP_INITARGS})) {
+        while (my $pkg = shift(@{$$GBL{'dump'}{'args'}})) {
+            my $p_args = $$GBL{'args'}{$pkg};
             INIT_ARGS:
-            foreach my $name (keys(%{$$INIT_ARGS{$pkg}})) {
-                my $val = $$INIT_ARGS{$pkg}{$name};
+            foreach my $name (keys(%{$p_args})) {
+                my $val = $$p_args{$name};
                 if (ref($val) eq 'HASH') {
                     if (my $field = Object::InsideOut::Util::hash_re($val, qr/^FIELD$/i)) {
                         # Override get/set names, but not 'Name'
-                        foreach my $name2 (keys(%{$$DUMP_FIELDS{$pkg}})) {
-                            my $fld_spec = $$DUMP_FIELDS{$pkg}{$name2};
-                            if ($field == $$fld_spec[0]) {
-                                if ($$fld_spec[1] eq 'Name') {
+                        foreach my $name2 (keys(%{$$d_flds{$pkg}})) {
+                            my $fld_spec = $$d_flds{$pkg}{$name2};
+                            if ($field == $$fld_spec{'fld'}) {
+                                if ($$fld_spec{'src'} eq 'Name') {
                                     next INIT_ARGS;
                                 }
-                                delete($$DUMP_FIELDS{$pkg}{$name2});
+                                delete($$d_flds{$pkg}{$name2});
                                 last;
                             }
                         }
-                        if (exists($$DUMP_FIELDS{$pkg}{$name}) &&
-                            $field != $$DUMP_FIELDS{$pkg}{$name}[0])
+                        if (exists($$d_flds{$pkg}{$name}) &&
+                            $field != $$d_flds{$pkg}{$name}{'fld'})
                         {
                             OIO::Code->die(
                                 'message' => 'Cannot dump object',
-                                'Info'    => "In class '$pkg', '$name' refers to two different fields set by 'InitArgs' and '$$DUMP_FIELDS{$pkg}{$name}[1]'");
+                                'Info'    => "In class '$pkg', '$name' refers to two different fields set by 'InitArgs' and '$$d_flds{$pkg}{$name}{'src'}'");
                         }
-                        $$DUMP_FIELDS{$pkg}{$name} = [ $field, 'InitArgs' ];
+                        $$d_flds{$pkg}{$name} = {
+                            fld => $field,
+                            src => 'InitArgs',
+                        };
                     }
                 }
             }
@@ -52,19 +59,22 @@ sub dump
 
         # Gather data from the object's class tree
         my %dump;
-        foreach my $pkg (@{$$TREE_TOP_DOWN{ref($self)}}) {
+        my $fld_refs = $$GBL{'fld'}{'ref'};
+        my $dumpers  = $$GBL{'dump'}{'dumper'};
+        my $weak     = $$GBL{'fld'}{'weak'};
+        foreach my $pkg (@{$$GBL{'tree'}{'td'}{ref($self)}}) {
             # Try to use a class-supplied dumper
-            if (my $dumper = $$DUMPERS{$pkg}) {
+            if (my $dumper = $$dumpers{$pkg}) {
                 local $SIG{'__DIE__'} = 'OIO::trap';
                 $dump{$pkg} = $self->$dumper();
 
-            } elsif ($$FIELDS{$pkg}) {
+            } elsif ($$fld_refs{$pkg}) {
                 # Dump the data ourselves from all known class fields
-                my @fields = @{$$FIELDS{$pkg}};
+                my @fields = @{$$fld_refs{$pkg}};
 
                 # Fields for which we have names
-                foreach my $name (keys(%{$$DUMP_FIELDS{$pkg}})) {
-                    my $field = $$DUMP_FIELDS{$pkg}{$name}[0];
+                foreach my $name (keys(%{$$d_flds{$pkg}})) {
+                    my $field = $$d_flds{$pkg}{$name}{'fld'};
                     if (ref($field) eq 'HASH') {
                         if (exists($$field{$$self})) {
                             $dump{$pkg}{$name} = $$field{$$self};
@@ -74,7 +84,7 @@ sub dump
                             $dump{$pkg}{$name} = $$field[$$self];
                         }
                     }
-                    if ($$WEAK{$field} && exists($dump{$pkg}{$name})) {
+                    if ($$weak{$field} && exists($dump{$pkg}{$name})) {
                         Scalar::Util::weaken($dump{$pkg}{$name});
                     }
                     @fields = grep { $_ != $field } @fields;
@@ -91,7 +101,7 @@ sub dump
                             $dump{$pkg}{$field} = $$field[$$self];
                         }
                     }
-                    if ($$WEAK{$field} && exists($dump{$pkg}{$field})) {
+                    if ($$weak{$field} && exists($dump{$pkg}{$field})) {
                         Scalar::Util::weaken($dump{$pkg}{$field});
                     }
                 }
@@ -172,7 +182,7 @@ sub dump
             my $data = $$dump{$pkg};
 
             # Try to use a class-supplied pumper
-            if (my $pumper = $$PUMPERS{$pkg}) {
+            if (my $pumper = $$GBL{'dump'}{'pumper'}{$pkg}) {
                 local $SIG{'__DIE__'} = 'OIO::trap';
                 $self->$pumper($data);
 
@@ -180,7 +190,7 @@ sub dump
                 # Pump in the data ourselves
                 foreach my $fld_name (keys(%{$data})) {
                     my $value = $$data{$fld_name};
-                    if (my $field = $$DUMP_FIELDS{$pkg}{$fld_name}[0]) {
+                    if (my $field = $$GBL{'dump'}{'fld'}{$pkg}{$fld_name}{'fld'}) {
                         $self->set($field, $value);
                     } else {
                         if ($fld_name =~ /^(?:HASH|ARRAY)/) {
@@ -210,5 +220,5 @@ sub dump
 
 
 # Ensure correct versioning
-my $VERSION = 2.25;
-($Object::InsideOut::VERSION == 2.25) or die("Version mismatch\n");
+my $VERSION = 3.01;
+($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");
