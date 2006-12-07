@@ -146,12 +146,15 @@ sub create_CUMULATIVE :Sub(Private)
 
     return sub {
         my $class = ref($_[0]) || $_[0];
+        if (! $class) {
+            OIO::Method->die('message' => "Must call '$name' as a method");
+        }
         my $list_context = wantarray;
         my (@results, @classes);
 
         # Caller must be in class hierarchy
         my $restr = $$GBL{'sub'}{'cumu'}{'restrict'};
-        if (exists($$restr{$class}{$name})) {
+        if ($restr && exists($$restr{$class}{$name})) {
             my $caller = caller();
             if (! ((grep { $_ eq $caller } @{$$restr{$class}{$name}}) ||
                    $$GBL{'isa'}->($caller, $class) ||
@@ -203,10 +206,10 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = 3.01;
+our $VERSION = 3.03;
 
-use Object::InsideOut 3.01;
-use Object::InsideOut::Metadata 3.01;
+use Object::InsideOut 3.03;
+use Object::InsideOut::Metadata 3.03;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -256,5 +259,5 @@ add_meta(__PACKAGE__, {
 
 
 # Ensure correct versioning
-my $VERSION = 3.01;
-($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");
+my $VERSION = 3.03;
+($Object::InsideOut::VERSION == 3.03) or die("Version mismatch\n");

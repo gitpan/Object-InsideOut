@@ -147,13 +147,14 @@ sub create_CHAINED :Sub(Private)
     return sub {
         my $thing = shift;
         my $class = ref($thing) || $thing;
+        if (! $class) {
+            OIO::Method->die('message' => "Must call '$name' as a method");
+        }
         my @args = @_;
-        my $list_context = wantarray;
-        my @classes;
 
         # Caller must be in class hierarchy
         my $restr = $$GBL{'sub'}{'chain'}{'restrict'};
-        if (exists($$restr{$class}{$name})) {
+        if ($restr && exists($$restr{$class}{$name})) {
             my $caller = caller();
             if (! ((grep { $_ eq $caller } @{$$restr{$class}{$name}}) ||
                    $$GBL{'isa'}->($caller, $class) ||
@@ -168,7 +169,6 @@ sub create_CHAINED :Sub(Private)
             if (my $code = $$code_refs{$pkg}) {
                 local $SIG{'__DIE__'} = 'OIO::trap';
                 @args = $thing->$code(@args);
-                push(@classes, $pkg);
             }
         }
 
@@ -181,5 +181,5 @@ sub create_CHAINED :Sub(Private)
 
 
 # Ensure correct versioning
-my $VERSION = 3.01;
-($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");
+my $VERSION = 3.03;
+($Object::InsideOut::VERSION == 3.03) or die("Version mismatch\n");

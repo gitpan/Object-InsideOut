@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.01;
+our $VERSION = 3.03;
 
-use Object::InsideOut::Exception 3.01;
-use Object::InsideOut::Util 3.01 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.01;
+use Object::InsideOut::Exception 3.03;
+use Object::InsideOut::Util 3.03 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.03;
 
 use B ();
 use Scalar::Util 1.10;
@@ -440,12 +440,12 @@ sub MODIFY_CODE_ATTRIBUTES
             $GBL{'init'} = 1;
 
         } elsif ($attr =~ /^MOD(?:IFY)?_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
-            install_ATTRIBUTES();
+            install_ATTRIBUTES(\%GBL);
             $GBL{'attr'}{'MOD'}{$1}{$pkg} = $code;
             push(@attrs, $arg || 'HIDDEN');
 
         } elsif ($attr =~ /^FETCH_(ARRAY|CODE|HASH|SCALAR)_ATTR/) {
-            install_ATTRIBUTES();
+            install_ATTRIBUTES(\%GBL);
             push(@{$GBL{'attr'}{'FETCH'}{$1}}, $code);
             push(@attrs, $arg || 'HIDDEN');
 
@@ -807,7 +807,7 @@ sub initialize :Sub(Private)
 
     # Implement overload (-ify) operators
     if (exists($GBL{'sub'}{'ol'})) {
-        generate_OVERLOAD();
+        generate_OVERLOAD(\%GBL);
     }
 
     # Add metadata for methods
@@ -891,12 +891,12 @@ sub initialize :Sub(Private)
 
     # Implement cumulative methods
     if (exists($GBL{'sub'}{'cumu'}{'new'})) {
-        generate_CUMULATIVE();
+        generate_CUMULATIVE(\%GBL);
     }
 
     # Implement chained methods
     if (exists($GBL{'sub'}{'chain'}{'new'})) {
-        generate_CHAINED();
+        generate_CHAINED(\%GBL);
     }
 
     # Export methods
@@ -2569,7 +2569,6 @@ sub load :Sub(Private)
 sub generate_CUMULATIVE :Sub(Private)
 {
     load('Cumulative');
-    @_ = (\%GBL);
     goto &generate_CUMULATIVE;
 }
 
@@ -2582,7 +2581,6 @@ sub create_CUMULATIVE :Sub(Private)
 sub generate_CHAINED :Sub(Private)
 {
     load('Chained');
-    @_ = (\%GBL);
     goto &generate_CHAINED;
 }
 
@@ -2595,7 +2593,6 @@ sub create_CHAINED :Sub(Private)
 sub generate_OVERLOAD :Sub(Private)
 {
     load('Overload');
-    @_ = (\%GBL);
     goto &generate_OVERLOAD;
 }
 
@@ -2609,7 +2606,6 @@ sub install_UNIVERSAL :Sub
 sub install_ATTRIBUTES :Sub
 {
     load('attributes');
-    @_ = (\%GBL);
     goto &install_ATTRIBUTES;
 }
 

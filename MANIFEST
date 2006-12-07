@@ -71,6 +71,7 @@ t/34a-secure.t
 t/35-add_class.t
 t/36-require.t
 t/37-class_perm.t
+t/38-combined.t
 t/99-pod.t
 t/EmptyParent.pm
 t/ErrorParent.pm

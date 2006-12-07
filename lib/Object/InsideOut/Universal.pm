@@ -59,32 +59,105 @@ sub install_UNIVERSAL
             $super = 1;
         }
 
+        my $heritage    = $$GBL{'heritage'};
+        my $automethods = $$GBL{'sub'}{'auto'};
+
         # Next, check with heritage objects and Automethods
-        foreach my $package (@{$$GBL{'tree'}{'bu'}{$class}}) {
+        my ($code_type, $code_dir, %code_refs);
+        foreach my $pkg (@{$$GBL{'tree'}{'bu'}{$class}}) {
             # Skip self's class if SUPER
-            if ($super && $class eq $package) {
+            if ($super && $class eq $pkg) {
                 next;
             }
 
             # Check heritage
-            if (exists($$GBL{'heritage'}{$package})) {
-                foreach my $pkg (keys(%{$$GBL{'heritage'}{$package}{'cl'}})) {
-                    if ($code = $$GBL{'can'}->($pkg, $method)) {
+            if (exists($$heritage{$pkg})) {
+                foreach my $pkg2 (keys(%{$$heritage{$pkg}{'cl'}})) {
+                    if ($code = $$GBL{'can'}->($pkg2, $method)) {
                         return ($code);
                     }
                 }
             }
 
             # Check with the Automethods
-            if (my $automethod = $$GBL{'sub'}{'auto'}{$package}) {
+            if (my $automethod = $$automethods{$pkg}) {
                 # Call the Automethod to get a code ref
                 local $CALLER::_ = $_;
                 local $_ = $method;
                 local $SIG{'__DIE__'} = 'OIO::trap';
-                if ($code = $thing->$automethod()) {
+                if (my ($code, $ctype) = $automethod->($thing)) {
+                    if (ref($code) ne 'CODE') {
+                        # Not a code ref
+                        OIO::Code->die(
+                            'message' => ':Automethod did not return a code ref',
+                            'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
+                    }
+
+                    if (defined($ctype)) {
+                        my ($type, $dir) = $ctype =~ /(\w+)(?:[(]\s*(.*)\s*[)])?/;
+                        if ($type && $type =~ /CUM/i) {
+                            if ($code_type) {
+                                $type = ':Cumulative';
+                                $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                                if ($code_type ne $type || $code_dir ne $dir) {
+                                    # Mixed types
+                                    my ($pkg2) = keys(%code_refs);
+                                    OIO::Code->die(
+                                        'message' => 'Inconsistent code types returned by :Automethods',
+                                        'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
+                                }
+                            } else {
+                                $code_type = ':Cumulative';
+                                $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                            }
+                            $code_refs{$pkg} = $code;
+                            next;
+                        }
+                        if ($type && $type =~ /CHA/i) {
+                            if ($code_type) {
+                                $type = ':Chained';
+                                $dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                                if ($code_type ne $type || $code_dir ne $dir) {
+                                    # Mixed types
+                                    my ($pkg2) = keys(%code_refs);
+                                    OIO::Code->die(
+                                        'message' => 'Inconsistent code types returned by :Automethods',
+                                        'Info'    => "Class '$pkg' returned type $type($dir), and class '$pkg2' returned type $code_type($code_dir)");
+                                }
+                            } else {
+                                $code_type = ':Chained';
+                                $code_dir = ($dir && $dir =~ /BOT/i) ? 'bottom up' : 'top down';
+                            }
+                            $code_refs{$pkg} = $code;
+                            next;
+                        }
+
+                        # Unknown automethod code type
+                        OIO::Code->die(
+                            'message' => "Unknown :Automethod code type: $ctype",
+                            'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
+                    }
+
+                    if ($code_type) {
+                        # Mixed types
+                        my ($pkg2) = keys(%code_refs);
+                        OIO::Code->die(
+                            'message' => 'Inconsistent code types returned by :Automethods',
+                            'Info'    => "Class '$pkg' returned an 'execute immediately' type, and class '$pkg2' returned type $code_type($code_dir)");
+                    }
+
+                    # Just a one-shot - return it
                     return ($code);
                 }
             }
+        }
+
+        if ($code_type) {
+            my $tree = ($code_dir eq 'bottom up') ? $$GBL{'tree'}{'bu'} : $$GBL{'tree'}{'td'};
+            $code = ($code_type eq ':Cumulative')
+                            ? create_CUMULATIVE($method, $tree, \%code_refs)
+                            : create_CHAINED($method, $tree, \%code_refs);
+            return ($code);
         }
 
         return;   # Can't
@@ -106,9 +179,9 @@ sub install_UNIVERSAL
         }
 
         # Next, check heritage
-        foreach my $package (@{$$GBL{'tree'}{'bu'}{ref($thing) || $thing}}) {
-            if (exists($$GBL{'heritage'}{$package})) {
-                foreach my $pkg (keys(%{$$GBL{'heritage'}{$package}{'cl'}})) {
+        foreach my $pkg (@{$$GBL{'tree'}{'bu'}{ref($thing) || $thing}}) {
+            if (exists($$GBL{'heritage'}{$pkg})) {
+                foreach my $pkg (keys(%{$$GBL{'heritage'}{$pkg}{'cl'}})) {
                     if (my $isa = $$GBL{'isa'}->($pkg, $type)) {
                         return ($isa);
                     }
@@ -128,5 +201,5 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-my $VERSION = 3.01;
-($Object::InsideOut::VERSION == 3.01) or die("Version mismatch\n");
+my $VERSION = 3.03;
+($Object::InsideOut::VERSION == 3.03) or die("Version mismatch\n");
