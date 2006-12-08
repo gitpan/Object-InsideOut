@@ -23,6 +23,9 @@ package My::Class; {
     my @baz  :Field
              :All(baz)
              :Type(hash);
+    my @bork :Field
+             :Def('bork')
+             :Get(bork);
 }
 
 package main;
@@ -43,6 +46,7 @@ MAIN:
     is($obj->foo(),      99             => 'int field');
     is_deeply($obj->bar(), [ 'bar' ]    => 'list field');
     is_deeply($obj->baz(), { 'hello' => 'world' }       => 'hash field');
+    is($obj->bork(), 'bork',            => 'default');
 
     eval { My::Class->new('data' => 'foo'); };
     like($@, qr/must be a number/       => 'Type check');

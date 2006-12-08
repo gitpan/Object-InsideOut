@@ -1,9 +1,10 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.04 Fri Dec  8 13:17:51 EST 2006
+	- Added :Default(...) for :Field's
+
 3.03 Thu Dec  7 13:41:40 EST 2006
 	- Fixed ->can() for cumulative/chained automethods
-
-3.02 Thu Dec  7 06:54:04 EST 2006
 	- Fixed using overloads with :Cumulative/:Chained
 
 3.01 Tue Dec  5 16:36:42 EST 2006

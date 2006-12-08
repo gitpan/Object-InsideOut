@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.03;
+our $VERSION = 3.04;
 
-use Object::InsideOut::Exception 3.03;
-use Object::InsideOut::Util 3.03 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.03;
+use Object::InsideOut::Exception 3.04;
+use Object::InsideOut::Util 3.04 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.04;
 
 use B ();
 use Scalar::Util 1.10;
@@ -62,6 +62,7 @@ if (! exists($GBL{'isa'})) {
             type => {},         # :Type
             weak => {},         # :Weak
             deep => {},         # :Deep
+            def  => {},         # :Default
 
             regen => {          # Fix field keys during CLONE
                 type => [],
@@ -525,6 +526,20 @@ sub MODIFY_HASH_ATTRIBUTES :Sub
             push(@{$GBL{'fld'}{'regen'}{'deep'}}, $hash);
         }
 
+        # Defaults
+        elsif ($attr =~ /^Def(?:ault)?[(]([^)]+)[)]$/i) {
+            my $val;
+            eval '$val = $1';
+            if ($@) {
+                OIO::Attribute->die(
+                    'location'  => [ $pkg, (caller(2))[1,2] ],
+                    'message'   => "Bad ':Default' attribute in package '$pkg'",
+                    'Attribute' => $attr,
+                    'Error'     => $@);
+            }
+            push(@{$GBL{'fld'}{'def'}{$pkg}}, [ $hash, $val ]);
+        }
+
         # Field name for dump
         elsif ($attr =~ /^Name\s*[(]\s*'?([^)'\s]+)'?\s*[)]/i) {
             $GBL{'dump'}{'fld'}{$pkg}{$1} = { fld => $hash, src => 'Name' };
@@ -592,6 +607,20 @@ sub MODIFY_ARRAY_ATTRIBUTES :Sub
         elsif ($attr =~ /^Deep$/i) {
             $GBL{'fld'}{'deep'}{$array} = 1;
             push(@{$GBL{'fld'}{'regen'}{'deep'}}, $array);
+        }
+
+        # Defaults
+        elsif ($attr =~ /^Def(?:ault)?[(]([^)]+)[)]$/i) {
+            my $val;
+            eval "\$val = $1";
+            if ($@) {
+                OIO::Attribute->die(
+                    'location'  => [ $pkg, (caller(2))[1,2] ],
+                    'message'   => "Bad ':Default' attribute in package '$pkg'",
+                    'Attribute' => $attr,
+                    'Error'     => $@);
+            }
+            push(@{$GBL{'fld'}{'def'}{$pkg}}, [ $array, $val ]);
         }
 
         # Field name for dump
@@ -998,10 +1027,10 @@ sub process_fields :Sub(Private)
 
                 # Restore contents
                 if ($contents) {
-                    if (ref($fld) eq 'ARRAY') {
-                        @{$fld} = @{$contents};
-                    } else {
+                    if (ref($fld) eq 'HASH') {
                         %{$fld} = %{$contents};
+                    } else {
+                        @{$fld} = @{$contents};
                     }
                 }
             }
@@ -1095,17 +1124,18 @@ sub CLONE
     }
 
     # Fix field references
-    my $regen = $GBL{'fld'}{'regen'};
-    $GBL{'fld'}{'weak'} = { map { $_ => 1 } @{$$regen{'weak'}} };
-    $GBL{'fld'}{'deep'} = { map { $_ => 1 } @{$$regen{'deep'}} };
-    $GBL{'fld'}{'type'} = { map { $_->[0] => $_->[1] } @{$$regen{'type'}} };
+    my $g_fld = $GBL{'fld'};
+    my $regen = $$g_fld{'regen'};
+    $$g_fld{'type'} = { map { $_->[0] => $_->[1] } @{$$regen{'type'}} };
+    $$g_fld{'weak'} = { map { $_ => 1 } @{$$regen{'weak'}} };
+    $$g_fld{'deep'} = { map { $_ => 1 } @{$$regen{'deep'}} };
 
     # Process non-thread-shared objects
     my $g_obj     = $GBL{'obj'};
     my $trees     = $GBL{'tree'}{'td'};
     my $id_subs   = $GBL{'sub'}{'id'};
-    my $fld_ref   = $GBL{'fld'}{'ref'};
-    my $weak      = $GBL{'fld'}{'weak'};
+    my $fld_ref   = $$g_fld{'ref'};
+    my $weak      = $$g_fld{'weak'};
     my $repl_subs = $GBL{'sub'}{'repl'};
     my $do_repl   = %{$repl_subs};
     foreach my $class (keys(%{$g_obj})) {
@@ -1148,15 +1178,15 @@ sub CLONE
                 # with the new object ID
                 foreach my $pkg (@tree) {
                     foreach my $fld (@{$$fld_ref{$pkg}}) {
-                        if (ref($fld) eq 'ARRAY') {
-                            $$fld[$$obj] = delete($$fld[$old_id]);
-                            if ($$weak{$fld}) {
-                                Scalar::Util::weaken($$fld[$$obj]);
-                            }
-                        } else {
+                        if (ref($fld) eq 'HASH') {
                             $$fld{$$obj} = delete($$fld{$old_id});
                             if ($$weak{'weak'}{$fld}) {
                                 Scalar::Util::weaken($$fld{$$obj});
+                            }
+                        } else {
+                            $$fld[$$obj] = delete($$fld[$old_id]);
+                            if ($$weak{$fld}) {
+                                Scalar::Util::weaken($$fld[$$obj]);
                             }
                         }
                     }
@@ -1458,24 +1488,39 @@ sub new :MergeArgs
         my $spec = $$g_args{$pkg};
         my $init = $$init_subs{$pkg};
 
-        # Nothing to initialize for this class
-        next if (!$spec && !$init);
+        if ($spec || $init) {
+            # If have InitArgs, then process args with it.  Otherwise, all the
+            # args will be sent to the Init subroutine.
+            my $args = ($spec) ? _args($pkg, $self, $spec, $all_args)
+                               : $all_args;
 
-        # If have InitArgs, then process args with it.  Otherwise, all the
-        # args will be sent to the Init subroutine.
-        my $args = ($spec) ? _args($pkg, $self, $spec, $all_args)
-                           : $all_args;
+            if ($init) {
+                # Send remaining args, if any, to Init subroutine
+                local $SIG{'__DIE__'} = 'OIO::trap';
+                $self->$init($args);
 
-        if ($init) {
-            # Send remaining args, if any, to Init subroutine
-            local $SIG{'__DIE__'} = 'OIO::trap';
-            $self->$init($args);
+            } elsif (%$args) {
+                # It's an error if there are unhandled args, but no :Init sub
+                OIO::Args->die(
+                    'message' => "Unhandled arguments for class '$class': " . join(', ', keys(%$args)),
+                    'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
+            }
+        }
 
-        } elsif (%$args) {
-            # It's an error if there are unhandled args, but no :Init sub
-            OIO::Args->die(
-                'message' => "Unhandled arguments for class '$class': " . join(', ', keys(%$args)),
-                'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
+        # Set any defaults
+        if (my $def = $GBL{'fld'}{'def'}{$pkg}) {
+            foreach my $dat (@{$def}) {
+                my ($fld, $val) = @{$dat};
+                if (ref($fld) eq 'HASH') {
+                    if (! exists($$fld{$$self})) {
+                        $self->set($fld, $val);
+                    }
+                } else {
+                    if (! exists($$fld[$$self])) {
+                        $self->set($fld, $val);
+                    }
+                }
+            }
         }
     }
 
@@ -1512,18 +1557,7 @@ sub clone
         foreach my $fld (@{$$fld_ref{$pkg}}) {
             my $fdeep = $is_deep || $$deep{$fld};  # Deep clone the field?
             lock($fld) if ($am_sharing);
-            if (ref($fld) eq 'ARRAY') {
-                if ($fdeep && $am_sharing) {
-                    $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
-                } elsif ($fdeep) {
-                    $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
-                } else {
-                    $$fld[$$clone] = $$fld[$$parent];
-                }
-                if ($$weak{$fld}) {
-                    Scalar::Util::weaken($$fld[$$clone]);
-                }
-            } else {
+            if (ref($fld) eq 'HASH') {
                 if ($fdeep && $am_sharing) {
                     $$fld{$$clone} = Object::InsideOut::Util::shared_clone($$fld{$$parent});
                 } elsif ($fdeep) {
@@ -1533,6 +1567,17 @@ sub clone
                 }
                 if ($$weak{$fld}) {
                     Scalar::Util::weaken($$fld{$$clone});
+                }
+            } else {
+                if ($fdeep && $am_sharing) {
+                    $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
+                } elsif ($fdeep) {
+                    $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
+                } else {
+                    $$fld[$$clone] = $$fld[$$parent];
+                }
+                if ($$weak{$fld}) {
+                    Scalar::Util::weaken($$fld[$$clone]);
                 }
             }
         }
@@ -1609,27 +1654,27 @@ sub set
         threads::shared::_id($field))
     {
         lock($field);
-        if ($fld_type eq 'ARRAY') {
-            $$field[$$self] = make_shared($data);
-        } else {
+        if ($fld_type eq 'HASH') {
             $$field{$$self} = make_shared($data);
+        } else {
+            $$field[$$self] = make_shared($data);
         }
 
     } else {
         # No sharing - just store the data
-        if ($fld_type eq 'ARRAY') {
-            $$field[$$self] = $data;
-        } else {
+        if ($fld_type eq 'HASH') {
             $$field{$$self} = $data;
+        } else {
+            $$field[$$self] = $data;
         }
     }
 
     # Weaken data, if required
     if ($weak) {
-        if ($fld_type eq 'ARRAY') {
-            Scalar::Util::weaken($$field[$$self]);
-        } else {
+        if ($fld_type eq 'HASH') {
             Scalar::Util::weaken($$field{$$self});
+        } else {
+            Scalar::Util::weaken($$field[$$self]);
         }
     }
 }

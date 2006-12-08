@@ -591,6 +591,14 @@ added to the C<:Init> argument hash ref (e.g., S<C<{ 'data' =E<gt> 'foo' }>>).
 
 C<Default> may be abbreviated to C<Def>.
 
+Fields can also be assigned a default value even if not associated with an
+initialization parameter:
+
+ my @data :Field
+          :Default('foo');
+
+C<:Default> may be abbreviated to C<:Def>.
+
 =head2 Parameter Name Matching
 
 Rather than having to rely on exact matches to parameter keys in the
@@ -633,9 +641,16 @@ found, are called in order from the bottom of the class hierarchy upwards
 The subroutine should expect two arguments:  The newly created
 (un-initialized) object (i.e., C<$self>), and a hash ref of all the parameters
 from the C<-E<gt>new()> method call, including any additional parameters added
-by other C<:PreInit> subroutines.  The hash ref will not be exactly as
-supplied to C<-E<gt>new()>, but will be I<flattened> into a single hash ref.
-For example,
+by other C<:PreInit> subroutines.
+
+ sub pre_init :PreInit
+ {
+     my ($self, $args) = @_;
+     ...
+ }
+
+The parameter hash ref will not be exactly as supplied to C<-E<gt>new()>, but
+will be I<flattened> into a single hash ref.  For example,
 
  my $obj = My::Class->new(
      'param_X' => 'value_X',
@@ -658,10 +673,15 @@ would produce
 as the hash ref to the C<:PreInit> subroutine.
 
 The C<:PreInit> subroutine may then add, modify or even remove any parameters
-from the hash ref as needed for its purposes.
+from the hash ref as needed for its purposes.  After all the C<:PreInit>
+subroutines have been executed, object initialization will then proceed using
+the resulting parameter hash.
 
-After all the C<:PreInit> subroutines have been executed, object
-initialization will then proceed using the resulting parameter hash.
+The C<:PreInit> subroutine should not try to set data in its class's fields or
+in other class's fields (e.g., using I<set> methods) as such changes will be
+overwritten during initialization phase which follows preinitialization.  The
+C<:PreInit> subroutine is only intended for modifying initialization
+parameters prior to initialization.
 
 =head1 ACCESSOR GENERATION
 
