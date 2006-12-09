@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.04;
+our $VERSION = 3.05;
 
-use Object::InsideOut::Exception 3.04;
-use Object::InsideOut::Util 3.04 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.04;
+use Object::InsideOut::Exception 3.05;
+use Object::InsideOut::Util 3.05 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.05;
 
 use B ();
 use Scalar::Util 1.10;
@@ -103,6 +103,7 @@ if (! exists($GBL{'isa'})) {
         share => {              # Object sharing between threads
             cl  => {},
             obj => make_shared({}),
+            ok  => $threads::shared::threads_shared,
         },
     );
 
@@ -665,6 +666,7 @@ sub _ID :Sub
     # Save deleted IDs for later reuse
     my $reuse = $GBL{'id'}{'reuse'};
     if ($id) {
+        lock($reuse) if $GBL{'share'}{'ok'};
         if (! exists($$reuse{$tree})) {
             $$reuse{$tree} = make_shared([]);
         }
@@ -689,6 +691,7 @@ sub _ID :Sub
 
     # Return the next ID
     my $g_id = $GBL{'id'}{'obj'};
+    lock($g_id) if $GBL{'share'}{'ok'};
     if (! exists($$g_id{$tree})) {
         $$g_id{$tree} = make_shared([]);
     }
@@ -791,8 +794,8 @@ sub initialize :Sub(Private)
     }
 
     # If needed, process any thread object sharing flags
-    my $sh_cl = $GBL{'share'}{'cl'};
-    if ($threads::shared::threads_shared && %{$sh_cl}) {
+    if ($GBL{'share'}{'ok'}) {
+        my $sh_cl = $GBL{'share'}{'cl'};
         foreach my $flag_class (keys(%{$sh_cl})) {
             # Find the class in any class tree
             foreach my $tree (values(%{$trees})) {
@@ -1089,7 +1092,7 @@ sub set_sharing :Sub(Private)
 # Determines if a class's objects are shared between threads
 sub is_sharing :Sub(Private)
 {
-    return if ! $threads::shared::threads_shared;
+    return if ! $GBL{'share'}{'ok'};
     my $class = $_[0];
     my $sh_cl = $GBL{'share'}{'cl'};
     return (exists($$sh_cl{$class}) && $$sh_cl{$class}{'share'});
@@ -1110,10 +1113,16 @@ sub CLONE
     # Set thread ID for the above
     $GBL{'tid'} = $tid;
 
+    if ($threads::shared::threads_shared && ! $GBL{'share'}{'ok'}) {
+        OIO::Code->die(
+            'message' => q/'threads::shared' imported after Object::InsideOut initialized/,
+            'Info'    => q/Add 'use threads::shared;' to the start of your application code/);
+    }
+
     # Process thread-shared objects
     {
         my $sh_obj = $GBL{'share'}{'obj'};
-        lock($sh_obj);
+        lock($sh_obj) if $GBL{'share'}{'ok'};
 
         # Add thread ID to every object in the thread tracking registry
         foreach my $class (keys(%{$sh_obj})) {
@@ -1225,7 +1234,7 @@ sub _obj :Sub(Private)
 
         # Add thread tracking list for this thread-shared object
         my $sh_obj = $GBL{'share'}{'obj'};
-        lock($sh_obj);
+        lock($sh_obj) if $GBL{'share'}{'ok'};
         if (exists($$sh_obj{$class})) {
             $$sh_obj{$class}{$$self} = make_shared([ $GBL{'tid'} ]);
         } else {
@@ -1650,7 +1659,7 @@ sub set
     }
 
     # Handle sharing
-    if ($threads::shared::threads_shared &&
+    if ($GBL{'share'}{'ok'} &&
         threads::shared::_id($field))
     {
         lock($field);

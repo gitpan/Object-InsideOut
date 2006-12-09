@@ -220,5 +220,5 @@ sub dump
 
 
 # Ensure correct versioning
-my $VERSION = 3.04;
-($Object::InsideOut::VERSION == 3.04) or die("Version mismatch\n");
+my $VERSION = 3.05;
+($Object::InsideOut::VERSION == 3.05) or die("Version mismatch\n");

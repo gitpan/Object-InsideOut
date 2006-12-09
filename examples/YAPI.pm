@@ -2,11 +2,11 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-
     my $threaded_okay;   # Can we do indicators using threads?
     BEGIN {
         eval {
             require threads;
+            require threads::shared;
             die if ($threads::VERSION lt '1.31');
         };
         $threaded_okay = !$@;

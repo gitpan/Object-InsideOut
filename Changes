@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.05 Fri Dec  8 20:02:17 EST 2006
+	- Catch when threads::shared loaded after OIO initialized
+
 3.04 Fri Dec  8 13:17:51 EST 2006
 	- Added :Default(...) for :Field's
 

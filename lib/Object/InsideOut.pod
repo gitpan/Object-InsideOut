@@ -531,6 +531,10 @@ because the key C<MY_PARAM> is specified in the C<:InitArgs> hash.
 C<_init> checks that the parameter C<MY_PARAM> exists in the hash ref, and
 then (since it does exist) adds C<$parm> to the object's C<@my_field> field.
 
+=over
+
+=item Setting Data
+
 Data processed by the C<:Init> subroutine may be placed directly into the
 class's field arrays (hashes) using the object's ID (i.e., C<$$self>):
 
@@ -543,6 +547,17 @@ use the L<-E<gt>set()|/"Setting Data"> method:
 
 which handles converting the data to a shared format when needed for
 applications using L<threads::shared>.
+
+=item All Parameters
+
+The C<:InitArgs> hash and the C<:Arg> attribute on fields act as filters that
+constrain which initialization parameters are and are not sent to the C<:Init>
+subroutine.  If, however, a class does not have an C<:InitArgs> hash B<and>
+does not use the C<:Arg> attribute on any of its fields, then its C<:Init>
+subroutine (if it exists, of course) will get all the initialization
+parameters supplied to the C<-E<gt>new()> method.
+
+=back
 
 =head2 Mandatory Parameters
 
