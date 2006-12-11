@@ -163,6 +163,9 @@ MAIN:
                           'Bar' => 'Bar',
                           'Baz' => 'Baz' }      => 'we_are');
 
+SKIP: {
+    skip('due to Perl 5.8.0 bug', 2) if ($] == 5.008);
+
     my @izza = @{$baz};
     is_deeply(\@izza, [ 'Baz isa Baz',
                         'Baz isa Bar',
@@ -172,6 +175,7 @@ MAIN:
     is_deeply(\@says, [ "Foo says 'I am Foo.'",
                         "Bar says 'I am Bar son of Foo.'",
                         "Baz says 'I am Baz son of Bar son of Foo.'" ] => 'bork');
+}
 
 }
 
