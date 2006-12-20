@@ -15,7 +15,7 @@ package My::Class; {
     }
 
     my @aa :Field
-           :Acc(aa)
+           :Acc(aa) :Name(aa)
            :Type(array);
     my @ar :Field
            :Acc(ar)
@@ -27,7 +27,7 @@ package My::Class; {
            :Acc(hh)
            :Type(hash);
     my @hr :Field
-           :Acc(hr)
+           :Acc(hr) :Name(hr)
            :Type(hashref);
     my @mc :Field
            :Acc(mc)

@@ -2,7 +2,7 @@ package Bundle::Object::InsideOut;
 
 use strict;
 
-our $VERSION = 3.06;
+our $VERSION = 3.07;
 
 1;
 
@@ -32,7 +32,7 @@ Test::Pod 1.26                  - Checks POD syntax
 
 Devel::Symdump 2.0604           - Used by Pod::Coverage
 
-File::Spec 3.23                 - Used by Pod::Parser
+File::Spec 3.24                 - Used by Pod::Parser
 
 Pod::Parser 1.35                - Used by Pod::Coverage
 
@@ -40,7 +40,7 @@ Pod::Coverage 0.18              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.53                    - Support for threads
+threads 1.54                    - Support for threads
 
 threads::shared 1.05            - Support for sharing objects between threads
 
@@ -54,7 +54,7 @@ Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.06          - Inside-out object support
+Object::InsideOut 3.07          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 

@@ -1,10 +1,13 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.07 Wed Dec 20 08:22:30 EST 2006
+	- Fixed bug with :Name attribute
+
 3.06 Mon Dec 11 15:03:13 EST 2006
 	- Updates to Bundle::Object::InsideOut
 	- Skip certain tests under 5.8.0
 
-Fri Dec  8 20:02:17 EST 2006
+3.05 Fri Dec  8 20:02:17 EST 2006
 	- Catch when threads::shared loaded after OIO initialized
 
 3.04 Fri Dec  8 13:17:51 EST 2006

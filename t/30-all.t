@@ -17,7 +17,7 @@ package My::Class; {
     my @data :Field('all'=>'data', 'type' => 'num');
     my @info :Field({ 'std'=>'info', 'arg'=>'scalar', 'type' => \&My::Class::is_scalar });
     my @foo  :Field
-             :Acc(foo)
+             :Acc(foo) :Name(foo)
              :Arg(FOO) :Type(name => \&My::Class::is_int);
     my @bar  :Field('all'=>'bar', 'type' => 'ARRAY');
     my @baz  :Field

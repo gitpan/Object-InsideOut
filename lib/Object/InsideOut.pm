@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.06;
+our $VERSION = 3.07;
 
-use Object::InsideOut::Exception 3.06;
-use Object::InsideOut::Util 3.06 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.06;
+use Object::InsideOut::Exception 3.07;
+use Object::InsideOut::Util 3.07 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.07;
 
 use B ();
 use Scalar::Util 1.10;
@@ -2105,7 +2105,7 @@ sub create_accessors :Sub(Private)
                 'Attribute' => $attr);
         }
         if (! exists($$dump{$get}) ||
-            ($$dump{$get}[1] ne 'Name'))
+            ($$dump{$get}{'src'} ne 'Name'))
         {
             $$dump{$get} = { fld => $field_ref, src => 'Get' };
         }
@@ -2120,7 +2120,7 @@ sub create_accessors :Sub(Private)
                 'Attribute' => $attr);
         }
         if (! exists($$dump{$set}) ||
-            ($$dump{$set}[1] ne 'Name'))
+            ($$dump{$set}{'src'} ne 'Name'))
         {
             $$dump{$set} = { fld => $field_ref, src => 'Set' };
         }

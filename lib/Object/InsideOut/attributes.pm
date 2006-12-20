@@ -79,5 +79,5 @@ sub FETCH_CODE_ATTRIBUTES   :Sub { return (FETCH_ATTRS('CODE',   @_)); }
 
 
 # Ensure correct versioning
-my $VERSION = 3.06;
-($Object::InsideOut::VERSION == 3.06) or die("Version mismatch\n");
+my $VERSION = 3.07;
+($Object::InsideOut::VERSION == 3.07) or die("Version mismatch\n");
