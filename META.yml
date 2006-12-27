@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Object-InsideOut
-version:             3.07
+version:             3.08
 abstract:            Comprehensive inside-out object support module
 license:             perl
 generated_by:        ExtUtils::MakeMaker version 6.31

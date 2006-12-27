@@ -53,6 +53,7 @@ SKIP: {
                             qr/^sub_name$/,
                             qr/^AUTOLOAD$/,
                             qr/^CLONE$/,
+                            qr/^CLONE_SKIP$/,
                             qr/^DESTROY$/,
                             qr/^MODIFY_ARRAY_ATTRIBUTES$/,
                             qr/^MODIFY_CODE_ATTRIBUTES$/,

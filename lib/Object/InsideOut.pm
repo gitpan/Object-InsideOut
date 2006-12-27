@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.07;
+our $VERSION = 3.08;
 
-use Object::InsideOut::Exception 3.07;
-use Object::InsideOut::Util 3.07 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.07;
+use Object::InsideOut::Exception 3.08;
+use Object::InsideOut::Util 3.08 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.08;
 
 use B ();
 use Scalar::Util 1.10;
@@ -530,7 +530,7 @@ sub MODIFY_HASH_ATTRIBUTES :Sub
         # Defaults
         elsif ($attr =~ /^Def(?:ault)?[(]([^)]+)[)]$/i) {
             my $val;
-            eval '$val = $1';
+            eval "\$val = $1";
             if ($@) {
                 OIO::Attribute->die(
                     'location'  => [ $pkg, (caller(2))[1,2] ],
@@ -1450,8 +1450,7 @@ sub _args :Sub(Private)
         }
 
         # If the destination field is specified, then put it in, and remove it
-        # from the found args hash.  If thread-sharing, then make sure the
-        # value is thread-shared.
+        # from the found args hash.
         if (my $field = hash_re($spec_item, qr/^FIELD$/i)) {
             $self->set($field, delete($found{$key}));
         }
@@ -1494,9 +1493,13 @@ sub new :MergeArgs
     my $g_args    = $GBL{'args'};
     my $init_subs = $GBL{'sub'}{'init'};
     foreach my $pkg (@{$GBL{'tree'}{'td'}{$class}}) {
+        # Set any defaults
+        if (my $def = $GBL{'fld'}{'def'}{$pkg}) {
+            $self->set(@{$_}) foreach (@{$def});
+        }
+
         my $spec = $$g_args{$pkg};
         my $init = $$init_subs{$pkg};
-
         if ($spec || $init) {
             # If have InitArgs, then process args with it.  Otherwise, all the
             # args will be sent to the Init subroutine.
@@ -1513,22 +1516,6 @@ sub new :MergeArgs
                 OIO::Args->die(
                     'message' => "Unhandled arguments for class '$class': " . join(', ', keys(%$args)),
                     'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
-            }
-        }
-
-        # Set any defaults
-        if (my $def = $GBL{'fld'}{'def'}{$pkg}) {
-            foreach my $dat (@{$def}) {
-                my ($fld, $val) = @{$dat};
-                if (ref($fld) eq 'HASH') {
-                    if (! exists($$fld{$$self})) {
-                        $self->set($fld, $val);
-                    }
-                } else {
-                    if (! exists($$fld[$$self])) {
-                        $self->set($fld, $val);
-                    }
-                }
             }
         }
     }
@@ -2070,6 +2057,21 @@ sub create_accessors :Sub(Private)
             ! hash_re($$g_args{$arg}, qr/^TYPE$/i))
         {
             $$g_args{$arg}{'TYPE'} = $$fld_type{$field_ref}{'type'};
+        }
+
+        # Add default to :InitArgs
+        if (my $g_def = delete($GBL{'fld'}{'def'}{$pkg})) {
+            my @defs;
+            foreach my $item (@{$g_def}) {
+                if ($field_ref == $$item[0]) {
+                    $$g_args{$arg}{'DEFAULT'} = $$item[1];
+                } else {
+                    push(@defs, $item);
+                }
+            }
+            if (@defs) {
+                $GBL{'fld'}{'def'}{$pkg} = \@defs;
+            }
         }
     }
 
@@ -2744,6 +2746,15 @@ initialize();
     CHECK {
         initialize();
     }
+}
+
+# Initialize just before cloning a thread
+sub CLONE_SKIP
+{
+    if ($_[0] eq __PACKAGE__) {
+        initialize();
+    }
+    return 0;
 }
 
 # Workaround for Perl's "in cleanup" bug

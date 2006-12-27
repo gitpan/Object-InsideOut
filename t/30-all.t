@@ -26,6 +26,15 @@ package My::Class; {
     my @bork :Field
              :Def('bork')
              :Get(bork);
+    my %faz  :Field
+             :Arg('zzz')
+             :Def('snooze');
+
+    sub init :Init
+    {
+        my ($self, $args) = @_;
+        Test::More::is($faz{$$self}, 'snooze' => 'default assigned before :Init');
+    }
 }
 
 package main;

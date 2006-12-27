@@ -590,7 +590,7 @@ parameters:
 
 If an optional parameter with a specified default is missing from the argument
 list to C<-E<gt>new()>, then the default is assigned to the field when the
-object is created.
+object is created (before the C<:Init> subroutine, if any, is called).
 
 The format for C<:Init> handled parameters is:
 
@@ -611,6 +611,9 @@ initialization parameter:
 
  my @data :Field
           :Default('foo');
+
+Note that when using C<:Default>, the value must be properly specified (e.g.,
+strings must be quoted as illustrated above).
 
 C<:Default> may be abbreviated to C<:Def>.
 
