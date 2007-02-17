@@ -6,7 +6,7 @@ use Test::More 'no_plan';
 package My::Class; {
     use Object::InsideOut;
 
-    sub is_scalar : Private { return (! ref(shift)); }
+    sub is_scalar :Private { return (! ref(shift)); }
 
     sub is_int {
         my $arg = $_[0];
@@ -14,15 +14,17 @@ package My::Class; {
                 (int($arg) == $arg));
     }
 
-    my @aa : Field('acc'=>'aa', 'type' => 'array');
-    my @as : Field('acc'=>'as', 'type' => 'array(My::Class)');
-    my @ar : Field('acc'=>'ar', 'type' => 'array_ref');
-    my @cc : Field({'acc'=>'cc', 'type' => sub{ shift > 0 } });
-    my @hh : Field('acc'=>'hh', 'type' => 'hash');
-    my @hr : Field('acc'=>'hr', 'type' => 'hashref');
-    my @mc : Field({'acc'=>'mc', 'type' => 'My::Class'});
-    my @nn : Field({'acc'=>'nn', 'type' => 'num'});
-    my @ss : Field({'acc'=>'ss', 'type' => \&My::Class::is_scalar });
+    my @aa :Field('acc'=>'aa', 'type' => 'array');
+    my @as :Field('acc'=>'as', 'type' => 'array(My::Class)');
+    my @ar :Field('acc'=>'ar', 'type' => 'array_ref');
+    my @cc :Field({'acc'=>'cc', 'type' => sub{ shift > 0 } });
+    my @hh :Field('acc'=>'hh', 'type' => 'hash');
+    my @hr :Field('acc'=>'hr', 'type' => 'hashref');
+    my @mc :Field({'acc'=>'mc', 'type' => 'My::Class'});
+    my @nn :Field({'acc'=>'nn', 'type' => 'num'});
+    my @ss :Field
+           :Acc(ss)
+           :Type(\&My::Class::is_scalar);
 
     my %init_args :InitArgs = (
         'DATA' => {

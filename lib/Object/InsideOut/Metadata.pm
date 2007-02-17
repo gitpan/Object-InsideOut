@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 3.08;
+    our $VERSION = 3.09;
 }
 
 
@@ -101,8 +101,8 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 3.08 qw(hash_re);
-use Object::InsideOut 3.08;
+use Object::InsideOut::Util 3.09 qw(hash_re);
+use Object::InsideOut 3.09;
 
 my @CLASSES :Field;
 my @FOREIGN :Field;
@@ -270,7 +270,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 3.08
+This document describes Object::InsideOut::Metadata version 3.09
 
 =head1 SYNOPSIS
 
@@ -821,7 +821,7 @@ Jerry D. Hedden, S<E<lt>jdhedden AT cpan DOT orgE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2006 Jerry D. Hedden. All rights reserved.
+Copyright 2006 - 2007 Jerry D. Hedden. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.

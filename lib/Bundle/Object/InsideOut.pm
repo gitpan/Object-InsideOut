@@ -2,7 +2,7 @@ package Bundle::Object::InsideOut;
 
 use strict;
 
-our $VERSION = 3.08;
+our $VERSION = 3.09;
 
 1;
 
@@ -20,7 +20,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 Test::Harness 2.64              - Used for module testing
 
-Test::Simple 0.66               - Used for module testing
+Test::Simple 0.67               - Used for module testing
 
 Scalar::Util 1.19               - Used by Object::InsideOut
 
@@ -30,7 +30,7 @@ Pod::Simple 3.04                - Used by Test::Pod
 
 Test::Pod 1.26                  - Checks POD syntax
 
-Devel::Symdump 2.0604           - Used by Pod::Coverage
+Devel::Symdump 2.07             - Used by Pod::Coverage
 
 File::Spec 3.24                 - Used by Pod::Parser
 
@@ -40,9 +40,9 @@ Pod::Coverage 0.18              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.57                    - Support for threads
+threads 1.59                    - Support for threads
 
-threads::shared 1.06            - Support for sharing objects between threads
+threads::shared 1.07            - Support for sharing objects between threads
 
 Want 0.12                       - :lvalue accessor support
 
@@ -54,17 +54,17 @@ Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.08          - Inside-out object support
+Object::InsideOut 3.09          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 
 HTML::Tagset 3.10               - Used by LWP::UserAgent
 
-HTML::Parser 3.55               - Used by LWP::UserAgent
+HTML::Parser 3.56               - Used by LWP::UserAgent
 
 LWP::UserAgent 2.033            - Used by Math::Random::MT::Auto
 
-Win32::API 0.45                 - Used by Math::Random::MT::Auto (Win XP only)
+Win32::API 0.46                 - Used by Math::Random::MT::Auto (Win XP only)
 
 Math::Random::MT::Auto 5.04     - Support for :SECURE mode
 
@@ -86,7 +86,7 @@ Jerry D. Hedden, S<E<lt>jdhedden AT cpan DOT orgE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2006 Jerry D. Hedden. All rights reserved.
+Copyright 2006 - 2007 Jerry D. Hedden. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.

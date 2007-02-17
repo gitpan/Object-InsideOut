@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.09 Fri Feb 16 22:21:05 EST 2007
+	- Exemptions for :Restricted/:Private accessors
+
 3.08 Wed Dec 27 09:13:28 EST 2006
 	- Apply defaults before :Init is called
 	- Do initialize() in CLONE_SKIP

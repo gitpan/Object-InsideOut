@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.08;
+our $VERSION = 3.09;
 
-use Object::InsideOut::Exception 3.08;
-use Object::InsideOut::Util 3.08 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.08;
+use Object::InsideOut::Exception 3.09;
+use Object::InsideOut::Util 3.09 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.09;
 
 use B ();
 use Scalar::Util 1.10;
@@ -1989,16 +1989,28 @@ sub create_accessors :Sub(Private)
                 $return = uc($val);
             }
             # Set accessor permission
-            elsif ($key_uc =~ /^PERM|^PRIV|^RESTRICT/) {
+            elsif ($key_uc =~ /^PERM|^PRIV|^REST/) {
                 if ($key_uc =~ /^PERM/) {
-                    $key_uc = uc($val);
-                    $val = 1;
-                }
-                if ($key_uc =~ /^PRIV/) {
-                    $private = $val;
-                }
-                if ($key_uc =~ /^RESTRICT/) {
-                    $restricted = $val;
+                    if ($val =~ /^PRIV/i) {
+                        my @exempt = split(/[(),\s]+/, $val);
+                        @exempt = grep { $_ } @exempt;
+                        shift(@exempt);
+                        unshift(@exempt, $pkg);
+                        $private = "'" . join("','", @exempt) . "'";
+                    } elsif ($val =~ /^REST/i) {
+                        my @exempt = split(/[(),\s]+/, $val);
+                        @exempt = grep { $_ } @exempt;
+                        shift(@exempt);
+                        $restricted = "'" . join("','", @exempt) . "'";
+                    }
+                } elsif ($key_uc =~ /^PRIV/) {
+                    if ($val) {
+                        $private = "'$pkg'";
+                    }
+                } elsif ($key_uc =~ /^REST/) {
+                    if ($val) {
+                        $restricted = '';
+                    }
                 }
             }
             # :lvalue accessor
@@ -2212,9 +2224,9 @@ sub create_accessors :Sub(Private)
     foreach my $meth ($get, $set) {
         next if (! $meth);
         # Permissions
-        if ($private) {
+        if (defined($private)) {
             $meta{$meth}{'hidden'} = 1;
-        } elsif ($restricted) {
+        } elsif (defined($restricted)) {
             $meta{$meth}{'restricted'} = 1;
         }
     }
@@ -2359,17 +2371,20 @@ sub preamble_code :Sub(Private)
     my $code = '';
 
     # Permission checking code
-    if ($private) {
+    if (defined($private)) {
         $code = <<"_PRIVATE_";
     my \$caller = caller();
-    if (\$caller ne '$pkg') {
+    if (! grep { \$_ eq \$caller } ($private)) {
         OIO::Method->die('message' => "Can't call private method '$pkg->$name' from class '\$caller'");
     }
 _PRIVATE_
-    } elsif ($restricted) {
+    } elsif (defined($restricted)) {
         $code = <<"_RESTRICTED_";
     my \$caller = caller();
-    if (! \$caller->isa('$pkg') && ! $pkg->isa(\$caller)) {
+    if (! ((grep { \$_ eq \$caller } ($restricted)) ||
+           \$caller->isa('$pkg')                   ||
+           $pkg->isa(\$caller)))
+    {
         OIO::Method->die('message'  => "Can't call restricted method '$pkg->$name' from class '\$caller'");
     }
 _RESTRICTED_

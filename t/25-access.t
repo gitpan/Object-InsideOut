@@ -3,15 +3,15 @@ use warnings;
 
 use Test::More 'no_plan';
 
-package Foo;
-{
+package Foo; {
     use Object::InsideOut;
     my @data :Field('Standard' => 'data', 'Permission' => 'private');
     my @info :Field('Accessor' => 'info', 'Permission' => 'restricted');
+    my @also :Field
+             :Acc('Name' => 'also', 'Perm' => 'rest ( Bork , ) ');
 }
 
-package Bar;
-{
+package Bar; {
     use Object::InsideOut 'Foo';
 
     sub bar_data
@@ -27,6 +27,24 @@ package Bar;
             return ($self->info());
         }
         $self->info(@_);
+    }
+}
+
+package Bork; {
+    sub exempt
+    {
+        my $self = shift;
+        my $obj = shift;
+        if (! @_) {
+            return ($obj->also());
+        }
+        $obj->also(@_);
+    }
+
+    sub cant
+    {
+        my ($self, $obj) = @_;
+        $obj->info();
     }
 }
 
@@ -50,6 +68,13 @@ is($@->error, q/Can't call private method 'Foo->get_data' from class 'Bar'/
                                     , 'Private get method');
 
 ok($bar->bar_info(10)               => 'Restricted set');
-is($bar->bar_info(), 10             => 'Restricted get')
+is($bar->bar_info(), 10             => 'Restricted get');
+
+eval { Bork->cant($bar); };
+is($@->error, q/Can't call restricted method 'Foo->info' from class 'Bork'/
+                                    , 'Restricted method');
+
+ok(Bork->exempt($bar, 99)           => 'Exempt restricted set');
+is(Bork->exempt($bar), 99           => 'Exempt restricted get');
 
 # EOF

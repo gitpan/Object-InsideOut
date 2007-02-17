@@ -615,6 +615,32 @@ initialization parameter:
 Note that when using C<:Default>, the value must be properly specified (e.g.,
 strings must be quoted as illustrated above).
 
+Using an array or hash reference as a default will probably not produce the
+result that you might expect:
+
+ my @foo :Field
+         :Default({});
+
+This does b<not> result in a new empty hash reference being created for each
+new object.  Rather, a single empty hash reference is created when the module
+is loaded, and then that reference is assigned to each newly created object.
+In other words, it is equivalent to:
+
+ my %bar = ();
+
+ my @foo :Field
+         :Default(\%bar);
+
+To get the other result, assign a new empty hash reference using an C<:Init>
+subroutine:
+
+ sub _init :Init
+ {
+     my ($self, $args) = @_;
+
+     $foo[$$self] = {};
+ }
+
 C<:Default> may be abbreviated to C<:Def>.
 
 =head2 Parameter Name Matching
@@ -648,7 +674,7 @@ need for any parameter key pattern matching within the C<:Init> subroutine.
 
 C<Regexp> may be abbreviated to C<Regex> or C<Re>.
 
-=head1 OBJECT PRE-iNITIALIZATION
+=head1 OBJECT PRE-INITIALIZATION
 
 Occassionally, a child class may need to send a parameter to a parent class as
 part of object initialization.  This can be accomplished by supplying a
@@ -998,15 +1024,15 @@ on the two accessors, then you'll have to use separate C<:Get> and C<:Set>
 attributes on the field.
 
  # Create a private set method
- # and a restricted get method on the 'foo' field
+ #  and a restricted get method on the 'foo' field
  my @foo :Field
-         :Set('Name' => 'set_foo', 'Priv' => 1);
+         :Set('Name' => 'set_foo', 'Priv' => 1)
          :Get('Name' => 'get_foo', 'Rest' => 1);
 
  # Create a restricted set method
- # and a public get method on the 'bar' field
+ #  and a public get method on the 'bar' field
  my %bar :Field
-         :Set('Name' => 'set_bar', 'Perm' => 'restrict');
+         :Set('Name' => 'set_bar', 'Perm' => 'restrict')
          :Get(get_bar);
 
 C<Permission> may be abbreviated to C<Perm>; C<Private> may be abbreviated to
@@ -1026,9 +1052,15 @@ of C<:Restricted> and C<:Private> attributes.
 Without either of these attributes, most methods have I<public> access.  If
 desired, you may explicitly label them with the C<:Public> attribute.
 
-It is also possible to specify classes that are exempt from the C<:Restricted>
-and C<:Private> access permissions (i.e., the method may be called from those
+=head2 Exemptions
+
+It is also possible to specify classes that are exempt from the I<Restricted>
+and I<Private> access permissions (i.e., the method may be called from those
 classes as well):
+
+ my %foo :Field
+         :Acc('Name' => 'foo', 'Perm' => 'Restrict(Exempt::Class)')
+         :Get(get_bar);
 
  sub bar :Private(Some::Class, Another::Class)
  {
@@ -1263,6 +1295,28 @@ previous section.  For example:
          'Type' => 'list(My::Class)',
      },
  );
+
+One exception involves custom type checking:  If referenced in an C<:InitArgs>
+hash, the type checking subroutine cannot be made C<:Private>:
+
+ package My::Class; {
+     use Object::InsideOut;
+
+     sub check_type   # Cannot be :Private
+     {
+        ...
+     }
+
+     my %init_args :InitArgs = (
+         'ARG' => {
+             'Type' => \&check_type,
+         },
+     );
+
+     ...
+ }
+
+Also, as shown, it also doesn't have to be a fully-qualified name.
 
 =head1 CUMULATIVE METHODS
 
@@ -1987,7 +2041,7 @@ creation:
      }
  }
 
-=head2 RUNTIME INHERITANCE
+=head1 RUNTIME INHERITANCE
 
 The class method C<-E<gt>add_class()> provides the capability to dynamically
 add classes to a class hierarchy at runtime.
@@ -2012,24 +2066,15 @@ without having it create an actual subclass.
 =head2 Parameter Preprocessing
 
 You can specify a code ref (either in the form of an anonymous subroutine, or
-a fully-qualified subroutine name) for an object initialization parameter that
-will be called on that parameter prior to taking any of the other parameter
-actions described above.  Here's an example:
+a subroutine name) for an object initialization parameter that will be called
+on that parameter prior to taking any of the other parameter actions described
+above.  Here's an example:
 
  package My::Class; {
      use Object::InsideOut;
 
-     my @data :Field
-              :Arg('Name' => 'DATA', 'Preprocess' => \&My::Class::preproc);
-
-     my %init_args :InitArgs = (
-         'PARAM' => {
-             'Preprocess' => \&My::Class::preproc);
-         },
-     );
-
-     # The parameter preprocessing subroutine may be made 'Private'
-     sub preproc :Private
+     # The parameter preprocessing subroutine
+     sub preproc
      {
          my ($class, $param, $spec, $obj, $value) = @_;
 
@@ -2039,7 +2084,23 @@ actions described above.  Here's an example:
          # Return result
          return ...;
      }
+
+     my @data :Field
+              :Arg('Name' => 'DATA', 'Preprocess' => \&My::Class::preproc);
+
+     my %init_args :InitArgs = (
+         'PARAM' => {
+             'Preprocess' => \&preproc,
+         },
+     );
+
+     ...
  }
+
+When used in the C<:Arg> attribute, the subroutine name must be
+fully-qualified, as illustrated.  Further, if not referenced in the
+C<:InitArgs> hash, the preprocessing subroutine can be given the C<:Private>
+attribute.
 
 As the above illustrates, the parameter preprocessing subroutine is sent five
 arguments:
@@ -3060,7 +3121,7 @@ Jerry D. Hedden, S<E<lt>jdhedden AT cpan DOT orgE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2005, 2006 Jerry D. Hedden. All rights reserved.
+Copyright 2005 - 2007 Jerry D. Hedden. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.
