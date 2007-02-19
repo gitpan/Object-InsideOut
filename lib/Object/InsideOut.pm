@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.09;
+our $VERSION = 3.11;
 
-use Object::InsideOut::Exception 3.09;
-use Object::InsideOut::Util 3.09 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.09;
+use Object::InsideOut::Exception 3.11;
+use Object::InsideOut::Util 3.11 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.11;
 
 use B ();
 use Scalar::Util 1.10;
@@ -97,6 +97,7 @@ if (! exists($GBL{'isa'})) {
 
         # Currently executing thread
         tid => (($threads::threads) ? threads->tid() : 0),
+        # pids                  # MSWin32 pseudo-forks
 
         obj => {},              # Object registry for thread cloning
 
@@ -1107,12 +1108,19 @@ sub CLONE
     return if ($_[0] ne __PACKAGE__);
 
     # Don't execute twice for same thread
-    my $tid = threads->tid();
-    return if ($GBL{'tid'} == $tid);
+    my $tid;
+    if ($threads::threads) {
+        $tid = threads->tid();
+        return if ($GBL{'tid'} == $tid);
+        $GBL{'tid'} = $tid;
+    } else {
+        # MSWin32 pseudo-fork
+        return if (exists($GBL{'pids'}{$$}));
+        $GBL{'pids'}{$$} = undef;
+        $tid = ++$GBL{'tid'};
+    }
 
-    # Set thread ID for the above
-    $GBL{'tid'} = $tid;
-
+    # Check for delayed threads::shared usage
     if ($threads::shared::threads_shared && ! $GBL{'share'}{'ok'}) {
         OIO::Code->die(
             'message' => q/'threads::shared' imported after Object::InsideOut initialized/,
