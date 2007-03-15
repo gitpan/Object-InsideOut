@@ -923,8 +923,7 @@ accept arguments, return values, and so on:
 
 C<:lvalue> accessors can be used in L<method chains|/"Method Chaining">.
 
-B<CAVEATS>
-
+B<Caveats>:
 While still classified as I<experimental>, Perl's support for C<:lvalue>
 subroutines has been around since 5.6.0, and a good number of CPAN modules
 make use of them.
@@ -1783,12 +1782,22 @@ hierarchy.  If C<$data> is the string returned by using C<$obj-E<gt>dump(1)>,
 then it is C<eval>ed to turn it into an array ref, and then processed as
 above.
 
+B<Caveats>:
 If any of an object's fields are dumped to field name keys of the form
 C<ARRAY(0x...)> or C<HASH(0x...)> (see above), then the data will not be
 reloadable using C<Object::InsideOut-E<gt>pump()>.  To overcome this problem,
 the class developer must either add C<:Name> attributes to the C<:Field>
 declarations (see above), or provide a C<:Dumper>/C<:Pumper> pair of
 subroutines as described below.
+
+Dynamcially altering a class (e.g., using
+L<-E<gt>create_field()|/"DYNAMIC FIELD CREATION"> after objects have been
+dumped will result in C<undef> fields when pumped back in regardless of
+whether or not the added fields have defaults.
+
+Modifying the output from C<-E<gt>dump()>, and then feeding it into
+C<Object::InsideOut-E<gt>pump()> will work, but is not specificially
+supported.  If you know what you're doing, fine, but you're on your own.
 
 =item C<:Dumper> Subroutine Attribute
 

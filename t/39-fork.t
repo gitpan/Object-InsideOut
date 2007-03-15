@@ -2,8 +2,9 @@ use strict;
 use warnings;
 
 BEGIN {
-    if ($^O ne 'MSWin32') {
-        print("1..0 # Skip Not MSWin32\n");
+    use Config;
+    unless ($^O eq 'MSWin32' || $Config{'d_pseudofork'}) {
+        print("1..0 # Skip Not using pseudo-forks\n");
         exit(0);
     }
 }

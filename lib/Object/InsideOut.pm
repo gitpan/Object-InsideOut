@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.11;
+our $VERSION = 3.12;
 
-use Object::InsideOut::Exception 3.11;
-use Object::InsideOut::Util 3.11 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.11;
+use Object::InsideOut::Exception 3.12;
+use Object::InsideOut::Util 3.12 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.12;
 
 use B ();
 use Scalar::Util 1.10;
@@ -97,7 +97,7 @@ if (! exists($GBL{'isa'})) {
 
         # Currently executing thread
         tid => (($threads::threads) ? threads->tid() : 0),
-        # pids                  # MSWin32 pseudo-forks
+        # pids                  # Pseudo-forks
 
         obj => {},              # Object registry for thread cloning
 
@@ -211,7 +211,7 @@ sub import
         }
 
         # Restricted class
-        if ($pkg =~ /^:RESTRICT(?:ED)?\((.*)\)/i) {
+        if ($pkg =~ /^:RESTRICT(?:ED)?(?:\((.*)\))?/i) {
             *{$class.'::new'}
                 = wrap_RESTRICTED($class, 'new',
                                   sub { goto &Object::InsideOut::new },
@@ -223,7 +223,7 @@ sub import
         }
 
         # Private class
-        if ($pkg =~ /^:PRIV(?:ATE)?\((.*)\)/i) {
+        if ($pkg =~ /^:PRIV(?:ATE)?(?:\((.*)\))?/i) {
             *{$class.'::new'}
                 = wrap_PRIVATE($class, 'new',
                                sub { goto &Object::InsideOut::new },
@@ -1114,7 +1114,7 @@ sub CLONE
         return if ($GBL{'tid'} == $tid);
         $GBL{'tid'} = $tid;
     } else {
-        # MSWin32 pseudo-fork
+        # Pseudo-fork
         return if (exists($GBL{'pids'}{$$}));
         $GBL{'pids'}{$$} = undef;
         $tid = ++$GBL{'tid'};

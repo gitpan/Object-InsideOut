@@ -179,6 +179,9 @@ sub dump
 
         # Store object data
         foreach my $pkg (keys(%{$dump})) {
+            if (! exists($$GBL{'tree'}{'td'}{$pkg})) {
+                OIO::Args->die('message' => "Unknown class: $pkg");
+            }
             my $data = $$dump{$pkg};
 
             # Try to use a class-supplied pumper
@@ -220,5 +223,5 @@ sub dump
 
 
 # Ensure correct versioning
-my $VERSION = 3.11;
-($Object::InsideOut::VERSION == 3.11) or die("Version mismatch\n");
+my $VERSION = 3.12;
+($Object::InsideOut::VERSION == 3.12) or die("Version mismatch\n");

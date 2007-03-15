@@ -1,7 +1,10 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.12 Thu Mar 15 08:07:53 EDT 2007
+	- Fix for classes permissions
+
 3.11 Sun Feb 18 19:22:45 EST 2007
-	- Handle MSWin32 pseudoforks
+	- Handle pseudo-forks
 
 3.09 Fri Feb 16 22:21:05 EST 2007
 	- Exemptions for :Restricted/:Private accessors
