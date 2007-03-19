@@ -5,11 +5,11 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.12;
+our $VERSION = 3.13;
 
-use Object::InsideOut::Exception 3.12;
-use Object::InsideOut::Util 3.12 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.12;
+use Object::InsideOut::Exception 3.13;
+use Object::InsideOut::Util 3.13 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.13;
 
 use B ();
 use Scalar::Util 1.10;

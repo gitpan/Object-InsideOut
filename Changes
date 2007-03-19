@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.13 Mon Mar 19 09:36:46 EDT 2007
+	- Fix recursion bug caused by bad :Automethod
+
 3.12 Thu Mar 15 08:07:53 EDT 2007
 	- Fix for classes permissions
 

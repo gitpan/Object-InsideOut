@@ -98,6 +98,17 @@ package Baz; {
 }
 
 
+package NFG; {
+    use Object::InsideOut;
+
+    sub _automethod :Automethod {
+      my ($self, $val) = @_;
+      my $set=exists $_[1];
+      my $name=$_;
+    }
+}
+
+
 package main;
 
 MAIN:
@@ -178,6 +189,10 @@ MAIN:
     is(Bar->Baz::SUPER::foo(), 'Foo: Bar->foo'  => 'class::SUPER::method');
     is(Baz->bing(),            'Foo: Baz->bing' => 'SUPER::method');
     is(Bar->Baz::foo(),        'Baz: Bar->foo'  => 'class::method');
+
+    $obj = NFG->new();
+    eval { $obj->nfg(); };
+    like($@->error, qr/did not return a code ref/, 'Defective :Automethod');
 }
 
 exit(0);

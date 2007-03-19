@@ -79,10 +79,13 @@ sub AUTOLOAD
                 local $SIG{'__DIE__'} = 'OIO::trap';
                 if (my ($code, $ctype) = $automethod->(@_)) {
                     if (ref($code) ne 'CODE') {
+                        # Delete defective automethod
+                        delete($$automethods{$pkg});
                         # Not a code ref
                         OIO::Code->die(
                             'message' => ':Automethod did not return a code ref',
-                            'Info'    => ":Automethod in package '$pkg' invoked for method '$method'");
+                            'Info'    => "NOTICE: The defective :Automethod in package '$pkg' has been DELETED!",
+                            'Code'    => ":Automethod in package '$pkg' invoked for method '$method'");
                     }
 
                     if (defined($ctype)) {
@@ -169,5 +172,5 @@ sub AUTOLOAD
 
 
 # Ensure correct versioning
-my $VERSION = 3.12;
-($Object::InsideOut::VERSION == 3.12) or die("Version mismatch\n");
+my $VERSION = 3.13;
+($Object::InsideOut::VERSION == 3.13) or die("Version mismatch\n");
