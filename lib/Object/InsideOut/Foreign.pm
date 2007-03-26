@@ -30,12 +30,12 @@ sub inherit
         }
 
         # Flatten arg list
-        my @arg_objs;
-        while (my $arg = shift) {
-            if (ref($arg) eq 'ARRAY') {
-                push(@arg_objs, @{$arg});
+        my (@arg_objs, $_arg);
+        while (defined($_arg = shift)) {
+            if (ref($_arg) eq 'ARRAY') {
+                push(@arg_objs, @{$_arg});
             } else {
-                push(@arg_objs, $arg);
+                push(@arg_objs, $_arg);
             }
         }
 
@@ -143,12 +143,12 @@ sub inherit
         }
 
         # Flatten arg list
-        my @args;
-        while (my $arg = shift) {
-            if (ref($arg) eq 'ARRAY') {
-                push(@args, @{$arg});
+        my (@args, $_arg);
+        while (defined($_arg = shift)) {
+            if (ref($_arg) eq 'ARRAY') {
+                push(@args, @{$_arg});
             } else {
-                push(@args, $arg);
+                push(@args, $_arg);
             }
         }
 
@@ -270,5 +270,5 @@ sub inherit
 
 
 # Ensure correct versioning
-my $VERSION = 3.13;
-($Object::InsideOut::VERSION == 3.13) or die("Version mismatch\n");
+my $VERSION = 3.14;
+($Object::InsideOut::VERSION == 3.14) or die("Version mismatch\n");
