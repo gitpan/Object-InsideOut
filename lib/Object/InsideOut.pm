@@ -5,11 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = 3.14;
+our $VERSION = '3.15';
+$VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.14;
-use Object::InsideOut::Util 3.14 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.14;
+use Object::InsideOut::Exception 3.15;
+use Object::InsideOut::Util 3.15 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.15;
 
 use B ();
 use Scalar::Util 1.10;
@@ -1497,34 +1498,36 @@ sub new :MergeArgs
         }
     }
 
-    # Initialize object
-    my $g_args    = $GBL{'args'};
-    my $init_subs = $GBL{'sub'}{'init'};
-    foreach my $pkg (@{$GBL{'tree'}{'td'}{$class}}) {
-        # Set any defaults
+    my $tree = $GBL{'tree'}{'td'}{$class};
+
+    # Set any defaults
+    foreach my $pkg (@{$tree}) {
         if (my $def = $GBL{'fld'}{'def'}{$pkg}) {
             $self->set(@{$_}) foreach (@{$def});
         }
+    }
 
-        my $spec = $$g_args{$pkg};
-        my $init = $$init_subs{$pkg};
-        if ($spec || $init) {
-            # If have InitArgs, then process args with it.  Otherwise, all the
-            # args will be sent to the Init subroutine.
-            my $args = ($spec) ? _args($pkg, $self, $spec, $all_args)
-                               : $all_args;
+    # Process :InitArgs
+    my %pkg_args;
+    my $g_args = $GBL{'args'};
+    foreach my $pkg (@{$tree}) {
+        if (my $spec = $$g_args{$pkg}) {
+            $pkg_args{$pkg} = _args($pkg, $self, $spec, $all_args);
+        }
+    }
 
-            if ($init) {
-                # Send remaining args, if any, to Init subroutine
-                local $SIG{'__DIE__'} = 'OIO::trap';
-                $self->$init($args);
+    # Call :Init subs
+    my $init_subs = $GBL{'sub'}{'init'};
+    foreach my $pkg (@{$tree}) {
+        if (my $init = $$init_subs{$pkg}) {
+            local $SIG{'__DIE__'} = 'OIO::trap';
+            $self->$init($pkg_args{$pkg} || $all_args);
 
-            } elsif (%$args) {
-                # It's an error if there are unhandled args, but no :Init sub
-                OIO::Args->die(
-                    'message' => "Unhandled arguments for class '$class': " . join(', ', keys(%$args)),
-                    'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
-            }
+        } elsif ($pkg_args{$pkg} && %{$pkg_args{$pkg}}) {
+            # It's an error if there are unhandled args, but no :Init sub
+            OIO::Args->die(
+                'message' => "Unhandled arguments for class '$class': " . join(', ', keys(%{$pkg_args{$pkg}})),
+                'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
         }
     }
 

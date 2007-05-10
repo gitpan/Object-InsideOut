@@ -4,7 +4,8 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = 3.14;
+    our $VERSION = '3.15';
+    $VERSION = eval $VERSION;
 }
 
 
@@ -101,8 +102,8 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 3.14 qw(hash_re);
-use Object::InsideOut 3.14;
+use Object::InsideOut::Util 3.15 qw(hash_re);
+use Object::InsideOut 3.15;
 
 my @CLASSES :Field;
 my @FOREIGN :Field;
@@ -270,7 +271,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 3.14
+This document describes Object::InsideOut::Metadata version 3.15
 
 =head1 SYNOPSIS
 

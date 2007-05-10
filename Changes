@@ -1,8 +1,13 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.15 Thu May 10 17:19:55 2007
+	- Modified (and documented) object initialization sequence
+	- Improved file versioning
+	- Subversion repository on Google
+
 3.14 Mon Mar 26 15:35:57 EDT 2007
 	- Fix to Foreign.pm (courtesy of Michael Houghton)
-	- Updated verion numbers in POD
+	- Updated version numbers in POD
 
 3.13 Mon Mar 19 09:36:46 EDT 2007
 	- Fix recursion bug caused by bad :Automethod

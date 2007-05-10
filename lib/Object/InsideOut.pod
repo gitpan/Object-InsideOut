@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.14
+This document describes Object::InsideOut version 3.15
 
 =head1 SYNOPSIS
 
@@ -674,7 +674,7 @@ need for any parameter key pattern matching within the C<:Init> subroutine.
 
 C<Regexp> may be abbreviated to C<Regex> or C<Re>.
 
-=head1 OBJECT PRE-INITIALIZATION
+=head2 Object Pre-initialization
 
 Occassionally, a child class may need to send a parameter to a parent class as
 part of object initialization.  This can be accomplished by supplying a
@@ -726,6 +726,54 @@ in other class's fields (e.g., using I<set> methods) as such changes will be
 overwritten during initialization phase which follows preinitialization.  The
 C<:PreInit> subroutine is only intended for modifying initialization
 parameters prior to initialization.
+
+=head2 Initialization Sequence
+
+For the most part, object initialization can be conceptualized as proceeding
+from parent classes down through child classes.  As such, calling child class
+methods from a parent class during object initialization may not work because
+the object will not have been fully initialized in the child classes.
+
+Knowing the order of events during object initialization may help in
+determining when this can be done safely:
+
+=over
+
+=item 1.  The scalar reference for the object is created, populated with an
+L</"Object ID">, and blessed into the appropriate class.
+
+=item 2.  L<:PreInit|/"Object Pre-initialization"> subroutines are called in
+order from the bottom of the class hierarchy upwards (i.e., child classes
+first).
+
+=item 3.  From the top of the class hierarchy downwards (i.e., parent classes
+first), L</"Default Values"> are assigned to fields.  (These may be
+overwritten by subsequent steps below.)
+
+=item 4.  From the top of the class hierarchy downwards, parameters to the
+C<-E<gt>new()> method are processed for C<:Arg> field attributes and entries
+in the C<:InitArgs> hash:
+
+=over
+
+=item a.  L</"Parameter Preprocessing"> is performed.
+
+=item b.  Checks for L</"Mandatory Parameters"> are made.
+
+=item c.  L</"Default Values"> specified in the C<:InitArgs> hash are added
+for subsequent processing by the C<:Init> subroutine.
+
+=item d.  L<Type checking|/"TYPE CHECKING"> is performed.
+
+=item e.  L</"Field-Specific Parameters"> are assigned to fields.
+
+=back
+
+=item 5.  From the top of the class hierarchy downwards, L<:Init|/"Object
+Initialization Subroutines"> subroutines are called with parameters specified
+in the C<:InitArgs> hash.
+
+=back
 
 =head1 ACCESSOR GENERATION
 
@@ -3099,7 +3147,10 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.14/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.15/lib/Object/InsideOut.pm>
+
+Source repository:
+L<http://code.google.com/p/object-insideout/>
 
 Inside-out Object Model:
 L<http://www.perlmonks.org/?node_id=219378>,
