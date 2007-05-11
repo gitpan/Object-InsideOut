@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.17 Fri May 11 19:43:53 2007
+	- Fix for pseudo-forks
+
 3.16 Thu May 10 17:41:38 2007
 	- Minor mod for CPAN's PAUSE indexer
 

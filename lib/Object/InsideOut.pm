@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.16';
+our $VERSION = '3.17';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.16;
-use Object::InsideOut::Util 3.16 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.16;
+use Object::InsideOut::Exception 3.17;
+use Object::InsideOut::Util 3.17 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.17;
 
 use B ();
 use Scalar::Util 1.10;
@@ -1118,7 +1118,7 @@ sub CLONE
         # Pseudo-fork
         return if (exists($GBL{'pids'}{$$}));
         $GBL{'pids'}{$$} = undef;
-        $tid = ++$GBL{'tid'};
+        $tid = $GBL{'tid'};
     }
 
     # Check for delayed threads::shared usage
