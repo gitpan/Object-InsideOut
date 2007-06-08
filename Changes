@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.18 Fri Jun  8 18:31:32 2007
+	- Fixed secure mode breakage caused by MRMA upgrade
+
 3.17 Fri May 11 19:43:53 2007
 	- Fix for pseudo-forks
 

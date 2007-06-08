@@ -1,9 +1,9 @@
 package Object::InsideOut::Secure; {
 
-    our $VERSION = '3.17';
+    our $VERSION = '3.18';
     $VERSION = eval $VERSION;
 
-    use Object::InsideOut 3.17 ':hash_only';
+    use Object::InsideOut 3.18 ':hash_only';
 
     # Holds used IDs
     my %used :Field = ( 0 => undef );
@@ -12,7 +12,7 @@ package Object::InsideOut::Secure; {
     BEGIN {
         $Math::Random::MT::Auto::shared = $threads::shared::threads_shared;
     }
-    use Math::Random::MT::Auto 5.04 ();
+    use Math::Random::MT::Auto 5.04 ':!auto';
     my $prng = Math::Random::MT::Auto->new();
 
     # Assigns random IDs
