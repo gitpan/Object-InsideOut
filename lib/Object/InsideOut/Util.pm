@@ -5,12 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-BEGIN {
-    our $VERSION = '3.18';
-    $VERSION = eval $VERSION;
-}
+our $VERSION = '3.19';
+$VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.18;
+use Object::InsideOut::Metadata 3.19;
 
 ### Module Initialization ###
 
@@ -121,7 +119,7 @@ sub make_shared
         # Copy an array ref
         if ($ref_type eq 'ARRAY') {
             # Make empty shared array ref
-            $out = &share([]);
+            $out = &threads::shared::share([]);
             # Recursively copy and add contents
             foreach my $val (@$in) {
                 push(@$out, make_shared($val));
@@ -131,7 +129,7 @@ sub make_shared
         # Copy a hash ref
         elsif ($ref_type eq 'HASH') {
             # Make empty shared hash ref
-            $out = &share({});
+            $out = &threads::shared::share({});
             # Recursively copy and add contents
             foreach my $key (keys(%{$in})) {
                 $out->{$key} = make_shared($in->{$key});
@@ -141,7 +139,7 @@ sub make_shared
         # Copy a scalar ref
         elsif ($ref_type eq 'SCALAR') {
             $out = \do{ my $scalar = $$in; };
-            share($out);
+            threads::shared::share($out);
         }
     }
 
@@ -186,7 +184,7 @@ sub shared_clone
         # Copy an array ref
         if ($ref_type eq 'ARRAY') {
             # Make empty shared array ref
-            $out = &share([]);
+            $out = &threads::shared::share([]);
             # Recursively copy and add contents
             foreach my $val (@$in) {
                 push(@$out, shared_clone($val));
@@ -196,7 +194,7 @@ sub shared_clone
         # Copy a hash ref
         elsif ($ref_type eq 'HASH') {
             # Make empty shared hash ref
-            $out = &share({});
+            $out = &threads::shared::share({});
             # Recursively copy and add contents
             foreach my $key (keys(%{$in})) {
                 $out->{$key} = shared_clone($in->{$key});
@@ -206,7 +204,7 @@ sub shared_clone
         # Copy a scalar ref
         elsif ($ref_type eq 'SCALAR') {
             $out = \do{ my $scalar = $$in; };
-            share($out);
+            threads::shared::share($out);
         }
     }
 

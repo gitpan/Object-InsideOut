@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.19 Tue Jun 26 16:19:02 2007
+	- Less use of BEGIN blocks
+	- Fixed a threads::shared issue
+
 3.18 Fri Jun  8 18:31:32 2007
 	- Fixed secure mode breakage caused by MRMA upgrade
 

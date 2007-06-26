@@ -5,27 +5,21 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.18';
+our $VERSION = '3.19';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.18;
-use Object::InsideOut::Util 3.18 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.18;
+use Object::InsideOut::Exception 3.19;
+use Object::InsideOut::Util 3.19 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.19;
 
-use B ();
+require B;
+
 use Scalar::Util 1.10;
-
-{
-    no warnings 'void';
-    BEGIN {
-        # Verify we have 'weaken'
-        if (! Scalar::Util->can('weaken')) {
-            OIO->Trace(0);
-            OIO::Code->die(
-                'message' => q/Cannot use 'pure perl' version of Scalar::Util - 'weaken' missing/,
-                'Info'    => 'Upgrade/reinstall your version of Scalar::Util');
-        }
-    }
+if (! Scalar::Util->can('weaken')) {
+    OIO->Trace(0);
+    OIO::Code->die(
+        'message' => q/Cannot use 'pure perl' version of Scalar::Util - 'weaken' missing/,
+        'Info'    => 'Upgrade/reinstall your version of Scalar::Util');
 }
 
 

@@ -3,11 +3,8 @@ package Object::InsideOut::Metadata; {
 use strict;
 use warnings;
 
-BEGIN {
-    our $VERSION = '3.18';
-    $VERSION = eval $VERSION;
-}
-
+our $VERSION = '3.19';
+$VERSION = eval $VERSION;
 
 # Stores method metadata
 # Initialized with our own metadata
@@ -102,8 +99,8 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 3.18 qw(hash_re);
-use Object::InsideOut 3.18;
+use Object::InsideOut::Util 3.19 qw(hash_re);
+use Object::InsideOut 3.19;
 
 my @CLASSES :Field;
 my @FOREIGN :Field;
@@ -271,7 +268,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 3.18
+This document describes Object::InsideOut::Metadata version 3.19
 
 =head1 SYNOPSIS
 
