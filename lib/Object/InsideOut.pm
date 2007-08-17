@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.19';
+our $VERSION = '3.21';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.19;
-use Object::InsideOut::Util 3.19 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.19;
+use Object::InsideOut::Exception 3.21;
+use Object::InsideOut::Util 3.21 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.21;
 
 require B;
 
@@ -167,7 +167,7 @@ sub import
     if (! $class || $class eq 'main') {
         OIO::Code->die(
             'message' => q/'import' invoked from 'main'/,
-            'Info'    => "Can't use 'use Object::InsideOut;' or 'import Object::InsideOut;' inside application code");
+            'Info'    => "Can't use 'use Object::InsideOut;' or 'Object::InsideOut->import();' inside application code");
     }
 
     no strict 'refs';
@@ -1048,6 +1048,44 @@ sub process_fields :Sub(Private)
 }
 
 
+# Normalize the :InitArgs hash
+sub normalize :Sub
+{
+    my $hash = $_[$#_];
+    if (ref($hash) ne 'HASH') {
+        OIO::Args->die(
+            'message' => 'Argument is not a hash ref',
+            'Usage'   => q/Object::InsideOut::normalize($hash)/);
+    }
+
+    foreach my $arg (keys(%{$hash})) {
+        my $spec = $$hash{$arg};
+        next if (ref($spec) ne 'HASH');
+        foreach my $opt (keys(%{$spec})) {
+            if ($opt =~ qr/^DEF(?:AULTs?)?$/i) {
+                $$spec{'_D'} = $$spec{$opt};
+            } elsif ($opt =~ qr/^FIELD$/i) {
+                $$spec{'_F'} = $$spec{$opt};
+            } elsif ($opt =~ qr/^(?:MAND|REQ)/i) {
+                $$spec{'_M'} = $$spec{$opt};
+            } elsif ($opt =~ qr/^PRE/i) {
+                $$spec{'_P'} = $$spec{$opt};
+            } elsif ($opt =~ qr/^RE(?:GEXp?)?$/i) {
+                # Turn into an actual 'Regexp', if needed
+                $$spec{'_R'} = (ref($$spec{$opt}) eq 'Regexp')
+                                    ? $$spec{$opt}
+                                    : qr/^$$spec{$opt}$/;
+            } elsif ($opt =~ qr/^TYPE$/i) {
+                $$spec{'_T'} = $$spec{$opt};
+            }
+        }
+    }
+    $$hash{' '} = undef;
+
+    return ($hash);
+}
+
+
 ### Thread-Shared Object Support ###
 
 # Set a class as thread-sharing
@@ -1249,7 +1287,7 @@ sub _obj :Sub(Private)
         Scalar::Util::weaken($GBL{'obj'}{$class}{$$self} = $self);
     }
 
-    return($self);
+    return ($self);
 }
 
 
@@ -1261,21 +1299,16 @@ sub _args :Sub(Private)
     my $spec  = shift;   # Hash ref of arg specifiers
     my $args  = shift;   # Hash ref of args
 
-    # Extract/build arg-matching regexs from the specifiers
+    # Ensure :InitArgs hash is normalized
+    if (! exists($$spec{' '})) {
+        normalize($spec);
+    }
+
+    # Extract arg-matching regexs from the specifiers
     my %regex;
-    foreach my $key (keys(%{$spec})) {
-        my $regex = $spec->{$key};
-        # If the value for the key is a hash ref, then the regex may be
-        # inside it
-        if (ref($regex) eq 'HASH') {
-            $regex = hash_re($regex, qr/^RE(?:GEXp?)?$/i);
-        }
-        # Turn $regex into an actual 'Regexp', if needed
-        if ($regex && ref($regex) ne 'Regexp') {
-            $regex = qr/^$regex$/;
-        }
-        # Store it
-        $regex{$key} = $regex;
+    while (my ($key, $val) = each(%{$spec})) {
+        next if ($key eq ' ');
+        $regex{$key} = (ref($val) eq 'HASH') ? $$val{'_R'} : $val;
     }
 
     # Search for specified args
@@ -1284,7 +1317,7 @@ sub _args :Sub(Private)
         # Find arguments using regex's
         foreach my $key (keys(%regex)) {
             my $regex = $regex{$key};
-            my $value = ($regex) ? hash_re($args, $regex) : $args->{$key};
+            my $value = ($regex) ? hash_re($args, $regex) : $$args{$key};
             if (defined($found{$key})) {
                 if (defined($value)) {
                     $found{$key} = $value;
@@ -1295,8 +1328,8 @@ sub _args :Sub(Private)
         }
 
         # Check for class-specific argument hash ref
-        if (exists($args->{$class})) {
-            $args = $args->{$class};
+        if (exists($$args{$class})) {
+            $args = $$args{$class};
             if (ref($args) ne 'HASH') {
                 OIO::Args->die(
                     'message' => "Bad class initializer for '$class'",
@@ -1310,7 +1343,7 @@ sub _args :Sub(Private)
     # Check on what we've found
     CHECK:
     foreach my $key (keys(%{$spec})) {
-        my $spec_item = $spec->{$key};
+        my $spec_item = $$spec{$key};
         # No specs to check
         if (ref($spec_item) ne 'HASH') {
             # The specifier entry was just 'key => regex'.  If 'key' is not in
@@ -1323,7 +1356,7 @@ sub _args :Sub(Private)
         }
 
         # Preprocess the argument
-        if (my $pre = hash_re($spec_item, qr/^PRE/i)) {
+        if (my $pre = $$spec_item{'_P'}) {
             if (ref($pre) ne 'CODE') {
                 OIO::Code->die(
                     'message' => q/Can't handle argument/,
@@ -1347,15 +1380,13 @@ sub _args :Sub(Private)
         # Handle args not found
         if (! defined($found{$key})) {
             # Complain if mandatory
-            if (hash_re($spec_item, qr/^(?:MAND|REQ)/i)) {
+            if ($$spec_item{'_M'}) {
                 OIO::Args->die(
                     'message' => "Missing mandatory initializer '$key' for class '$class'");
             }
 
             # Assign default value
-            $found{$key} = Object::InsideOut::Util::clone(
-                                hash_re($spec_item, qr/^DEF(?:AULTs?)?$/i)
-                           );
+            $found{$key} = Object::InsideOut::Util::clone($$spec_item{'_D'});
 
             # If no default, then remove it from the found args hash
             if (! defined($found{$key})) {
@@ -1365,7 +1396,7 @@ sub _args :Sub(Private)
         }
 
         # Check for correct type
-        if (my $type = hash_re($spec_item, qr/^TYPE$/i)) {
+        if (my $type = $$spec_item{'_T'}) {
             my $subtype;
 
             # Custom type checking
@@ -1454,7 +1485,7 @@ sub _args :Sub(Private)
 
         # If the destination field is specified, then put it in, and remove it
         # from the found args hash.
-        if (my $field = hash_re($spec_item, qr/^FIELD$/i)) {
+        if (my $field = $$spec_item{'_F'}) {
             $self->set($field, delete($found{$key}));
         }
     }
@@ -2063,17 +2094,15 @@ sub create_accessors :Sub(Private)
         $g_args = $$g_args{$pkg};
         if (!$arg) {
             $arg = hash_re($acc_spec, qr/^ARG$/i);
-            $$g_args{$arg} = $acc_spec;
+            $$g_args{$arg} = normalize($acc_spec);
         }
         if (!defined($name)) {
             $name = $arg;
         }
-        $$g_args{$arg}{'FIELD'} = $field_ref;
+        $$g_args{$arg}{'_F'} = $field_ref;
         # Add type to :InitArgs
-        if ($$fld_type{$field_ref} &&
-            ! hash_re($$g_args{$arg}, qr/^TYPE$/i))
-        {
-            $$g_args{$arg}{'TYPE'} = $$fld_type{$field_ref}{'type'};
+        if ($$fld_type{$field_ref} && ! exists($$g_args{$arg}{'_T'})) {
+            $$g_args{$arg}{'_T'} = $$fld_type{$field_ref}{'type'};
         }
 
         # Add default to :InitArgs
@@ -2081,7 +2110,7 @@ sub create_accessors :Sub(Private)
             my @defs;
             foreach my $item (@{$g_def}) {
                 if ($field_ref == $$item[0]) {
-                    $$g_args{$arg}{'DEFAULT'} = $$item[1];
+                    $$g_args{$arg}{'_D'} = $$item[1];
                 } else {
                     push(@defs, $item);
                 }

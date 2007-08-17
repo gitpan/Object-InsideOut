@@ -74,6 +74,7 @@ t/36-require.t
 t/37-class_perm.t
 t/38-combined.t
 t/39-fork.t
+t/40-normalize.t
 t/99-pod.t
 t/EmptyParent.pm
 t/ErrorParent.pm

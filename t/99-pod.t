@@ -25,6 +25,7 @@ SKIP: {
                             qr/^meta$/,
                             qr/^create_field$/,
                             qr/^add_class$/,
+                            qr/^normalize$/,
                         ],
                         'private' => [
                             qr/^STORABLE_freeze$/,

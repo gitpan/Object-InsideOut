@@ -3,7 +3,7 @@ package Object::InsideOut::Metadata; {
 use strict;
 use warnings;
 
-our $VERSION = '3.19';
+our $VERSION = '3.21';
 $VERSION = eval $VERSION;
 
 # Stores method metadata
@@ -99,8 +99,7 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut::Util 3.19 qw(hash_re);
-use Object::InsideOut 3.19;
+use Object::InsideOut 3.21;
 
 my @CLASSES :Field;
 my @FOREIGN :Field;
@@ -157,22 +156,23 @@ sub get_args
     foreach my $pkg (@{$CLASSES[$$self]}) {
         if (my $ia = $$GBL{'args'}{$pkg}) {
             foreach my $arg (keys(%$ia)) {
+                next if ($arg eq ' ');
                 my $hash = $$ia{$arg};
                 $args{$pkg}{$arg} = {};
                 if (ref($hash) eq 'HASH') {
-                    if (hash_re($hash, qr/^FIELD$/i)) {
+                    if ($$hash{'_F'}) {
                         $args{$pkg}{$arg}{'field'} = 1;
                     }
-                    if (hash_re($hash, qr/^(?:MAND|REQ)/i)) {
+                    if ($$hash{'_M'}) {
                         $args{$pkg}{$arg}{'mandatory'} = 1;
                     }
-                    if (defined(my $def = hash_re($hash, qr/^DEF(?:AULTs?)?$/i))) {
+                    if (defined(my $def = $$hash{'_D'})) {
                         $args{$pkg}{$arg}{'default'} = Object::InsideOut::Util::clone($def);
                     }
-                    if (my $pre = hash_re($hash, qr/^PRE/i)) {
+                    if (my $pre = $$hash{'_P'}) {
                         $args{$pkg}{$arg}{'preproc'} = $pre;
                     }
-                    if (my $type = hash_re($hash, qr/^TYPE$/i)) {
+                    if (my $type = $$hash{'_T'}) {
                         if (!ref($type)) {
                             $type =~ s/\s//g;
                             my $subtype;
@@ -268,7 +268,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 3.19
+This document describes Object::InsideOut::Metadata version 3.21
 
 =head1 SYNOPSIS
 
@@ -545,8 +545,8 @@ Methods that are excluded are private and hidden methods (see
 L<Object::InsideOut/"PERMISSIONS">), methods that begin with an underscore
 (which, by convention, means they are private), and subroutines named
 C<CLONE>, C<CLONE_SKIP>, and C<DESTROY> (which are not methods).  While
-technically a method, C<import> is also excluded as it is generally not used
-as such.
+technically a method, C<import> is also excluded as it is generally not
+invoked directly (i.e., it's usually called as part of C<use>).
 
 =over
 

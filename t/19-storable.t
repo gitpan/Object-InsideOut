@@ -9,7 +9,7 @@ BEGIN {
     }
     eval {
         require Storable;
-        import Storable qw(thaw);
+        Storable->import('thaw');
     };
     if ($@) {
         print("1..0 # Skip Storable not available\n");

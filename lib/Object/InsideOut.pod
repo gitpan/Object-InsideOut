@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.19
+This document describes Object::InsideOut version 3.21
 
 =head1 SYNOPSIS
 
@@ -215,11 +215,11 @@ Multiple inheritance is also supported:
  }
 
 Object::InsideOut acts as a replacement for the C<base> pragma:  It loads the
-parent module(s), calls their C<import> functions, and sets up the sub-class's
-@ISA array.  Therefore, you should not S<C<use base ...>> yourself, nor try to
-set up C<@ISA> arrays.  Further, you should not use a class's C<@ISA> array to
-determine a class's hierarchy:  See L</"INTROSPECTION"> for details on how to
-do this.
+parent module(s), calls their C<-E<gt>import()> methods, and sets up the
+sub-class's @ISA array.  Therefore, you should not S<C<use base ...>> yourself,
+nor try to set up C<@ISA> arrays.  Further, you should not use a class's
+C<@ISA> array to determine a class's hierarchy:  See L</"INTROSPECTION"> for
+details on how to do this.
 
 If a parent class takes parameters (e.g., symbols to be exported via
 L<Exporter|/"Usage With C<Exporter>">), enclose them in an array ref
@@ -774,6 +774,19 @@ Initialization Subroutines"> subroutines are called with parameters specified
 in the C<:InitArgs> hash.
 
 =back
+
+=head2 Modifying C<:InitArgs>
+
+For performance purposes, Object::InsideOut I<normalizes> each class'
+C<:InitArgs> hash by creating keys in the form of C<'_X'> for the various
+options it handles (e.g., C<'_R'> for C<'Regexp'>).
+
+If a class has the unusual requirement to modify its C<:InitArgs> hash during
+runtime, then it must renormalize the hash after making such changes by
+invoking C<Object::InsideOut::normalize()> on it so that Object::InsideOut
+will pick up the changes:
+
+ Object::InsideOut::normalize(\%init_args);
 
 =head1 ACCESSOR GENERATION
 
@@ -3147,7 +3160,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.19/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.21/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

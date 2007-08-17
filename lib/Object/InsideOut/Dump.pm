@@ -23,31 +23,30 @@ sub dump
             INIT_ARGS:
             foreach my $name (keys(%{$p_args})) {
                 my $val = $$p_args{$name};
-                if (ref($val) eq 'HASH') {
-                    if (my $field = Object::InsideOut::Util::hash_re($val, qr/^FIELD$/i)) {
-                        # Override get/set names, but not 'Name'
-                        foreach my $name2 (keys(%{$$d_flds{$pkg}})) {
-                            my $fld_spec = $$d_flds{$pkg}{$name2};
-                            if ($field == $$fld_spec{'fld'}) {
-                                if ($$fld_spec{'src'} eq 'Name') {
-                                    next INIT_ARGS;
-                                }
-                                delete($$d_flds{$pkg}{$name2});
-                                last;
+                next if (ref($val) ne 'HASH');
+                if (my $field = $$val{'_F'}) {
+                    # Override get/set names, but not 'Name'
+                    foreach my $name2 (keys(%{$$d_flds{$pkg}})) {
+                        my $fld_spec = $$d_flds{$pkg}{$name2};
+                        if ($field == $$fld_spec{'fld'}) {
+                            if ($$fld_spec{'src'} eq 'Name') {
+                                next INIT_ARGS;
                             }
+                            delete($$d_flds{$pkg}{$name2});
+                            last;
                         }
-                        if (exists($$d_flds{$pkg}{$name}) &&
-                            $field != $$d_flds{$pkg}{$name}{'fld'})
-                        {
-                            OIO::Code->die(
-                                'message' => 'Cannot dump object',
-                                'Info'    => "In class '$pkg', '$name' refers to two different fields set by 'InitArgs' and '$$d_flds{$pkg}{$name}{'src'}'");
-                        }
-                        $$d_flds{$pkg}{$name} = {
-                            fld => $field,
-                            src => 'InitArgs',
-                        };
                     }
+                    if (exists($$d_flds{$pkg}{$name}) &&
+                        $field != $$d_flds{$pkg}{$name}{'fld'})
+                    {
+                        OIO::Code->die(
+                            'message' => 'Cannot dump object',
+                            'Info'    => "In class '$pkg', '$name' refers to two different fields set by 'InitArgs' and '$$d_flds{$pkg}{$name}{'src'}'");
+                    }
+                    $$d_flds{$pkg}{$name} = {
+                        fld => $field,
+                        src => 'InitArgs',
+                    };
                 }
             }
         }
@@ -223,7 +222,7 @@ sub dump
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.19)
+($Object::InsideOut::VERSION == 3.21)
     or die("Version mismatch\n");
 
 # EOF
