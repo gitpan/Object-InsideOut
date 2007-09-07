@@ -3,7 +3,7 @@ package Object::InsideOut::Metadata; {
 use strict;
 use warnings;
 
-our $VERSION = '3.21';
+our $VERSION = '3.22';
 $VERSION = eval $VERSION;
 
 # Stores method metadata
@@ -99,7 +99,7 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut 3.21;
+use Object::InsideOut 3.22;
 
 my @CLASSES :Field;
 my @FOREIGN :Field;
@@ -268,7 +268,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 3.21
+This document describes Object::InsideOut::Metadata version 3.22
 
 =head1 SYNOPSIS
 
@@ -535,9 +535,9 @@ Parameter takes a value that is type-checked by the code ref paired to the
 The methods returned by a metadata object are those that are currently
 available at the time of the C<-E<gt>get_methods()> call.
 
-The presense of C<:Automethod> subroutines in an Object::InsideOut class, or
+The presence of C<:Automethod> subroutines in an Object::InsideOut class, or
 C<AUTOLOAD> in a foreign class means that the methods supported by the class
-may not be determinable.  The presense of C<AUTOLOAD> in the list of methods
+may not be determinable.  The presence of C<AUTOLOAD> in the list of methods
 for a class should alert the programmer to the fact that more methods may be
 supported than are listed.
 
@@ -796,7 +796,7 @@ If adding metadata for multiple methods, another level of hash may be used:
                                           'return' => 'old' },
                          'get_info'  => { 'my_meta' => 'true' } });
 
-=head1 TODO
+=head1 TO DO
 
 Provide filtering capabilities on the method information returned by
 C<-E<gt>get_methods()>.

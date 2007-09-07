@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.21
+This document describes Object::InsideOut version 3.22
 
 =head1 SYNOPSIS
 
@@ -340,10 +340,10 @@ Object::InsideOut at compile time.  Object::InsideOut then makes use of the
 information in these tags to handle such operations as object construction,
 automatic accessor generation, and so on.
 
-(Note:  The use of attibutes is not the same thing as
+(Note:  The use of attributes is not the same thing as
 L<source filtering|Filter::Simple>.)
 
-An attribute consists of an identifier preceeded by a colon, and optionally
+An attribute consists of an identifier preceded by a colon, and optionally
 followed by a set of parameters in parentheses.  For example, the attributes
 on the following array declare it as an object field, and specify the
 generation of an accessor method for that field:
@@ -676,14 +676,14 @@ C<Regexp> may be abbreviated to C<Regex> or C<Re>.
 
 =head2 Object Pre-initialization
 
-Occassionally, a child class may need to send a parameter to a parent class as
+Occasionally, a child class may need to send a parameter to a parent class as
 part of object initialization.  This can be accomplished by supplying a
 C<:PreInit> labeled subroutine in the child class.  These subroutines, if
-found, are called in order from the bottom of the class hierarchy upwards
+found, are called in order from the bottom of the class hierarchy upward
 (i.e., child classes first).
 
 The subroutine should expect two arguments:  The newly created
-(un-initialized) object (i.e., C<$self>), and a hash ref of all the parameters
+(uninitialized) object (i.e., C<$self>), and a hash ref of all the parameters
 from the C<-E<gt>new()> method call, including any additional parameters added
 by other C<:PreInit> subroutines.
 
@@ -723,7 +723,7 @@ the resulting parameter hash.
 
 The C<:PreInit> subroutine should not try to set data in its class's fields or
 in other class's fields (e.g., using I<set> methods) as such changes will be
-overwritten during initialization phase which follows preinitialization.  The
+overwritten during initialization phase which follows pre-initialization.  The
 C<:PreInit> subroutine is only intended for modifying initialization
 parameters prior to initialization.
 
@@ -743,20 +743,20 @@ determining when this can be done safely:
 L</"Object ID">, and blessed into the appropriate class.
 
 =item 2.  L<:PreInit|/"Object Pre-initialization"> subroutines are called in
-order from the bottom of the class hierarchy upwards (i.e., child classes
+order from the bottom of the class hierarchy upward (i.e., child classes
 first).
 
-=item 3.  From the top of the class hierarchy downwards (i.e., parent classes
+=item 3.  From the top of the class hierarchy downward (i.e., parent classes
 first), L</"Default Values"> are assigned to fields.  (These may be
 overwritten by subsequent steps below.)
 
-=item 4.  From the top of the class hierarchy downwards, parameters to the
+=item 4.  From the top of the class hierarchy downward, parameters to the
 C<-E<gt>new()> method are processed for C<:Arg> field attributes and entries
 in the C<:InitArgs> hash:
 
 =over
 
-=item a.  L</"Parameter Preprocessing"> is performed.
+=item a.  L</"Parameter Pre-processing"> is performed.
 
 =item b.  Checks for L</"Mandatory Parameters"> are made.
 
@@ -769,7 +769,7 @@ for subsequent processing by the C<:Init> subroutine.
 
 =back
 
-=item 5.  From the top of the class hierarchy downwards, L<:Init|/"Object
+=item 5.  From the top of the class hierarchy downward, L<:Init|/"Object
 Initialization Subroutines"> subroutines are called with parameters specified
 in the C<:InitArgs> hash.
 
@@ -835,7 +835,7 @@ which is equivalent to:
 
  my @data :Field :Get(get_data) :Set(set_data);
 
-Other programmers perfer to use a single I<combination> accessors that
+Other programmers prefer to use a single I<combination> accessors that
 performs both functions:  When called with no arguments, it I<gets>, and when
 called with an argument, it I<sets>.  Object::InsideOut will generate such
 accessors with the C<:Accessor> attribute.  (This can be abbreviated to
@@ -1070,7 +1070,7 @@ be called at any time.  In other words, their access permission is I<public>.
 
 If desired, accessors can be made I<restricted> - in which case they can only
 be called from within the class's hierarchy - or I<private> - such that they
-can only be called from within the accessors's class.  Here are examples of
+can only be called from within the accessors' class.  Here are examples of
 the syntax for adding permissions:
 
  my @data     :Field :Std('Name' => 'data',     'Permission' => 'private');
@@ -1078,7 +1078,7 @@ the syntax for adding permissions:
  my @internal :Field :Acc('Name' => 'internal', 'Private' => 1);
  my @state    :Field :Get('Name' => 'state',    'Restricted' => 1);
 
-When creating a I<standard> pair of I<get_/set_> accessors, the premission
+When creating a I<standard> pair of I<get_/set_> accessors, the permission
 setting is applied to both accessors.  If different permissions are required
 on the two accessors, then you'll have to use separate C<:Get> and C<:Set>
 attributes on the field.
@@ -1214,7 +1214,7 @@ created for that class unless it has a permission declaration of its own:
 
 Here, class C<Zork> inherits from class C<Baz>, and its constructor has
 unrestricted access.  (In general, don't use the C<:Public> declaration for a
-class except to overcome contructor permissions inherited from parent
+class except to overcome constructor permissions inherited from parent
 classes.)
 
 =head1 TYPE CHECKING
@@ -1477,7 +1477,7 @@ As illustrated above, cumulative methods are tagged with the C<:Cumulative>
 attribute (or S<C<:Cumulative(top down)>>), and propagate from the I<top down>
 through the class hierarchy (i.e., from the parent classes down through the
 child classes).  If tagged with S<C<:Cumulative(bottom up)>>, they will
-propagated from the object's class upwards through the parent classes.
+propagated from the object's class upward through the parent classes.
 
 =head1 CHAINED METHODS
 
@@ -1603,7 +1603,7 @@ attribute S<C<:Chained(top down)>> to make this more explicit.
 
 If you label the method with the S<C<:Chained(bottom up)>> attribute, then the
 chained methods are called starting with the object's class and working
-upwards through the parent classes in the class hierarchy, similar to how
+upward through the parent classes in the class hierarchy, similar to how
 S<C<:Cumulative(bottom up)>> works.
 
 =head1 ARGUMENT MERGING
@@ -1656,7 +1656,7 @@ hash ref of the I<merged> arguments.  For example:
 =head1 ARGUMENT VALIDATION
 
 A number of users have asked about argument validation for methods:
-L<http://www.cpanforum.com/threads/3204>.  For this, I recommand using
+L<http://www.cpanforum.com/threads/3204>.  For this, I recommend using
 L<Params::Validate>:
 
  package Foo; {
@@ -1851,13 +1851,13 @@ the class developer must either add C<:Name> attributes to the C<:Field>
 declarations (see above), or provide a C<:Dumper>/C<:Pumper> pair of
 subroutines as described below.
 
-Dynamcially altering a class (e.g., using
+Dynamically altering a class (e.g., using
 L<-E<gt>create_field()|/"DYNAMIC FIELD CREATION"> after objects have been
 dumped will result in C<undef> fields when pumped back in regardless of
 whether or not the added fields have defaults.
 
 Modifying the output from C<-E<gt>dump()>, and then feeding it into
-C<Object::InsideOut-E<gt>pump()> will work, but is not specificially
+C<Object::InsideOut-E<gt>pump()> will work, but is not specifically
 supported.  If you know what you're doing, fine, but you're on your own.
 
 =item C<:Dumper> Subroutine Attribute
@@ -1916,7 +1916,7 @@ Object::InsideOut declaration in your package:
 
 and adding S<C<use Storable;>> in your application.  Then you can use the
 C<-E<gt>store()> and C<-E<gt>freeze()> methods to serialize your objects, and
-the C<retrieve()> and C<thaw()> subroutines to deserialize them.
+the C<retrieve()> and C<thaw()> subroutines to de-serialize them.
 
  package main;
  use Storable;
@@ -2068,7 +2068,7 @@ method for this:
  My::Class->create_field('%'.$fld, ":Std($fld)");
 
 The first argument is the class into which the field will be added.  The
-second argument is a string containing the name of the field preceeded by
+second argument is a string containing the name of the field preceded by
 either a C<@> or C<%> to declare an array field or hash field, respectively.
 The remaining string arguments should be attributes declaring accessors and
 the like.  The C<:Field> attribute is assumed, and does not need to be added
@@ -2268,7 +2268,7 @@ Usually, the preprocessing subroutine would return just a single value.  For
 fields declared as type C<List>, multiple values may be returned.
 
 Following preprocessing, the I<set> accessor will operate on whatever value(s)
-are returned by the proprocessing subroutine.
+are returned by the preprocessing subroutine.
 
 =head1 SPECIAL PROCESSING
 
@@ -2327,7 +2327,7 @@ objects, and a flag:
  }
 
 In the case of thread cloning, C<$flag> will be set to the C<'CLONE'>, and the
-C<$parent> object is just an un-blessed anonymous scalar reference that
+C<$parent> object is just a non-blessed anonymous scalar reference that
 contains the ID for the object in the parent thread.
 
 When invoked via the C<-E<gt>clone()> method, C<$flag> will be either an empty
@@ -2492,7 +2492,7 @@ inherited foreign class's method (e.g., C<My::Class> has its own
 C<-E<gt>bar()> method).  Such overridden methods are not directly callable.
 If such overriding is intentional, then this should not be an issue:  No one
 should be writing code that tries to by-pass the override.  However, if the
-overriding is accidently, then either the I<native> method should be renamed,
+overriding is accidentally, then either the I<native> method should be renamed,
 or the I<native> class should provide a wrapper method so that the
 functionality of the overridden method is made available under a different
 name.
@@ -2794,7 +2794,7 @@ topmost class(es) in a hierarchy.
 
 Object::InsideOut uses I<attribute 'modify' handlers> as described in
 L<attributes/"Package-specific Attribute Handling">, and provides a mechanism
-for adding attibute handlers to your own classes.  Instead of naming your
+for adding attribute handlers to your own classes.  Instead of naming your
 attribute handler as C<MODIFY_*_ATTRIBUTES>, name it something else and then
 label it with the C<:MODIFY_*_ATTRIBUTES> attribute (or C<:MOD_*_ATTRS> for
 short).  Your handler should work just as described in
@@ -2824,13 +2824,13 @@ by your handler.  Here's an example:
      }
  }
 
-Attribute 'modify' handlers are called I<upwards> through the class hierarchy
+Attribute 'modify' handlers are called I<upward> through the class hierarchy
 (i.e., I<bottom up>).  This provides child classes with the capability to
 I<override> the handling of attributes by parent classes, or to add attributes
 (via the returned list of unhandled attributes) for parent classes to process.
 
 Attribute 'modify' handlers should be located at the beginning of a package,
-or at least before any use of attibutes on the corresponding type of variable
+or at least before any use of attributes on the corresponding type of variable
 or subroutine:
 
  package My::Class; {
@@ -2961,7 +2961,7 @@ code.
 Object::InsideOut installs a C<__DIE__> handler (see L<perlfunc/"die LIST">
 and L<perlfunc/"eval BLOCK">) to catch any errant exceptions from
 class-specific code, namely, C<:Init>, C<:Replicate>, C<:Destroy>, etc.
-subroutines.  This handler may interfer with code that uses the C<die>
+subroutines.  This handler may interfere with code that uses the C<die>
 function as a method of flow control for leaving an C<eval> block.  The proper
 method for handling this is to localize C<$SIG{'__DIE__'}> inside the C<eval>
 block:
@@ -3160,12 +3160,13 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.21/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.22/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>
 
 Inside-out Object Model:
+L<http://www.perlfoundation.org/perl5/index.cgi?inside_out_object>,
 L<http://www.perlmonks.org/?node_id=219378>,
 L<http://www.perlmonks.org/?node_id=483162>,
 L<http://www.perlmonks.org/?node_id=515650>,
@@ -3201,7 +3202,7 @@ the same terms as Perl itself.
 
 =head1 TRANSLATIONS
 
-A Janapese translation of this documentation by
+A Japanese translation of this documentation by
 TSUJII, Naofumi S<E<lt>tsun DOT nt AT gmail DOT comE<gt>>
 is available at L<http://perldoc.jp/docs/modules/>.
 

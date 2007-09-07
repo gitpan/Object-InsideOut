@@ -2,36 +2,55 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
+    our $VERSION = '3.22';
+
+    #####
+    #
+    # TODO:
+    #   types - pulse, countdown
+    #
+    #####
+
     my $threaded_okay;   # Can we do indicators using threads?
     BEGIN {
         eval {
             require threads;
-            require threads::shared;
             die if ($threads::VERSION lt '1.31');
+            require Thread::Queue;
         };
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 2.02;
+    use Object::InsideOut 3.22;
 
     # Default progress indicator is a twirling bar
-    my @yapi
-        :Field
-        :Type(List)
-        :Arg('Name' => 'yapi', 'Regex' => qr/^(?:yapi|prog)/i, 'Default' => [ qw(/ - \ |) ]);
+    my @yapi :Field
+             :Type(List)
+             :Arg('Name' => 'yapi', 'Regex' => qr/^yapi/i);
 
     # Boolean - indicator is asynchronous?
-    my @is_async
-        :Field
-        :Arg('Name' => 'async', 'Regex' => qr/^(?:async|thr)/i, 'Default' => 0);
+    my @is_async :Field
+                 :Arg('Name' => 'async', 'Regex' => qr/^(?:async|thr)/i);
+
+    # Boolean
+    my @erase :Field
+              :Arg('Name' => 'erase', 'Regex' => qr/^erase/i, 'Default' => 0);
 
     # Step counter for indicator
-    my @step
-        :Field
-        :Arg('Name' => 'step', 'Default' => 0);
+    my @step :Field;
 
     # Boolean - indicator is running?
     my @is_running :Field;
+
+    # Type of indicator = twirl, dots, pulse, ...
+    my @type :Field;
+
+    my %init_args :InitArgs = (
+        'type' => {
+            'Regex'   => qr/^type$/i,
+            'Default' => 'anim',
+        },
+    );
 
 
     my $current;   # Currently running indicator
@@ -43,6 +62,7 @@ package Term::YAPI; {
     my $HIDE = "\e[?25l";   # Hide cursor
     my $SHOW = "\e[?25h";   # Show cursor
     my $EL   = "\e[K";      # Erase line
+
 
     sub import
     {
@@ -60,16 +80,39 @@ package Term::YAPI; {
     {
         my ($self, $args) = @_;
 
+        # Indicator type
+        if ($$args{'type'} =~ /^anim/i) {
+            $type[$$self] = 'anim';
+            if (! defined($yapi[$$self])) {
+                $yapi[$$self] = [ qw(/ - \ |) ];
+            }
+
+        } elsif ($$args{'type'} =~ /^dot/i) {
+            $type[$$self] = 'dots';
+            if (! defined($yapi[$$self])) {
+                $yapi[$$self] = ['.'];
+            }
+
+        } elsif ($$args{'type'} =~ /^count$/i) {
+            $type[$$self] = 'count';
+            $yapi[$$self] = [ 0 ];
+
+        } else {
+            OIO::Args->die(
+                'message'  => "Unknown indicator 'type': '$$args{'type'}'",
+                'Usage'    => q/Supported types: 'anim', 'dots' and 'count'/,
+                'location' => [ caller(1) ]);
+        }
+
         # If this is the first async indicator, create the indicator thread
         if ($is_async[$$self] && ! $queue && $threaded_okay) {
             my $thr;
             eval {
                 # Create communication queue for indicator thread
-                require Thread::Queue;
                 if ($queue = Thread::Queue->new()) {
                     # Create indicator thread in 'void' context
                     # Give the thread the queue
-                    $thr = threads->create({'void' => 1}, 'yapi_thread', $queue);
+                    $thr = threads->create({'void' => 1}, \&_yapi_thread, $queue);
                 }
             };
             # If all is well, detach the thread
@@ -85,12 +128,10 @@ package Term::YAPI; {
 
 
     # Start the indicator
-    sub start
+    sub start :Method(object)
     {
         my $self = shift;
         my $msg  = shift || 'Working: ';
-
-        $| = 1;   # Autoflush
 
         # Stop currently running indicator
         if ($current) {
@@ -100,39 +141,79 @@ package Term::YAPI; {
         # Set ourself as running
         $is_running[$$self] = 1;
         $current = $self;
+        $step[$$self] = 0;
 
         # Remember existing interrupt handler
         $sig_int = $SIG{'INT'};
 
         # Set interrupt handler
         $SIG{'INT'} = sub {
-            $self->done('INTERRUPTED');   # Stop the progress indicator
+            $self->_done('INTERRUPTED');  # Stop the progress indicator
             kill(shift, $$);              # Propagate the signal
         };
 
+        $| = 1;   # Autoflush
+
         # Print message and hide cursor
-        print("\r$EL$msg $HIDE");
+        print("\r$EL$msg$HIDE");
 
         # Set up progress
         if ($is_async[$$self]) {
             if ($threaded_okay) {
-                $queue->enqueue('', @{$yapi[$$self]});
+                $queue->enqueue('', $type[$$self], @{$yapi[$$self]});
                 threads->yield();
             } else {
-                print('wait...  ');   # Use this when 'async is broken'
+                print('wait...');     # Use this when 'async is broken'
             }
         } else {
-            $self->progress();
+            print($yapi[$$self][0]);  # First progress step
         }
     }
 
 
-    # Print out next progress character
-    sub progress
+    # Returns a progress element
+    sub _prog :Sub
+    {
+        my ($type, $yapi, $step, $max) = @_;
+
+        my $prog = ($type eq 'count')
+                        ? $step
+                        : $yapi->[$step % $max];
+
+        return $prog;
+    }
+
+    # Generates a string to erase the previous progress element
+    sub _undo :Sub
+    {
+        my ($type, $yapi, $step, $max, $last) = @_;
+
+        my $undo = ($type eq 'anim')
+                        ? ("\b \b" x length($yapi->[$step % $max]))
+                 : ($type eq 'dots')
+                        ? (($last) ? ' ' : '')
+                 : ($type eq 'count')
+                        ? ("\b \b" x length($step))
+                 : '';
+
+        return $undo;
+    }
+
+
+    # Prints out next progress element
+    sub progress :Method(object)
     {
         my $self = shift;
+
+        return if ($is_async[$$self]);   # N/A for 'async' indicators
+
         if ($is_running[$$self]) {
-            print("\b$yapi[$$self][$step[$$self]++ % @{$yapi[$$self]}]");
+            my $type = $type[$$self];
+            my $yapi = $yapi[$$self];
+            my $step = $step[$$self]++;
+            my $max  = scalar(@{$yapi});
+            print(_undo($type, $yapi, $step,   $max, 0) .
+                  _step($type, $yapi, $step+1, $max))
         } else {
             # Not running, or some other indicator is running.
             # Therefore, start this indicator.
@@ -142,10 +223,9 @@ package Term::YAPI; {
 
 
     # Stop the indicator
-    sub done
+    sub _done :Private
     {
-        my $self = shift;
-        my $msg  = shift || 'done';
+        my ($self, $msg) = @_;
 
         # Ignore if not running
         return if (! delete($is_running[$$self]));
@@ -155,17 +235,33 @@ package Term::YAPI; {
 
         # Halt indicator thread, if applicable
         if ($is_async[$$self] && $threaded_okay) {
-            eval { $queue->enqueue(''); };
+            eval { $queue->enqueue($msg); };
             threads->yield();
             sleep(1);
-        }
 
-        # Display done message and restore cursor
-        print("\b$msg$SHOW\n");
+        } else {
+            # Display done message
+            print(_undo($type[$$self], $yapi[$$self], $step[$$self], scalar(@{$yapi[$$self]}), 1)
+                  . $SHOW . $msg);
+        }
 
         # Restore any previous interrupt handler
         $SIG{'INT'} = $sig_int || 'DEFAULT';
         undef($sig_int);
+    }
+
+    # Stop the indicator, and possibly erase the line
+    sub done :Method(object)
+    {
+        my ($self, $msg) = @_;
+        $self->_done(($erase[$$self]) ? "\r$EL"  :
+                     (defined($msg))  ? "$msg\n" : "done\n");
+    }
+
+    # Stop the indicator and erase the line
+    sub erase :Method(object)
+    {
+        $_[0]->_done("\r$EL");
     }
 
 
@@ -178,7 +274,7 @@ package Term::YAPI; {
 
 
     # Progress indicator thread entry point function
-    sub yapi_thread :Private
+    sub _yapi_thread :Sub
     {
         my $queue = shift;
 
@@ -189,22 +285,29 @@ package Term::YAPI; {
                 $item = $queue->dequeue();
             }
 
-            # Gather progress characters
-            my @yapi = ($item);
-            while ($item = $queue->dequeue_nb()) {
+            # Type of indicator
+            my $type = $item;
+
+            # Gather progress elements
+            my @yapi;
+            while (defined($item = $queue->dequeue_nb())) {
                 push(@yapi, $item);
             }
 
             $| = 1;   # Autoflush
 
             # Show progress
-            for (my ($step, $max) = (0, scalar(@yapi));
-                 ! defined($item = $queue->dequeue_nb());
-                 $step++)
-            {
-                print("\b$yapi[$step % $max]");
+            my ($step, $max) = (0, scalar(@yapi));
+            print($yapi[0]);
+            while (! defined($item = $queue->dequeue_nb())) {
                 sleep(1);
+                print(_undo($type, \@yapi, $step,   $max, 0) .
+                      _prog($type, \@yapi, $step+1, $max));
+                $step++;
             }
+
+            # Display done message
+            print(_undo($type, \@yapi, $step, $max, 1) . $SHOW . $item);
         }
     }
 }
@@ -221,8 +324,8 @@ Term::YAPI - Yet Another Progress Indicator
 
  use Term::YAPI;
 
- # Synchronous progress indicator
- my $yapi = Term::YAPI->new('yapi' => [ qw(/ - \ |) ]);
+ # Synchronous progress indicator: .o0o.o0o.o0o.
+ my $yapi = Term::YAPI->new('type' => 'dots', 'yapi' => [ qw(. o 0 o) ]);
  $yapi->start('Working: ');
  foreach (1..10) {
      sleep(1);
@@ -230,17 +333,18 @@ Term::YAPI - Yet Another Progress Indicator
  }
  $yapi->done('done');
 
- # Asynchronous (threaded) progress indicator
- my $yapi = Term::YAPI->new('async' => 1);
- $yapi->start('Please wait: ');
+ # Asynchronous (threaded) incrementing counter
+ my $yapi = Term::YAPI->new('type' => 'count', 'async' => 1);
+ $yapi->start('Waiting 10 sec.: ');
  sleep(10);
- $yapi->done('done');
+ $yapi->erase();
 
 =head1 DESCRIPTION
 
-Term::YAPI provides a simple progress indicator on the terminal to let the
-user know that something is happening.  The indicator is an I<animation> of
-single characters displayed cyclically one after the next.
+Term::YAPI provides progress indicators on the terminal to let the user know
+that something is happening.  The indicator can be in incrementing counter, or
+can consist of one or more elements that are displayed cyclically one after
+another.
 
 The text cursor is I<hidden> while progress is being displayed, and restored
 after the progress indicator finishes.  A C<$SIG{'INT'}> handler is installed
@@ -255,40 +359,72 @@ can run asynchronously in a thread.
 =item my $yapi = Term::YAPI->new()
 
 Creates a new synchronous progress indicator object, using the default
-I<twirling bar> indicator: / - \ |
+I<twirling bar> indicator:  / - \ |
+
+=item my $yapi = Term::YAPI->new('type' => 'XXX');
+
+The C<'type'> parameter specifies the type of progress indicator to be used:
+
+=over
+
+=item C<'type' =E<gt> 'anim'>
+
+An I<animated> indicator - defaults to the I<twirling bar> indicator.  This is
+the default indicator type.
+
+=item C<'type' =E<gt> 'dots'>
+
+A character sequence indicator - defaults to a line of periods/dots:  .....
+
+=item C<'type' =E<gt> 'count'>
+
+An incrementing counter that starts at 0.
+
+=back
 
 =item my $yapi = Term::YAPI->new('yapi' => $indicator_array_ref)
 
-Creates a new synchronous progress indicator object using the characters
-specified in the supplied array ref.  Examples:
+The C<'yapi'> parameter supplies an array reference containing the elements
+to be used for the indicator.  Examples:
 
- my $yapi = Term::YAPI->new('yapi' => [ qw(^ > v <) ]);
+ my $yapi = Term::YAPI->new('yapi' => [ qw(^ > v <) ], 'type' => 'anim');
 
- my $yapi = Term::YAPI->new('yapi' => [ qw(. o O o) ]);
+ my $yapi = Term::YAPI->new('yapi' => [ qw(. o O o) ]);   # Either type
 
- my $yapi = Term::YAPI->new('yapi' => [ qw(. : | :) ]);
+ my $yapi = Term::YAPI->new('yapi' => [ qw(. : | :) ]);   # Either type
 
- my $yapi = Term::YAPI->new('yapi' => [ qw(9 8 7 6 5 4 3 2 1 0) ]);
+ my $yapi = Term::YAPI->new('yapi' => [ '|o    |',
+                                        '| o   |',
+                                        '|  o  |',
+                                        '|   o |',
+                                        '|    o|',
+                                        '|   o |',
+                                        '|  o  |',
+                                        '| o   |'  ], 'type' => 'anim');
+
+This parameter is ignored for C<'type' =E<gt> 'count'> indicators.
 
 =item my $yapi = Term::YAPI->new('async' => 1);
 
-=item my $yapi = Term::YAPI->new('yapi' => $indicator_array_ref, 'async' => 1)
-
 Creates a new asynchronous progress indicator object.
+
+=item my $yapi = Term::YAPI->new('erase' => 1);
+
+Indicates that the entire line occupied by the indicator is to be erased when
+the indicator is terminated.
 
 =item $yapi->start($start_msg)
 
 Sets up the interrupt signal handler, hides the text cursor, and prints out
-the optional message string followed by the first progress character.  The
-message defaults to 'Working: '.
+the optional message followed by the first progress element.  The message
+defaults to 'Working: '.
 
-For an asynchronous progress indicator, the progress characters begin
-displaying at one second intervals.
+For an asynchronous progress indicator, the progress elements display at one
+second intervals.
 
 =item $yapi->progress()
 
-Backspaces over the previous progress character, and displays the next
-character.
+Displays the next progress indicator element.
 
 This method is not used with asynchronous progress indicators.
 
@@ -298,9 +434,15 @@ Prints out the optional message (defaults to 'done'), restores the text
 cursor, and removes the interrupt handler installed by the C<-E<gt>start()>
 method (restoring any previous interrupt handler).
 
+=item $yapi->erase()
+
+Terminates the indicator as with the C<-E<gt>done()> method, and erases the
+entire line the indicator was on.
+
 =back
 
-The progress indicator object is reusable.
+The progress indicator object is reusable.  In other words, after using it
+once, you can use it again just by using C<$yapi-E<gt>start($start_msg)>.
 
 =head1 INSTALLATION
 
@@ -324,9 +466,12 @@ times in an application is supported.  This module will not allow more than
 one indicator to run at the same time.
 
 Trying to use asynchronous progress indicators on non-threaded Perls will
-work, but will not display an animated progress character.
+not cause an error, but will only display 'wait...'.
 
 =head1 SEE ALSO
+
+Annotated POD for Term::YAPI:
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.22/examples/YAPI.pm>
 
 L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 

@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.21';
+our $VERSION = '3.22';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.21;
-use Object::InsideOut::Util 3.21 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.21;
+use Object::InsideOut::Exception 3.22;
+use Object::InsideOut::Util 3.22 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.22;
 
 require B;
 
@@ -961,9 +961,7 @@ sub initialize :Sub(Private)
                 } elsif ($sym eq 'create_field') {
                     $$meta{$pkg}{$sym}{'kind'} = 'class';
 
-                } elsif ($sym =~ /^STORABLE_/ ||
-                         $sym eq 'AUTOLOAD')
-                {
+                } elsif ($sym =~ /^STORABLE_/ || ($sym eq 'AUTOLOAD')) {
                     $$meta{$pkg}{$sym}{'hidden'} = 1;
 
                 } elsif ($sym =~ /herit/ || $sym eq 'set') {
@@ -1682,9 +1680,7 @@ sub set
     }
 
     # Handle sharing
-    if ($GBL{'share'}{'ok'} &&
-        threads::shared::_id($field))
-    {
+    if ($GBL{'share'}{'ok'} && threads::shared::_id($field)) {
         lock($field);
         if ($fld_type eq 'HASH') {
             $$field{$$self} = make_shared($data);
@@ -2129,9 +2125,7 @@ sub create_accessors :Sub(Private)
     $dump = $$dump{$pkg};
 
     if ($name) {
-        if (exists($$dump{$name}) &&
-            $field_ref != $$dump{$name}{'fld'})
-        {
+        if (exists($$dump{$name}) && ($field_ref != $$dump{$name}{'fld'})) {
             OIO::Attribute->die(
                 'message'   => "Can't create accessor method for package '$pkg'",
                 'Info'      => "'$name' already specified for another field using '$$dump{$name}{'src'}'",
@@ -2144,32 +2138,24 @@ sub create_accessors :Sub(Private)
         }
 
     } elsif ($get) {
-        if (exists($$dump{$get}) &&
-            $field_ref != $$dump{$get}{'fld'})
-        {
+        if (exists($$dump{$get}) && ($field_ref != $$dump{$get}{'fld'})) {
             OIO::Attribute->die(
                 'message'   => "Can't create accessor method for package '$pkg'",
                 'Info'      => "'$get' already specified for another field using '$$dump{$get}{'src'}'",
                 'Attribute' => $attr);
         }
-        if (! exists($$dump{$get}) ||
-            ($$dump{$get}{'src'} ne 'Name'))
-        {
+        if (! exists($$dump{$get}) || ($$dump{$get}{'src'} ne 'Name')) {
             $$dump{$get} = { fld => $field_ref, src => 'Get' };
         }
 
     } elsif ($set) {
-        if (exists($$dump{$set}) &&
-            $field_ref != $$dump{$set}{'fld'})
-        {
+        if (exists($$dump{$set}) && ($field_ref != $$dump{$set}{'fld'})) {
             OIO::Attribute->die(
                 'message'   => "Can't create accessor method for package '$pkg'",
                 'Info'      => "'$set' already specified for another field using '$$dump{$set}{'src'}'",
                 'Attribute' => $attr);
         }
-        if (! exists($$dump{$set}) ||
-            ($$dump{$set}{'src'} ne 'Name'))
-        {
+        if (! exists($$dump{$set}) || ($$dump{$set}{'src'} ne 'Name')) {
             $$dump{$set} = { fld => $field_ref, src => 'Set' };
         }
     } elsif (! $return && ! $lvalue) {
