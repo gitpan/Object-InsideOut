@@ -2,7 +2,7 @@ package Bundle::Object::InsideOut;
 
 use strict;
 
-our $VERSION = '3.22';
+our $VERSION = '3.23';
 $VERSION = eval $VERSION;
 
 1;
@@ -33,7 +33,7 @@ Test::Pod 1.26                  - Checks POD syntax
 
 Devel::Symdump 2.07             - Used by Pod::Coverage
 
-File::Spec 3.24                 - Used by Pod::Parser
+File::Spec 3.25                 - Used by Pod::Parser
 
 Pod::Parser 1.35                - Used by Pod::Coverage
 
@@ -41,11 +41,11 @@ Pod::Coverage 0.18              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.61                    - Support for threads
+threads 1.65                    - Support for threads
 
-threads::shared 1.11            - Support for sharing objects between threads
+threads::shared 1.13            - Support for sharing objects between threads
 
-Want 0.14                       - :lvalue accessor support
+Want 0.15                       - :lvalue accessor support
 
 Storable 2.16                   - Object serialization support
 
@@ -55,7 +55,7 @@ Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.22          - Inside-out object support
+Object::InsideOut 3.23          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 
@@ -63,11 +63,11 @@ HTML::Tagset 3.10               - Used by LWP::UserAgent
 
 HTML::Parser 3.56               - Used by LWP::UserAgent
 
-LWP::UserAgent 2.033            - Used by Math::Random::MT::Auto
+LWP::UserAgent 2.036            - Used by Math::Random::MT::Auto
 
 Win32::API 0.46                 - Used by Math::Random::MT::Auto (Win XP only)
 
-Math::Random::MT::Auto 6.03     - Support for :SECURE mode
+Math::Random::MT::Auto 6.07     - Support for :SECURE mode
 
 =head1 DESCRIPTION
 

@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.23 Tue Sep 11 16:17:44 2007
+	- Localize error vars in DESTROY
+
 3.22 Fri Sep  7 19:34:23 2007
 	- Enhancements to Term::YAPI in examples dir
 	- POD spelling test (maintainer only)

@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.22';
+our $VERSION = '3.23';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.22;
-use Object::InsideOut::Util 3.22 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.22;
+use Object::InsideOut::Exception 3.23;
+use Object::InsideOut::Util 3.23 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.23;
 
 require B;
 
@@ -670,7 +670,7 @@ sub _ID :Sub
         if (! exists($$r_tree[$thread_id])) {
             $$r_tree[$thread_id] = make_shared([]);
         } elsif (grep { $_ == $id } @{$$r_tree[$thread_id]}) {
-            print(STDERR "ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
+            warn("ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
             return;
         }
         push(@{$$r_tree[$thread_id]}, $id);
@@ -1719,6 +1719,9 @@ sub DESTROY
     # Grab any error coming into this routine
     my $err = $@;
 
+    # Preserve other error variables
+    local($., $!, $^E, $?);
+
     # Workaround for Perl's "in cleanup" bug
     if ($threads::shared::threads_shared && ! $GBL{'term'}) {
         eval {
@@ -1741,7 +1744,7 @@ sub DESTROY
             } else {
                 my $so_cl = $GBL{'share'}{'obj'}{$class};
                 if (! exists($$so_cl{$$self})) {
-                    print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $tid twice\n");
+                    warn("ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $tid twice\n");
                     return;   # Object already deleted (shouldn't happen)
                 }
 
@@ -1758,7 +1761,7 @@ sub DESTROY
         } elsif ($threads::threads) {
             my $obj_cl = $GBL{'obj'}{$class};
             if (! exists($$obj_cl{$$self})) {
-                print(STDERR "ERROR: Attempt to DESTROY object ID $$self of class $class twice\n");
+                warn("ERROR: Attempt to DESTROY object ID $$self of class $class twice\n");
                 return;
             }
 
