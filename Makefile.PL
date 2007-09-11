@@ -106,11 +106,10 @@ WriteMakefile(
 );
 
 
-# Add additional targets to Makefile for use by module maintainer
+# Additional 'make' targets
 sub MY::postamble
 {
-    if ($^O eq 'cygwin') {
-        return <<'_EXTRAS_';
+    return <<'_EXTRAS_';
 predist:
 	@dos2unix `cat MANIFEST`
 	@$(CHMOD) 644 `cat MANIFEST`
@@ -120,7 +119,6 @@ yapi:
 	  examples/YAPI.pm blib/lib/Term/YAPI.pm
 	$(NOECHO) $(TOUCH) pm_to_blib
 _EXTRAS_
-    }
 }
 
 # EOF
