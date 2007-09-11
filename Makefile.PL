@@ -111,9 +111,14 @@ sub MY::postamble
 {
     if ($^O eq 'cygwin') {
         return <<'_EXTRAS_';
-misc:
-	@$(CHMOD) 644 Build.PL `cat MANIFEST`
+predist:
 	@dos2unix `cat MANIFEST`
+	@$(CHMOD) 644 `cat MANIFEST`
+
+yapi:
+	$(NOECHO) $(ABSPERLRUN) -MExtUtils::Install -e 'pm_to_blib({@ARGV}, '\''$(INST_LIB)/auto'\'', '\''$(PM_FILTER)'\'')' -- \
+	  examples/YAPI.pm blib/lib/Term/YAPI.pm
+	$(NOECHO) $(TOUCH) pm_to_blib
 _EXTRAS_
     }
 }

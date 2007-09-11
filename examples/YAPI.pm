@@ -2,7 +2,7 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.23';
+    our $VERSION = '3.24';
 
     #####
     #
@@ -21,7 +21,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.23;
+    use Object::InsideOut 3.24;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field
@@ -451,6 +451,13 @@ installation:
 
  cp YAPI.pm `perl -MConfig -e'print $Config{privlibexp}'`/Term/
 
+or as part of the Object::InsideOut installation process:
+
+ perl Makefile.PL
+ make
+ make yapi
+ make install
+
 =head1 LIMITATIONS
 
 Works, as is, on C<xterm>, C<rxvt>, and the like.  When used with MSDOS
@@ -471,7 +478,7 @@ not cause an error, but will only display 'wait...'.
 =head1 SEE ALSO
 
 Annotated POD for Term::YAPI:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.23/examples/YAPI.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.24/examples/YAPI.pm>
 
 L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 

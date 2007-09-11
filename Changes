@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.24 Tue Sep 11 17:07:07 2007
+	- Capability to install Term::YAPI
+
 3.23 Tue Sep 11 16:17:44 2007
 	- Localize error vars in DESTROY
 
