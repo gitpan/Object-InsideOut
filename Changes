@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.26 Mon Sep 17 23:59:28 2007
+	- Support ANSI color sequences in Term::YAPI
+
 3.25 Tue Sep 11 17:29:00 2007
 	- Capability to install Term::YAPI (fixed)
 

@@ -2,7 +2,7 @@ package Bundle::Object::InsideOut;
 
 use strict;
 
-our $VERSION = '3.25';
+our $VERSION = '3.26';
 $VERSION = eval $VERSION;
 
 1;
@@ -21,7 +21,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 Test::Harness 2.64              - Used for module testing
 
-Test::Simple 0.70               - Used for module testing
+Test::Simple 0.71               - Used for module testing
 
 Scalar::Util 1.19               - Used by Object::InsideOut
 
@@ -37,7 +37,7 @@ File::Spec 3.25                 - Used by Pod::Parser
 
 Pod::Parser 1.35                - Used by Pod::Coverage
 
-Pod::Coverage 0.18              - Used by Test::Pod::Coverage
+Pod::Coverage 0.19              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
@@ -55,7 +55,7 @@ Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.25          - Inside-out object support
+Object::InsideOut 3.26          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 
@@ -67,7 +67,7 @@ LWP::UserAgent 2.036            - Used by Math::Random::MT::Auto
 
 Win32::API 0.46                 - Used by Math::Random::MT::Auto (Win XP only)
 
-Math::Random::MT::Auto 6.07     - Support for :SECURE mode
+Math::Random::MT::Auto 6.09     - Support for :SECURE mode
 
 =head1 DESCRIPTION
 

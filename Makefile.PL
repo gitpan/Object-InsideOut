@@ -15,7 +15,7 @@ if ($@) {
     $Scalar::Util::VERSION = 1.10;
 } elsif (! Scalar::Util->can('weaken')) {
     # Scalar::Util is 'pure Perl' version
-    if ($Scalar::Util::VERSION eq '1.18') {
+    if ($Scalar::Util::VERSION eq '1.20') {
         die <<_NO_WEAKEN_;
 You must reinstall Scalar::Util in order to install Object::InsideOut
 because the currently installed Scalar::Util is a 'pure perl' version

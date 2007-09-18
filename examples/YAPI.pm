@@ -2,7 +2,7 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.25';
+    our $VERSION = '3.26';
 
     #####
     #
@@ -21,7 +21,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.25;
+    use Object::InsideOut 3.26;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field
@@ -183,17 +183,26 @@ package Term::YAPI; {
         return $prog;
     }
 
+
+    # String length ignoring ANSI color sequences
+    sub _length :Sub
+    {
+        my $s = shift;
+        $s =~ s/\e.+?m//g;
+        return length($s);
+    }
+
     # Generates a string to erase the previous progress element
     sub _undo :Sub
     {
         my ($type, $yapi, $step, $max, $last) = @_;
 
         my $undo = ($type eq 'anim')
-                        ? ("\b \b" x length($yapi->[$step % $max]))
+                        ? ("\b \b" x _length($yapi->[$step % $max]))
                  : ($type eq 'dots')
                         ? (($last) ? ' ' : '')
                  : ($type eq 'count')
-                        ? ("\b \b" x length($step))
+                        ? ("\b \b" x _length($step))
                  : '';
 
         return $undo;
@@ -213,7 +222,7 @@ package Term::YAPI; {
             my $step = $step[$$self]++;
             my $max  = scalar(@{$yapi});
             print(_undo($type, $yapi, $step,   $max, 0) .
-                  _step($type, $yapi, $step+1, $max))
+                  _prog($type, $yapi, $step+1, $max))
         } else {
             # Not running, or some other indicator is running.
             # Therefore, start this indicator.
@@ -393,15 +402,6 @@ to be used for the indicator.  Examples:
 
  my $yapi = Term::YAPI->new('yapi' => [ qw(. : | :) ]);   # Either type
 
- my $yapi = Term::YAPI->new('yapi' => [ '|o    |',
-                                        '| o   |',
-                                        '|  o  |',
-                                        '|   o |',
-                                        '|    o|',
-                                        '|   o |',
-                                        '|  o  |',
-                                        '| o   |'  ], 'type' => 'anim');
-
 This parameter is ignored for C<'type' =E<gt> 'count'> indicators.
 
 =item my $yapi = Term::YAPI->new('async' => 1);
@@ -444,6 +444,35 @@ entire line the indicator was on.
 The progress indicator object is reusable.  In other words, after using it
 once, you can use it again just by using C<$yapi-E<gt>start($start_msg)>.
 
+=head1 EXAMPLE
+
+Term::YAPI will even support using ANSI color sequences in the progress
+indicator elements:
+
+ use Term::YAPI;
+ use Term::ANSIColor ':constants';
+
+ my $l = BOLD . BLUE . '<' . RESET;
+ my $r = BOLD . BLUE . '>' . RESET;
+ my $x1 = RED . '.' . RESET;
+ my $x2 = RED . 'o' . RESET;
+ my $x3 = RED . '0' . RESET;
+
+ my $yapi = Term::YAPI->new('type' => 'anim',
+                            'yapi' => [ "$l$x1    $r",
+                                        "$l $x2   $r",
+                                        "$l  $x3  $r",
+                                        "$l   $x2 $r",
+                                        "$l    $x1$r",
+                                        "$l   $x2 $r",
+                                        "$l  $x3  $r",
+                                        "$l $x2   $r" ],
+                            'async' => 1);
+
+ $yapi->start(GREEN . 'Watch this ' . RESET);
+ sleep(10);
+ $yapi->done(YELLOW . '- cool, eh?' . RESET);
+
 =head1 INSTALLATION
 
 The following will install YAPI.pm under the F<Term> directory in your Perl
@@ -478,7 +507,7 @@ not cause an error, but will only display 'wait...'.
 =head1 SEE ALSO
 
 Annotated POD for Term::YAPI:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.25/examples/YAPI.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.26/examples/YAPI.pm>
 
 L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 
