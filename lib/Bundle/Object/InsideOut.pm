@@ -2,7 +2,7 @@ package Bundle::Object::InsideOut;
 
 use strict;
 
-our $VERSION = '3.26';
+our $VERSION = '3.27';
 $VERSION = eval $VERSION;
 
 1;
@@ -21,7 +21,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 Test::Harness 2.64              - Used for module testing
 
-Test::Simple 0.71               - Used for module testing
+Test::Simple 0.72               - Used for module testing
 
 Scalar::Util 1.19               - Used by Object::InsideOut
 
@@ -31,7 +31,7 @@ Pod::Simple 3.05                - Used by Test::Pod
 
 Test::Pod 1.26                  - Checks POD syntax
 
-Devel::Symdump 2.07             - Used by Pod::Coverage
+Devel::Symdump 2.08             - Used by Pod::Coverage
 
 File::Spec 3.25                 - Used by Pod::Parser
 
@@ -41,9 +41,9 @@ Pod::Coverage 0.19              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.65                    - Support for threads
+threads 1.67                    - Support for threads
 
-threads::shared 1.13            - Support for sharing objects between threads
+threads::shared 1.14            - Support for sharing objects between threads
 
 Want 0.15                       - :lvalue accessor support
 
@@ -55,7 +55,7 @@ Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.26          - Inside-out object support
+Object::InsideOut 3.27          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 

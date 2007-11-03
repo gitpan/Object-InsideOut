@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.27 Sat Nov  3 01:23:30 2007
+	- Make :Default({}) work as expected
+	- Added ->endtime() method to Term::YAPI
+
 3.26 Mon Sep 17 23:59:28 2007
 	- Support ANSI color sequences in Term::YAPI
 

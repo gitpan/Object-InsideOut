@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.26';
+our $VERSION = '3.27';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.26;
-use Object::InsideOut::Util 3.26 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.26;
+use Object::InsideOut::Exception 3.27;
+use Object::InsideOut::Util 3.27 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.27;
 
 require B;
 
@@ -1526,7 +1526,7 @@ sub new :MergeArgs
     # Set any defaults
     foreach my $pkg (@{$tree}) {
         if (my $def = $GBL{'fld'}{'def'}{$pkg}) {
-            $self->set(@{$_}) foreach (@{$def});
+            $self->set($_->[0], Object::InsideOut::Util::clone($_->[1])) foreach (@{$def});
         }
     }
 

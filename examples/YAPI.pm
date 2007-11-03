@@ -2,12 +2,13 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.26';
+    our $VERSION = '3.27';
 
     #####
     #
     # TODO:
     #   types - pulse, countdown
+    #   STDERR
     #
     #####
 
@@ -21,7 +22,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.26;
+    use Object::InsideOut 3.27;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field
@@ -39,8 +40,8 @@ package Term::YAPI; {
     # Step counter for indicator
     my @step :Field;
 
-    # Boolean - indicator is running?
-    my @is_running :Field;
+    # Start time of running indicator
+    my @running :Field;
 
     # Type of indicator = twirl, dots, pulse, ...
     my @type :Field;
@@ -139,7 +140,7 @@ package Term::YAPI; {
         }
 
         # Set ourself as running
-        $is_running[$$self] = 1;
+        $running[$$self] = time();
         $current = $self;
         $step[$$self] = 0;
 
@@ -216,7 +217,7 @@ package Term::YAPI; {
 
         return if ($is_async[$$self]);   # N/A for 'async' indicators
 
-        if ($is_running[$$self]) {
+        if ($running[$$self]) {
             my $type = $type[$$self];
             my $yapi = $yapi[$$self];
             my $step = $step[$$self]++;
@@ -237,7 +238,7 @@ package Term::YAPI; {
         my ($self, $msg) = @_;
 
         # Ignore if not running
-        return if (! delete($is_running[$$self]));
+        return if (! delete($running[$$self]));
 
         # No longer currently running indicator
         undef($current);
@@ -265,6 +266,22 @@ package Term::YAPI; {
         my ($self, $msg) = @_;
         $self->_done(($erase[$$self]) ? "\r$EL"  :
                      (defined($msg))  ? "$msg\n" : "done\n");
+    }
+
+    # Stop the indicator and report elapsed time
+    sub endtime :Method(object)
+    {
+        my $self = $_[0];
+        if (my $start = $running[$$self]) {
+            my $time = time() - $start;
+
+            my $hrs = int($time/3600);
+            $time -= 3600*$hrs;
+            my $min = int($time/60);
+            my $sec = $time - 60*$min;
+
+            $self->_done(sprintf("time = %d:%02d:%02d\n", $hrs, $min, $sec));
+        }
     }
 
     # Stop the indicator and erase the line
@@ -434,10 +451,14 @@ Prints out the optional message (defaults to 'done'), restores the text
 cursor, and removes the interrupt handler installed by the C<-E<gt>start()>
 method (restoring any previous interrupt handler).
 
+=item $yapi->endtime()
+
+Terminates the indicator as with the C<-E<gt>done()> method, and prints out
+the elapsed time for the indicator.
+
 =item $yapi->erase()
 
-Terminates the indicator as with the C<-E<gt>done()> method, and erases the
-entire line the indicator was on.
+Terminates the indicator, and erases the entire line the indicator was on.
 
 =back
 
@@ -507,7 +528,7 @@ not cause an error, but will only display 'wait...'.
 =head1 SEE ALSO
 
 Annotated POD for Term::YAPI:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.26/examples/YAPI.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.27/examples/YAPI.pm>
 
 L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 
