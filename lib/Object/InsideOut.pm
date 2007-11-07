@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.27';
+our $VERSION = '3.28';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.27;
-use Object::InsideOut::Util 3.27 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.27;
+use Object::InsideOut::Exception 3.28;
+use Object::InsideOut::Util 3.28 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.28;
 
 require B;
 
@@ -1627,8 +1627,7 @@ sub clone
 # Get a metadata object
 sub meta
 {
-    my ($thing, $arg) = @_;
-    my $class = ref($thing) || $thing;
+    my $class = ref($_[0]) || $_[0];
 
     # No metadata for OIO
     if ($class eq __PACKAGE__) {

@@ -166,19 +166,18 @@ sub install_UNIVERSAL
 
     *UNIVERSAL::isa = sub
     {
-        my ($thing, $type) = @_;
-
         # Is it a metadata call?
-        if (! $type) {
-            return $thing->Object::InsideOut::meta()->get_classes();
+        if (@_ == 1) {
+            return Object::InsideOut::meta($_[0])->get_classes();
         }
 
-        # First, try the original UNIVERSAL::isa()
-        if (my $isa = $$GBL{'isa'}->($thing, $type)) {
+        # Try original UNIVERSAL::isa()
+        if (my $isa = $$GBL{'isa'}->(@_)) {
             return ($isa);
         }
 
         # Next, check heritage
+        my ($thing, $type) = @_;
         foreach my $pkg (@{$$GBL{'tree'}{'bu'}{ref($thing) || $thing}}) {
             if (exists($$GBL{'heritage'}{$pkg})) {
                 foreach my $pkg (keys(%{$$GBL{'heritage'}{$pkg}{'cl'}})) {
@@ -201,7 +200,7 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.27)
+($Object::InsideOut::VERSION == 3.28)
     or die("Version mismatch\n");
 
 # EOF
