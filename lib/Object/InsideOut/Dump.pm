@@ -20,33 +20,16 @@ sub dump
         # Extract field info from any :InitArgs hashes
         while (my $pkg = shift(@{$$GBL{'dump'}{'args'}})) {
             my $p_args = $$GBL{'args'}{$pkg};
-            INIT_ARGS:
             foreach my $name (keys(%{$p_args})) {
                 my $val = $$p_args{$name};
                 next if (ref($val) ne 'HASH');
                 if (my $field = $$val{'_F'}) {
-                    # Override get/set names, but not 'Name'
-                    foreach my $name2 (keys(%{$$d_flds{$pkg}})) {
-                        my $fld_spec = $$d_flds{$pkg}{$name2};
-                        if ($field == $$fld_spec{'fld'}) {
-                            if ($$fld_spec{'src'} eq 'Name') {
-                                next INIT_ARGS;
-                            }
-                            delete($$d_flds{$pkg}{$name2});
-                            last;
-                        }
-                    }
-                    if (exists($$d_flds{$pkg}{$name}) &&
-                        $field != $$d_flds{$pkg}{$name}{'fld'})
-                    {
+                    $$d_flds{$pkg} ||= {};
+                    if (add_dump_field('InitArgs', $name, $field, $$d_flds{$pkg}) eq 'conflict') {
                         OIO::Code->die(
                             'message' => 'Cannot dump object',
                             'Info'    => "In class '$pkg', '$name' refers to two different fields set by 'InitArgs' and '$$d_flds{$pkg}{$name}{'src'}'");
                     }
-                    $$d_flds{$pkg}{$name} = {
-                        fld => $field,
-                        src => 'InitArgs',
-                    };
                 }
             }
         }
@@ -222,7 +205,7 @@ sub dump
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.28)
+($Object::InsideOut::VERSION == 3.29)
     or die("Version mismatch\n");
 
 # EOF

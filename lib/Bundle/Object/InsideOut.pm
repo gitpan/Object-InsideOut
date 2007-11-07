@@ -2,7 +2,7 @@ package Bundle::Object::InsideOut;
 
 use strict;
 
-our $VERSION = '3.28';
+our $VERSION = '3.29';
 $VERSION = eval $VERSION;
 
 1;
@@ -43,7 +43,7 @@ Test::Pod::Coverage 1.08        - Tests POD coverage
 
 threads 1.67                    - Support for threads
 
-threads::shared 1.14            - Support for sharing objects between threads
+threads::shared 1.15            - Support for sharing objects between threads
 
 Want 0.15                       - :lvalue accessor support
 
@@ -55,7 +55,7 @@ Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.28          - Inside-out object support
+Object::InsideOut 3.29          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 

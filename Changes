@@ -1,7 +1,11 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.29 Wed Nov  7 18:20:56 2007
+	- Fix to dump (Bug #30527)
+	- Additional fix to UNIVERSAL::isa call (Bug #30533)
+
 3.28 Wed Nov  7 01:34:02 2007
-	- Fix UNIVERSAL::isa call for metadata
+	- Fix to UNIVERSAL::isa call (Bug #30533)
 
 3.27 Sat Nov  3 01:23:30 2007
 	- Make :Default({}) work as expected

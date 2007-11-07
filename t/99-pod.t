@@ -64,6 +64,7 @@ SKIP: {
                             qr/^_args$/,
                             qr/^_obj$/,
                             qr/^import$/,
+                            qr/^add_dump_field$/,
                         ]
                     }
     );

@@ -93,6 +93,12 @@ MAIN:
     is($x, $obj                         => 'Retrieved object');
 
     #print($obj->dump(1), "\n");
+
+    $obj = bless({}, 'SomeClass');
+    ok(UNIVERSAL::isa($obj, undef) ||
+       UNIVERSAL::isa($obj, '') ||
+       UNIVERSAL::isa($obj, 0) ||
+       UNIVERSAL::isa($obj, 'SomeClass'), 'isa works');
 }
 
 exit(0);

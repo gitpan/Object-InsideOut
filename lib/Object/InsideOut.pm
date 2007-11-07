@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.28';
+our $VERSION = '3.29';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.28;
-use Object::InsideOut::Util 3.28 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.28;
+use Object::InsideOut::Exception 3.29;
+use Object::InsideOut::Util 3.29 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.29;
 
 require B;
 
@@ -117,23 +117,22 @@ if (! exists($GBL{'isa'})) {
 
     *UNIVERSAL::isa = sub
     {
-        my ($thing, $type) = @_;
-
-        # Want classes?
-        if (! $type) {
-            return $thing->Object::InsideOut::meta()->get_classes();
+        # Metadata call for classes
+        if (@_ == 1) {
+            return Object::InsideOut::meta($_[0])->get_classes();
         }
+
+        # Workaround for Perl bug #47233
+        return ('') if (! defined($_[1]));
 
         goto $GBL{'isa'};
     };
 
     *UNIVERSAL::can = sub
     {
-        my ($thing, $method) = @_;
-
-        # Want methods?
-        if (! $method) {
-            my $meths = $thing->Object::InsideOut::meta()->get_methods();
+        # Metadata call for methods
+        if (@_ == 1) {
+            my $meths = Object::InsideOut::meta($_[0])->get_methods();
             return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
         }
 
@@ -1867,6 +1866,43 @@ sub STORABLE_thaw :Sub
 
 ### Accessor Generator ###
 
+# Names a field for dumping
+sub add_dump_field :Sub(Private)
+{
+    my ($src, $name, $fld, $dump) = @_;
+
+    # Name already in use for different field
+    if (exists($$dump{$name}) && ($fld != $$dump{$name}{'fld'})) {
+        return ('conflict');
+    }
+
+    # Entry already exists for field
+    if (my ($old_name) = grep { $$dump{$_}{'fld'} == $fld } keys(%$dump)) {
+        my $old_src = $$dump{$old_name}{'src'};
+        if ($old_src eq 'Name') {
+            return ('named');
+        } elsif ($src eq 'Name') {
+            delete($$dump{$old_name});
+        } elsif ($old_src eq 'InitArgs') {
+            return ('named');
+        } elsif ($src eq 'InitArgs') {
+            delete($$dump{$old_name});
+        } elsif ($old_src eq 'Get') {
+            return ('named');
+        } elsif ($src eq 'Get') {
+            delete($$dump{$old_name});
+        } elsif ($old_src eq 'Set') {
+            return ('named');
+        } else {
+            delete($$dump{$old_name});    # Shouldn't get here
+        }
+    }
+
+    $$dump{$name} = { fld => $fld, src => $src };
+    return ('okay');
+}
+
+
 # Creates object data accessors for classes
 sub create_accessors :Sub(Private)
 {
@@ -2121,44 +2157,33 @@ sub create_accessors :Sub(Private)
 
     # Add field info for dump()
     my $dump = $GBL{'dump'}{'fld'};
-    if (! exists($$dump{$pkg})) {
-        $$dump{$pkg} = {};
-    }
+    $$dump{$pkg} ||= {};
     $dump = $$dump{$pkg};
 
     if ($name) {
-        if (exists($$dump{$name}) && ($field_ref != $$dump{$name}{'fld'})) {
+        if (add_dump_field('Name', $name, $field_ref, $dump) eq 'conflict') {
             OIO::Attribute->die(
                 'message'   => "Can't create accessor method for package '$pkg'",
                 'Info'      => "'$name' already specified for another field using '$$dump{$name}{'src'}'",
                 'Attribute' => $attr);
         }
-        $$dump{$name} = { fld => $field_ref, src => 'Name' };
         # Done if only 'Name' present
         if (! $get && ! $set && ! $return && ! $lvalue) {
             return;
         }
-
     } elsif ($get) {
-        if (exists($$dump{$get}) && ($field_ref != $$dump{$get}{'fld'})) {
+        if (add_dump_field('Get', $get, $field_ref, $dump) eq 'conflict') {
             OIO::Attribute->die(
                 'message'   => "Can't create accessor method for package '$pkg'",
                 'Info'      => "'$get' already specified for another field using '$$dump{$get}{'src'}'",
                 'Attribute' => $attr);
         }
-        if (! exists($$dump{$get}) || ($$dump{$get}{'src'} ne 'Name')) {
-            $$dump{$get} = { fld => $field_ref, src => 'Get' };
-        }
-
     } elsif ($set) {
-        if (exists($$dump{$set}) && ($field_ref != $$dump{$set}{'fld'})) {
+        if (add_dump_field('Set', $set, $field_ref, $dump) eq 'conflict') {
             OIO::Attribute->die(
                 'message'   => "Can't create accessor method for package '$pkg'",
                 'Info'      => "'$set' already specified for another field using '$$dump{$set}{'src'}'",
                 'Attribute' => $attr);
-        }
-        if (! exists($$dump{$set}) || ($$dump{$set}{'src'} ne 'Name')) {
-            $$dump{$set} = { fld => $field_ref, src => 'Set' };
         }
     } elsif (! $return && ! $lvalue) {
         return;

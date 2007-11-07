@@ -12,15 +12,14 @@ sub install_UNIVERSAL
 
     *UNIVERSAL::can = sub
     {
-        my ($thing, $method) = @_;
-
-        # Is it a metadata call?
-        if (! $method) {
-            my $meths = $thing->Object::InsideOut::meta()->get_methods();
+        # Metadata call for methods
+        if (@_ == 1) {
+            my $meths = Object::InsideOut::meta($_[0])->get_methods();
             return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
         }
 
         # First, try the original UNIVERSAL::can()
+        my ($thing, $method) = @_;
         my $code;
         if ($method =~ /^SUPER::/) {
             # Superclass WRT caller
@@ -166,10 +165,13 @@ sub install_UNIVERSAL
 
     *UNIVERSAL::isa = sub
     {
-        # Is it a metadata call?
+        # Metadata call for classes
         if (@_ == 1) {
             return Object::InsideOut::meta($_[0])->get_classes();
         }
+
+        # Workaround for Perl bug #47233
+        return ('') if (! defined($_[1]));
 
         # Try original UNIVERSAL::isa()
         if (my $isa = $$GBL{'isa'}->(@_)) {
@@ -200,7 +202,7 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.28)
+($Object::InsideOut::VERSION == 3.29)
     or die("Version mismatch\n");
 
 # EOF
