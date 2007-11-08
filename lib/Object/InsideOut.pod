@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.29
+This document describes Object::InsideOut version 3.31
 
 =head1 SYNOPSIS
 
@@ -2030,7 +2030,7 @@ it must be provided using a L<:Replicate|/"Object Replication"> subroutine.
 
 =head2 Field Cloning
 
-Object cloning can be controlled at the field level such that only specified
+Object cloning can be controlled at the field level such that specified
 fields are I<deeply> copied when C<-E<gt>clone()> is called without any
 arguments.  This is done by adding the C<:Deep> attribute to the field:
 
@@ -2996,6 +2996,11 @@ with a patch that adds the missing S<C<local $SIG{'__DIE__'};>> statement.
 
 =head1 BUGS AND LIMITATIONS
 
+The equality operator (e.g., C<if ($obj1 == $obj2) { ...>) is overloaded
+for C<:SHARED> classes when L<threads::shared> is loaded.  The L<overload>
+subroutine compares object classes and IDs because references to the same
+thread shared object may have different refaddrs.
+
 You cannot overload an object to a scalar context (i.e., can't C<:SCALARIFY>).
 
 You cannot use two instances of the same class with mixed thread object
@@ -3032,7 +3037,7 @@ thread, and then manipulate the object inside the thread:
  threads->create(sub { $obj->set_data('bar'); })->join();
  my $data = $obj->get_data();
 
-With version of Perl prior to 5.10.0, there are bugs associated with
+With versions of Perl prior to 5.10.0, there are bugs associated with
 L<threads::shared> that may prevent you from using foreign inheritance with
 shared objects, or storing objects inside of shared objects.  With Perl 5.10.0
 (and later) together with L<threads::shared> 1.15 (and later), you can store
@@ -3164,7 +3169,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.29/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.31/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

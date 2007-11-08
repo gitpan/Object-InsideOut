@@ -109,17 +109,25 @@ MAIN:
 {
     my $obj = Baz->new('borg' => 'Picard');
 
-    my $x = $obj->freeze();
-    my $obj2 = thaw($x);
+    my $tmp = $obj->freeze();
+    my $obj2 = thaw($tmp);
     is($obj->dump(1), $obj2->dump(1) => 'Storable works');
 
-    # Test circular reference case
+    # Test stored objects
     my $f1 = Mat->new();
-    $f1->set_bom($f1);
-    is($f1->get_bom(), $f1      => 'Stored object');
+    $f1->set_bom($obj);
+    is($f1->get_bom(), $obj     => 'Stored object');
 
     my $f2 = thaw($f1->freeze());
-    is($f2->get_bom(), $f2      => 'Freeze+Thaw');
+    $obj2 = $f2->get_bom();
+    is($obj->dump(1), $obj2->dump(1) => 'Storable works');
+
+    # Test circular references
+    $f1->set_bom($f1);
+    is($f1->get_bom(), $f1      => 'Circular reference');
+
+    $f2 = thaw($f1->freeze());
+    is($f2->get_bom(), $f2      => 'Storable works');
 }
 
 exit(0);

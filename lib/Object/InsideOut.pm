@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.29';
+our $VERSION = '3.31';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.29;
-use Object::InsideOut::Util 3.29 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.29;
+use Object::InsideOut::Exception 3.31;
+use Object::InsideOut::Util 3.31 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.31;
 
 require B;
 
@@ -1116,6 +1116,10 @@ sub set_sharing :Sub(Private)
             file  => $file,
             line  => $line,
         };
+        # Set up equality via overload
+        if ($sharing && $threads::shared::threads_shared) {
+            push(@{$GBL{'sub'}{'ol'}}, { 'pkg' => $class, 'ify' => 'EQUATE' });
+        }
     }
 }
 

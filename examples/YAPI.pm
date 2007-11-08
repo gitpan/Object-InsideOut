@@ -2,12 +2,12 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.29';
+    our $VERSION = '3.31';
 
     #####
     #
     # TODO:
-    #   types - pulse, countdown
+    #   types - pulse, countdown, elapsed time
     #   STDERR
     #
     #####
@@ -22,7 +22,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.29;
+    use Object::InsideOut 3.31;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field
@@ -528,7 +528,7 @@ not cause an error, but will only display 'wait...'.
 =head1 SEE ALSO
 
 Annotated POD for Term::YAPI:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.29/examples/YAPI.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.31/examples/YAPI.pm>
 
 L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 

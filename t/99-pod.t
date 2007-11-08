@@ -119,6 +119,7 @@ Pre
 preproc
 preprocess
 pre-initialization
+refaddrs
 reloadable
 renormalize
 uncallable

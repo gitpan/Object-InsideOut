@@ -23,13 +23,17 @@ sub generate_OVERLOAD :Sub(Private)
 
     # Generate overload strings
     while (my $info = shift(@{$$GBL{'sub'}{'ol'}})) {
-        $$info{'name'} ||= sub_name($$info{'code'}, ":$$info{'ify'}", $$info{'loc'});
-        my $pkg = $$info{'pkg'};
-        my $name = $$info{'name'};
+        if ($$info{'ify'} eq 'EQUATE') {
+            push(@{$code{$$info{'pkg'}}}, "\tq/==/ => sub { (ref(\$_[0]) eq ref(\$_[1])) && (\${\$_[0]} == \${\$_[1]}) },");
+        } else {
+            $$info{'name'} ||= sub_name($$info{'code'}, ":$$info{'ify'}", $$info{'loc'});
+            my $pkg = $$info{'pkg'};
+            my $name = $$info{'name'};
 
-        push(@{$code{$pkg}}, "\tq/$TYPE{$$info{'ify'}}/ => sub { \$_[0]->$name() },");
+            push(@{$code{$pkg}}, "\tq/$TYPE{$$info{'ify'}}/ => sub { \$_[0]->$name() },");
 
-        $meta{$pkg}{$name}{'kind'} = 'overload';
+            $meta{$pkg}{$name}{'kind'} = 'overload';
+        }
     }
     delete($$GBL{'sub'}{'ol'});
 
@@ -79,7 +83,7 @@ sub generate_OVERLOAD :Sub(Private)
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.29)
+($Object::InsideOut::VERSION == 3.31)
     or die("Version mismatch\n");
 
 # EOF
