@@ -1,7 +1,22 @@
-#!/usr/bin/perl
-
 use strict;
 use warnings;
+
+use Config;
+BEGIN {
+    if (! $Config{useithreads} || $] < 5.008) {
+        print("1..0 # Skip Threads not supported\n");
+        exit(0);
+    }
+    if ($] == 5.008) {
+        print("1..0 # Skip Can't test under Perl 5.8.0\n");
+        exit(0);
+    }
+
+    if ($^O eq 'MSWin32' && $] == 5.008001) {
+        print("1..0 # Skip threads::shared not working for ActivePerl 5.8.1\n");
+        exit(0);
+    }
+}
 
 use threads;
 use threads::shared;

@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.32 Thu Nov  8 21:57:28 2007
+	- Skip overload test file if no threads
+
 3.31 Thu Nov  8 19:22:42 2007
 	- Overload the '==' operator for shared objects
 
