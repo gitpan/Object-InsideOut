@@ -44,24 +44,24 @@ package Bar; {
 package main;
 MAIN:
 {
-    my $obj = Foo->new();
-    my $obj2 = Foo->new('obj'=>$obj);
-    my $x = $obj2->obj();
-    isnt($x, $obj               => 'Shared objects are not the same');
-    ok($x == $obj               => 'However, they equate');
+    my $foo = Foo->new();
+    my $foo2 = Foo->new('obj'=>$foo);
+    my $oof = $foo2->obj();
+    isnt($oof, $foo             => 'Shared objects are not the same');
+    ok($oof == $foo             => 'However, they equate');
 
-    $obj = Bar->new('value' => 42);
-    ok($x != $obj               => "Different objects don't equate");
-    ok($$x == $$obj             => "Even if they have the same ID");
+    my $bar = Bar->new('value' => 42);
+    ok($oof != $bar             => "Different objects don't equate");
+    ok($$oof == $$bar           => "Even if they have the same ID");
 
-    $obj2 = Bar->new('obj'=>$obj);
-    $x = $obj2->obj();
-    is($x, $obj                 => 'Non-shared objects are the same');
-    ok($x == $obj               => 'And they equate');
+    my $bar2 = Bar->new('obj'=>$bar);
+    my $rab = $bar2->obj();
+    is($rab, $bar               => 'Non-shared objects are the same');
+    ok($rab == $bar             => 'And they equate');
 
-    ++$x;
-    is($x->value(), 43          => '++ worked');
-    is($obj->value(), 42        => 'Copy constuctor worked');
+    ++$rab;
+    is($rab->value(), 43        => '++ worked');
+    is($bar->value(), 42        => 'Copy constuctor worked');
 }
 
 exit(0);

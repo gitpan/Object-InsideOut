@@ -157,7 +157,7 @@ _PRE_
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.32)
+($Object::InsideOut::VERSION == 3.33)
     or die("Version mismatch\n");
 
 # EOF
