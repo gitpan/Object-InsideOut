@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.34 Wed Nov 28 01:47:52 2007
+	- Fixed preformance issue with reclaiming object IDs
+
 3.33 Fri Nov  9 13:16:56 2007
 	- Fix overload tests
 

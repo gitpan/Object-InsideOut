@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.33';
+our $VERSION = '3.34';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.33;
-use Object::InsideOut::Util 3.33 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.33;
+use Object::InsideOut::Exception 3.34;
+use Object::InsideOut::Util 3.34 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.34;
 
 require B;
 
@@ -667,21 +667,22 @@ sub _ID :Sub
         }
         my $r_tree = $$reuse{$tree};
         if (! exists($$r_tree[$thread_id])) {
-            $$r_tree[$thread_id] = make_shared([]);
-        } elsif (grep { $_ == $id } @{$$r_tree[$thread_id]}) {
+            $$r_tree[$thread_id] = make_shared({});
+        } elsif (exists($$r_tree[$thread_id]{$id})) {
             warn("ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
             return;
         }
-        push(@{$$r_tree[$thread_id]}, $id);
+        $$r_tree[$thread_id]{$id} = $id;
         return;
     }
 
     # Use a reclaimed ID if available
     if (exists($$reuse{$tree}) &&
-        exists($$reuse{$tree}[$thread_id]) &&
-        @{$$reuse{$tree}[$thread_id]})
+        exists($$reuse{$tree}[$thread_id]))
     {
-        return (shift(@{$$reuse{$tree}[$thread_id]}));
+        if ((my $id) = keys(%{$$reuse{$tree}[$thread_id]})) {
+            return (delete($$reuse{$tree}[$thread_id]{$id}));
+        }
     }
 
     # Return the next ID
@@ -696,7 +697,7 @@ sub _ID :Sub
 
 ### Initialization Handling ###
 
-# Finds a subroutine's name from its code ref
+# Finds a subroutine's name from itsft(@{$$reuse{$tree}[$thread_id code ref
 sub sub_name :Sub(Private)
 {
     my ($ref, $attr, $location) = @_;
