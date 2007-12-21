@@ -2,12 +2,12 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.34';
+    our $VERSION = '3.35';
 
     #####
     #
     # TODO:
-    #   types - pulse, countdown, elapsed time
+    #   types - pulse
     #   STDERR
     #
     #####
@@ -22,7 +22,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.34;
+    use Object::InsideOut 3.35;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field
@@ -39,6 +39,10 @@ package Term::YAPI; {
 
     # Step counter for indicator
     my @step :Field;
+
+    # Starting value for countdown indicators
+    my @countdown :Field
+                  :Arg('Name' => 'from', 'Regex' => qr/^from/i);
 
     # Start time of running indicator
     my @running :Field;
@@ -98,10 +102,19 @@ package Term::YAPI; {
             $type[$$self] = 'count';
             $yapi[$$self] = [ 0 ];
 
+        } elsif ($$args{'type'} =~ /^countdown$/i) {
+            $type[$$self] = 'countdown';
+            if (! exists($countdown[$$self])) {
+                OIO::Args->die(
+                    'message'  => q/Missing 'From' parameter for countdown timer/,
+                    'location' => [ caller(1) ]);
+            }
+            $yapi[$$self] = [ $countdown[$$self] ];
+
         } else {
             OIO::Args->die(
                 'message'  => "Unknown indicator 'type': '$$args{'type'}'",
-                'Usage'    => q/Supported types: 'anim', 'dots' and 'count'/,
+                'Usage'    => q/Supported types: 'anim', 'dots', 'count' and 'countdown'/,
                 'location' => [ caller(1) ]);
         }
 
@@ -177,8 +190,8 @@ package Term::YAPI; {
     {
         my ($type, $yapi, $step, $max) = @_;
 
-        my $prog = ($type eq 'count')
-                        ? $step
+        my $prog = ($type eq 'count')     ? $step
+                 : ($type eq 'countdown') ? $yapi->[0] - $step
                         : $yapi->[$step % $max];
 
         return $prog;
@@ -204,6 +217,8 @@ package Term::YAPI; {
                         ? (($last) ? ' ' : '')
                  : ($type eq 'count')
                         ? ("\b \b" x _length($step))
+                 : ($type eq 'countdown')
+                        ? ("\b \b" x _length($yapi->[0] - $step))
                  : '';
 
         return $undo;
@@ -406,6 +421,13 @@ A character sequence indicator - defaults to a line of periods/dots:  .....
 
 An incrementing counter that starts at 0.
 
+=item C<'type' =E<gt> 'countdown'>
+
+An decrementing counter.  The starting value is specified using a (mandatory)
+C<'from'> parameter:
+
+ my $yapi = Term::YAPI->new('type' => 'countdown', 'from' => 15);
+
 =back
 
 =item my $yapi = Term::YAPI->new('yapi' => $indicator_array_ref)
@@ -528,7 +550,7 @@ not cause an error, but will only display 'wait...'.
 =head1 SEE ALSO
 
 Annotated POD for Term::YAPI:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.34/examples/YAPI.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.35/examples/YAPI.pm>
 
 L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 

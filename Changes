@@ -1,5 +1,10 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.35 Fri Dec 21 15:18:29 2007
+	- Set min threads::shared version when overloading '==' operator
+	    for shared objects
+	- Added a countdown indicator to Term::YAPI
+
 3.34 Wed Nov 28 01:47:52 2007
 	- Fixed preformance issue with reclaiming object IDs
 

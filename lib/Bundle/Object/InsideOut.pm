@@ -2,7 +2,7 @@ package Bundle::Object::InsideOut;
 
 use strict;
 
-our $VERSION = '3.34';
+our $VERSION = '3.35';
 $VERSION = eval $VERSION;
 
 1;
@@ -19,9 +19,9 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.03              - Used for module testing
+Test::Harness 3.05              - Used for module testing
 
-Test::Simple 0.72               - Used for module testing
+Test::Simple 0.74               - Used for module testing
 
 Scalar::Util 1.19               - Used by Object::InsideOut
 
@@ -45,7 +45,7 @@ threads 1.67                    - Support for threads
 
 threads::shared 1.15            - Support for sharing objects between threads
 
-Want 0.15                       - :lvalue accessor support
+Want 0.16                       - :lvalue accessor support
 
 Storable 2.18                   - Object serialization support
 
@@ -55,7 +55,7 @@ Class::Data::Inheritable 0.06   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.34          - Inside-out object support
+Object::InsideOut 3.35          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 

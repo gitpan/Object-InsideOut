@@ -65,7 +65,7 @@ sub generate_OVERLOAD :Sub(Private)
     foreach my $pkg (keys(%{$$GBL{'tree'}{'td'}})) {
         # Bless an object into every class
         # This works around an obscure 'overload' bug reported against
-        # Class::Std (http://rt.cpan.org/NoAuth/Bug.html?id=14048)
+        # Class::Std (http://rt.cpan.org/Public/Bug/Display.html?id=14048)
         bless(\do{ my $scalar; }, $pkg);
 
         # Verify that scalar dereferencing is not overloaded in any class
@@ -83,7 +83,7 @@ sub generate_OVERLOAD :Sub(Private)
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.34)
+($Object::InsideOut::VERSION == 3.35)
     or die("Version mismatch\n");
 
 # EOF

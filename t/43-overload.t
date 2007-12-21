@@ -21,6 +21,13 @@ BEGIN {
 use threads;
 use threads::shared;
 
+BEGIN {
+    if ($threads::shared::VERSION lt '0.95') {
+        print("1..0 # Skip Needs threads::shared 0.95 or later\n");
+        exit(0);
+    }
+}
+
 use Test::More 'no_plan';
 
 package Foo; {
@@ -48,7 +55,12 @@ MAIN:
     my $foo2 = Foo->new('obj'=>$foo);
     my $oof = $foo2->obj();
     isnt($oof, $foo             => 'Shared objects are not the same');
-    ok($oof == $foo             => 'However, they equate');
+    if (! ok($oof == $foo       => 'However, they equate')) {
+        diag("Original object:  ref(\$foo)=" . ref($foo) . '  ID=' . $$foo);
+        diag("Shared   object:  ref(\$oof)=" . ref($oof) . '  ID=' . $$oof);
+        no strict 'refs';
+        diag('Equality: ' . &{'Foo::(=='}($foo, $oof));
+    }
 
     my $bar = Bar->new('value' => 42);
     ok($oof != $bar             => "Different objects don't equate");

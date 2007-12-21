@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.34';
+our $VERSION = '3.35';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.34;
-use Object::InsideOut::Util 3.34 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.34;
+use Object::InsideOut::Exception 3.35;
+use Object::InsideOut::Util 3.35 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.35;
 
 require B;
 
@@ -1118,7 +1118,9 @@ sub set_sharing :Sub(Private)
             line  => $line,
         };
         # Set up equality via overload
-        if ($sharing && $threads::shared::threads_shared) {
+        if ($sharing && $threads::shared::threads_shared
+                     && $threads::shared::VERSION ge '0.95')
+        {
             push(@{$GBL{'sub'}{'ol'}}, { 'pkg' => $class, 'ify' => 'EQUATE' });
         }
     }
@@ -1809,13 +1811,14 @@ sub DESTROY
             }
         }
 
+        # Unlock the object
+        Internals::SvREADONLY($$self, 0) if ($] >= 5.008003);
+
         # Reclaim the object ID if applicable
         if ($GBL{'sub'}{'id'}{$class}{'code'} == \&_ID) {
             _ID($class, $$self);
         }
 
-        # Unlock the object
-        Internals::SvREADONLY($$self, 0) if ($] >= 5.008003);
         # Erase the object ID - just in case
         $$self = undef;
 

@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.34
+This document describes Object::InsideOut version 3.35
 
 =head1 SYNOPSIS
 
@@ -3124,7 +3124,7 @@ sub-classed by other packages, you may need to C<require> it as follows:
  }
 
 View existing bug reports at, and submit any new bugs, problems, patches, etc.
-to: L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Object-InsideOut>
+to: L<http://rt.cpan.org/Public/Dist/Display.html?Name=Object-InsideOut>
 
 =head1 REQUIREMENTS
 
@@ -3169,7 +3169,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.34/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.35/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>
