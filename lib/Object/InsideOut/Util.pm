@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.35';
+our $VERSION = '3.36';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.35;
+use Object::InsideOut::Metadata 3.36;
 
 ### Module Initialization ###
 
@@ -140,11 +140,21 @@ sub make_shared
         elsif ($ref_type eq 'SCALAR') {
             $out = \do{ my $scalar = $$in; };
             threads::shared::share($out);
+            if (Internals::SvREADONLY($$in)) {
+                Internals::SvREADONLY($$out, 1);
+            }
+        }
+
+        # Copy of a ref of a ref
+        elsif ($ref_type eq 'REF') {
+            my $tmp = make_shared($$in);
+            $out = \$tmp;
+            threads::shared::share($out);
         }
     }
 
     # If copy created above ...
-    if ($out) {
+    if (defined($out)) {
         # Clone READONLY flag
         if (Internals::SvREADONLY($in)) {
             Internals::SvREADONLY($out, 1);
@@ -209,7 +219,7 @@ sub shared_clone
     }
 
     # If copy created above ...
-    if ($out) {
+    if (defined($out)) {
         # Clone READONLY flag
         if (Internals::SvREADONLY($in)) {
             Internals::SvREADONLY($out, 1);

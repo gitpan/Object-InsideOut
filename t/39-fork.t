@@ -4,8 +4,11 @@ no warnings 'once';
 
 BEGIN {
     use Config;
-    unless ($^O eq 'MSWin32' || $Config{'d_pseudofork'}) {
-        print("1..0 # Skip Not using pseudo-forks\n");
+    my $pseudo_fork = (($^O eq 'MSWin32' || $^O eq 'NetWare') &&
+                       $Config::Config{useithreads} &&
+                       $Config::Config{ccflags} =~ /-DPERL_IMPLICIT_SYS/);
+    if (! $pseudo_fork) {
+        print("1..0 # Skip: Not using pseudo-forks\n");
         exit(0);
     }
 }

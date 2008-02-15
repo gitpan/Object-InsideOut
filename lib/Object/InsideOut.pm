@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.35';
+our $VERSION = '3.36';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.35;
-use Object::InsideOut::Util 3.35 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.35;
+use Object::InsideOut::Exception 3.36;
+use Object::InsideOut::Util 3.36 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.36;
 
 require B;
 
@@ -1191,7 +1191,7 @@ sub CLONE
     my $fld_ref   = $$g_fld{'ref'};
     my $weak      = $$g_fld{'weak'};
     my $repl_subs = $GBL{'sub'}{'repl'};
-    my $do_repl   = %{$repl_subs};
+    my $do_repl   = keys(%{$repl_subs});
     foreach my $class (keys(%{$g_obj})) {
         my $obj_cl = $$g_obj{$class};
 
@@ -1803,7 +1803,7 @@ sub DESTROY
                 } else {
                     if ($is_sharing) {
                         # Workaround (?) for Perl's "in cleanup" bug
-                        eval { my $bug = @{$fld}; };
+                        eval { my $bug = scalar(@{$fld}); };
                         next if ($@);
                     }
                     delete($$fld[$$self]);

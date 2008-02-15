@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.36 Fri Feb 15 19:45:37 2008
+	- Shared copies of refs of refs
+
 3.35 Fri Dec 21 15:18:29 2007
 	- Set min threads::shared version when overloading '==' operator
 	    for shared objects

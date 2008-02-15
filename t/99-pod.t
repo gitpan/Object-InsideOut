@@ -1,6 +1,13 @@
 use strict;
 use warnings;
 
+BEGIN {
+    if (! $ENV{RUN_MAINTAINER_TESTS}) {
+        print("1..0 # Skip: Module maintainer tests\n");
+        exit(0);
+    }
+}
+
 use Test::More 'no_plan';
 
 SKIP: {
@@ -76,7 +83,6 @@ SKIP: {
 }
 
 SKIP: {
-    skip('Spelling tested by module maintainer', 1) if (! -d '.svn');
     eval "use Test::Spelling";
     skip("Test::Spelling required for testing POD spelling", 1) if $@;
     if (system('aspell help >/dev/null 2>&1')) {

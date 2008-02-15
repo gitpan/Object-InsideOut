@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.35
+This document describes Object::InsideOut version 3.36
 
 =head1 SYNOPSIS
 
@@ -1069,9 +1069,10 @@ By default, L<automatically generated accessors|/"ACCESSOR GENERATION">, can
 be called at any time.  In other words, their access permission is I<public>.
 
 If desired, accessors can be made I<restricted> - in which case they can only
-be called from within the class's hierarchy - or I<private> - such that they
-can only be called from within the accessors' class.  Here are examples of
-the syntax for adding permissions:
+be called from within the class and any child classes in the hierarchy that
+are derived from it - or I<private> - such that they can only be called from
+within the accessors' class.  Here are examples of the syntax for adding
+permissions:
 
  my @data     :Field :Std('Name' => 'data',     'Permission' => 'private');
  my @info     :Field :Set('Name' => 'set_info', 'Perm' => 'restricted');
@@ -1717,7 +1718,7 @@ Object::InsideOut walks through the class tree, calling each C<:Automethod>
 subroutine, as needed, to fulfill an unimplemented method call.
 
 The name of the method being called is passed as C<$_> instead of
-C<$AUTOLOAD>, and does I<not> have the class name prepended to it.  If the
+C<$AUTOLOAD>, and is I<not> prefixed with the class name.  If the
 C<:Automethod> subroutine also needs to access the C<$_> from the caller's
 scope, it is available as C<$CALLER::_>.
 
@@ -3169,7 +3170,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.35/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.36/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

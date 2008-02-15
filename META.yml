@@ -1,11 +1,11 @@
 --- #YAML:1.0
 name:                Object-InsideOut
-version:             3.35
+version:             3.36
 abstract:            Comprehensive inside-out object support module
 license:             perl
 author:              
     - Jerry D. Hedden <jdhedden AT cpan DOT org>
-generated_by:        ExtUtils::MakeMaker version 6.42
+generated_by:        ExtUtils::MakeMaker version 6.43_01
 distribution_type:   module
 requires:     
     attributes:                    0
