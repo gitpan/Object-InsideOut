@@ -7,15 +7,6 @@ BEGIN {
         print("1..0 # Skip Threads not supported\n");
         exit(0);
     }
-    if ($] == 5.008) {
-        print("1..0 # Skip Can't test under Perl 5.8.0\n");
-        exit(0);
-    }
-
-    if ($^O eq 'MSWin32' && $] == 5.008001) {
-        print("1..0 # Skip threads::shared not working for ActivePerl 5.8.1\n");
-        exit(0);
-    }
 }
 
 use threads;
@@ -34,7 +25,15 @@ BEGIN {
     }
 }
 
-use Test::More 'no_plan';
+
+if ($] == 5.008) {
+    require 't/test.pl';   # Test::More work-alike for Perl 5.8.0
+} else {
+    require Test::More;
+}
+Test::More->import();
+plan('tests' => 10);
+
 
 package Foo; {
     use Object::InsideOut ':SECURE :SHARED';

@@ -80,6 +80,7 @@ t/42-sh_obj.t
 t/43-overload.t
 t/44-data.t
 t/99-pod.t
+t/test.pl
 t/EmptyParent.pm
 t/ErrorParent.pm
 t/Imp1.pm

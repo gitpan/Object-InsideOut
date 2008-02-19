@@ -110,7 +110,7 @@ WriteMakefile(
 sub MY::postamble
 {
     return <<'_EXTRAS_';
-predist:
+fixfiles:
 	@dos2unix `cat MANIFEST`
 	@$(CHMOD) 644 `cat MANIFEST`
 

@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.36';
+our $VERSION = '3.37';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.36;
-use Object::InsideOut::Util 3.36 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.36;
+use Object::InsideOut::Exception 3.37;
+use Object::InsideOut::Util 3.37 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.37;
 
 require B;
 
@@ -680,7 +680,8 @@ sub _ID :Sub
     if (exists($$reuse{$tree}) &&
         exists($$reuse{$tree}[$thread_id]))
     {
-        if ((my $id) = keys(%{$$reuse{$tree}[$thread_id]})) {
+        keys(%{$$reuse{$tree}[$thread_id]});
+        if ((my $id) = each(%{$$reuse{$tree}[$thread_id]})) {
             return (delete($$reuse{$tree}[$thread_id]{$id}));
         }
     }
