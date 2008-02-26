@@ -1,8 +1,9 @@
 package Bundle::Object::InsideOut;
 
 use strict;
+use warnings;
 
-our $VERSION = '3.37';
+our $VERSION = '3.38';
 $VERSION = eval $VERSION;
 
 1;
@@ -21,7 +22,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 Test::Harness 3.09              - Used for module testing
 
-Test::Simple 0.74               - Used for module testing
+Test::Simple 0.75               - Used for module testing
 
 Scalar::Util 1.19               - Used by Object::InsideOut
 
@@ -41,9 +42,9 @@ Pod::Coverage 0.19              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.67                    - Support for threads
+threads 1.69                    - Support for threads
 
-threads::shared 1.15            - Support for sharing objects between threads
+threads::shared 1.18            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
@@ -55,7 +56,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.37          - Inside-out object support
+Object::InsideOut 3.38          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 
@@ -67,7 +68,7 @@ LWP::UserAgent 2.036            - Used by Math::Random::MT::Auto
 
 Win32::API 0.46                 - Used by Math::Random::MT::Auto (Win XP only)
 
-Math::Random::MT::Auto 6.09     - Support for :SECURE mode
+Math::Random::MT::Auto 6.12     - Support for :SECURE mode
 
 =head1 DESCRIPTION
 
@@ -87,7 +88,7 @@ Jerry D. Hedden, S<E<lt>jdhedden AT cpan DOT orgE<gt>>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2006 - 2007 Jerry D. Hedden. All rights reserved.
+Copyright 2006 - 2008 Jerry D. Hedden. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.

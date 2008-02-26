@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.38 Tue Feb 26 16:54:46 2008
+	- No shared copying if no threads
+
 3.37 Tue Feb 19 19:01:56 2008
 	- Fixed another preformance issue with reclaiming object IDs
 	- Fix testing under Perl 5.8.0

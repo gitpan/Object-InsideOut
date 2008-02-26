@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.37';
+our $VERSION = '3.38';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.37;
+use Object::InsideOut::Metadata 3.38;
 
 ### Module Initialization ###
 
@@ -107,7 +107,8 @@ sub make_shared
     my $in = $_[0];
 
     # If not sharing or already thread-shared, then just return the input
-    if (! $threads::shared::threads_shared ||
+    if (! $threads::threads ||
+        ! $threads::shared::threads_shared ||
         threads::shared::_id($in))
     {
         return ($in);

@@ -4,11 +4,18 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(plan ok is like is_deeply);
 
-use Scalar::Util 1.10 qw(looks_like_number);
+use Scalar::Util;
 
 sub plan
 {
-    my (undef, $tests) = @_;
+    my $what = shift;
+    if ($what eq 'skip_all') {
+        my $reason = shift;
+        print("1..0 # Skip: $reason\n");
+        exit(0);
+    }
+
+    my $tests = shift;
     $| = 1;
     print("1..$tests\n");
 }
