@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.38';
+our $VERSION = '3.39';
 $VERSION = eval $VERSION;
 
 1;
@@ -20,9 +20,9 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.09              - Used for module testing
+Test::Harness 3.10              - Used for module testing
 
-Test::Simple 0.75               - Used for module testing
+Test::Simple 0.78               - Used for module testing
 
 Scalar::Util 1.19               - Used by Object::InsideOut
 
@@ -56,11 +56,11 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.23           - Error handling
 
-Object::InsideOut 3.38          - Inside-out object support
+Object::InsideOut 3.39          - Inside-out object support
 
 URI 1.35                        - Used by LWP::UserAgent
 
-HTML::Tagset 3.10               - Used by LWP::UserAgent
+HTML::Tagset 3.20               - Used by LWP::UserAgent
 
 HTML::Parser 3.56               - Used by LWP::UserAgent
 

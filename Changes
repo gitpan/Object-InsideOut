@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.39 Mon Mar 10 20:25:30 2008
+	- Catch unhandled params to ->new()
+
 3.38 Tue Feb 26 16:54:46 2008
 	- No shared copying if no threads
 

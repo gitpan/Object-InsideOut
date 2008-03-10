@@ -79,6 +79,7 @@ t/41-def.t
 t/42-sh_obj.t
 t/43-overload.t
 t/44-data.t
+t/45-unused.t
 t/99-pod.t
 t/test.pl
 t/EmptyParent.pm

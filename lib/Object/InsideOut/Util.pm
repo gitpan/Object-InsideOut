@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.38';
+our $VERSION = '3.39';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.38;
+use Object::InsideOut::Metadata 3.39;
 
 ### Module Initialization ###
 
@@ -292,6 +292,7 @@ sub hash_re
 
     foreach (keys(%{$hash})) {
         if (/$re/) {
+            return ($hash->{$_}, $_) if wantarray();
             return ($hash->{$_});
         }
     }

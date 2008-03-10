@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.38
+This document describes Object::InsideOut version 3.39
 
 =head1 SYNOPSIS
 
@@ -773,11 +773,30 @@ for subsequent processing by the C<:Init> subroutine.
 Initialization Subroutines"> subroutines are called with parameters specified
 in the C<:InitArgs> hash.
 
+=item 6.  Checks are made for any parameters to C<-E<gt>new()> that were
+not handled in the above.  (See next section.)
+
 =back
+
+=head2 Unhandled Parameters
+
+It is an error to include any parameters to the C<-E<gt>new()> method that are
+not handled by at least one class in the hierarchy.  The primary purpose of
+this is to catch typos in parameter names:
+
+  my $obj = Person->new('nane' => 'John');   # Should be 'name'
+
+The only time that checks for unhandled parameters are not made is when at
+least one class in the hierarchy does not have an C<:InitArgs> hash B<and>
+does not use the C<:Arg> attribute on any of its fields B<and> uses an
+L<:Init|/"Object Initialization Subroutines"> subroutine for processing
+parameters.  In such a case, it is not possible for Object::InsideOut to
+determine which if any of the parameters are not handled by the C<:Init>
+subroutine.
 
 =head2 Modifying C<:InitArgs>
 
-For performance purposes, Object::InsideOut I<normalizes> each class'
+For performance purposes, Object::InsideOut I<normalizes> each class's
 C<:InitArgs> hash by creating keys in the form of C<'_X'> for the various
 options it handles (e.g., C<'_R'> for C<'Regexp'>).
 
@@ -3170,7 +3189,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.38/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.39/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.38';
+our $VERSION = '3.39';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.38;
-use Object::InsideOut::Util 3.38 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.38;
+use Object::InsideOut::Exception 3.39;
+use Object::InsideOut::Util 3.39 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.39;
 
 require B;
 
@@ -1299,10 +1299,12 @@ sub _obj :Sub(Private)
 # Extracts specified args from those given
 sub _args :Sub(Private)
 {
-    my $class = shift;
-    my $self  = shift;   # Object being initialized with args
-    my $spec  = shift;   # Hash ref of arg specifiers
-    my $args  = shift;   # Hash ref of args
+    my ($class,
+        $self,   # Object being initialized with args
+        $spec,   # Hash ref of arg specifiers
+        $args,   # Hash ref of args
+        $used)   # Hash ref of used args
+            = @_;
 
     # Ensure :InitArgs hash is normalized
     if (! exists($$spec{' '})) {
@@ -1318,17 +1320,21 @@ sub _args :Sub(Private)
 
     # Search for specified args
     my %found = ();
+    my $add_used = $used;
     EXTRACT: {
         # Find arguments using regex's
         foreach my $key (keys(%regex)) {
             my $regex = $regex{$key};
-            my $value = ($regex) ? hash_re($args, $regex) : $$args{$key};
+            my ($value, $arg) = ($regex) ? hash_re($args, $regex) : ($$args{$key}, $key);
             if (defined($found{$key})) {
                 if (defined($value)) {
                     $found{$key} = $value;
                 }
             } else {
                 $found{$key} = $value;
+            }
+            if (defined($arg)) {
+                $$add_used{$arg} = undef;
             }
         }
 
@@ -1340,6 +1346,8 @@ sub _args :Sub(Private)
                     'message' => "Bad class initializer for '$class'",
                     'Usage'   => q/Class initializers must be a hash ref/);
             }
+            $$add_used{$class} = {};
+            $add_used = $$add_used{$class};
             # Loop back to process class-specific arguments
             redo EXTRACT;
         }
@@ -1533,16 +1541,18 @@ sub new :MergeArgs
     # Set any defaults
     foreach my $pkg (@{$tree}) {
         if (my $def = $GBL{'fld'}{'def'}{$pkg}) {
-            $self->set($_->[0], Object::InsideOut::Util::clone($_->[1])) foreach (@{$def});
+            $self->set($_->[0], Object::InsideOut::Util::clone($_->[1]))
+                foreach (@{$def});
         }
     }
 
     # Process :InitArgs
     my %pkg_args;
+    my $used_args = {};
     my $g_args = $GBL{'args'};
     foreach my $pkg (@{$tree}) {
         if (my $spec = $$g_args{$pkg}) {
-            $pkg_args{$pkg} = _args($pkg, $self, $spec, $all_args);
+            $pkg_args{$pkg} = _args($pkg, $self, $spec, $all_args, $used_args);
         }
     }
 
@@ -1551,13 +1561,50 @@ sub new :MergeArgs
     foreach my $pkg (@{$tree}) {
         if (my $init = $$init_subs{$pkg}) {
             local $SIG{'__DIE__'} = 'OIO::trap';
-            $self->$init($pkg_args{$pkg} || $all_args);
+            if (exists($pkg_args{$pkg})) {
+                $self->$init($pkg_args{$pkg});
+            } else {
+                $self->$init($all_args);
+                undef($used_args);
+            }
 
-        } elsif ($pkg_args{$pkg} && %{$pkg_args{$pkg}}) {
-            # It's an error if there are unhandled args, but no :Init sub
+        } elsif (exists($pkg_args{$pkg})) {
+            if (%{$pkg_args{$pkg}}) {
+                # It's an error if there are unhandled args, but no :Init sub
+                OIO::Args->die(
+                    'message' => "Unhandled parameter for class '$class': " . join(', ', keys(%{$pkg_args{$pkg}})),
+                    'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
+            }
+
+        } elsif (exists($$all_args{$pkg})) {
+            # It's an error if there are unhandled class-specific args
+            if (ref($$all_args{$pkg}) ne 'HASH') {
+                OIO::Args->die(
+                    'message' => "Bad class initializer for '$class'",
+                    'Usage'   => q/Class initializers must be a hash ref/);
+            }
             OIO::Args->die(
-                'message' => "Unhandled arguments for class '$class': " . join(', ', keys(%{$pkg_args{$pkg}})),
-                'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
+                'message' => "Unhandled parameter for class '$class': " . join(', ', keys(%{$$all_args{$pkg}})),
+                'Usage'   => q/Add :Init subroutine or :InitArgs hash/);
+        }
+    }
+
+    # Any unused args?
+    if ($used_args) {
+        my %pkgs;
+        @pkgs{@{$tree}} = undef;
+        foreach my $key (keys(%$all_args)) {
+            if (exists($pkgs{$key})) {
+                foreach my $subkey (keys(%{$$all_args{$key}})) {
+                    if (! exists($$used_args{$key}{$subkey})) {
+                        OIO::Args->die('message' => "Unhandled parameter for class '$key': $subkey");
+                    }
+                }
+            } else {
+                if (! exists($$used_args{$key})) {
+                    OIO::Args->die('message' => "Unhandled parameter: $key");
+                }
+            }
         }
     }
 
