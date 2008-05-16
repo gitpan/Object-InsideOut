@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.39';
+our $VERSION = '3.41';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.39;
+use Object::InsideOut::Metadata 3.41;
 
 ### Module Initialization ###
 
@@ -104,74 +104,98 @@ sub create_object
 # Make a thread-shared version of a complex data structure or object
 sub make_shared
 {
-    my $in = $_[0];
+    my $in = shift;
+    my $cloned = shift || {};
 
     # If not sharing or already thread-shared, then just return the input
-    if (! $threads::threads ||
+    if (! ref($in) ||
+        ! $threads::threads ||
         ! $threads::shared::threads_shared ||
         threads::shared::_id($in))
     {
         return ($in);
     }
 
+    # Check for previously cloned references
+    #   (this takes care of circular refs as well)
+    my $addr = Scalar::Util::refaddr($in);
+    if (exists($cloned->{$addr})) {
+        # Return the already existing clone
+        return $cloned->{$addr};
+    }
+
     # Make copies of array, hash and scalar refs
     my $out;
-    if (my $ref_type = Scalar::Util::reftype($in)) {
-        # Copy an array ref
-        if ($ref_type eq 'ARRAY') {
-            # Make empty shared array ref
-            $out = &threads::shared::share([]);
-            # Recursively copy and add contents
-            foreach my $val (@$in) {
-                push(@$out, make_shared($val));
-            }
-        }
+    my $ref_type = Scalar::Util::reftype($in);
 
-        # Copy a hash ref
-        elsif ($ref_type eq 'HASH') {
-            # Make empty shared hash ref
-            $out = &threads::shared::share({});
-            # Recursively copy and add contents
-            foreach my $key (keys(%{$in})) {
-                $out->{$key} = make_shared($in->{$key});
-            }
-        }
+    # Copy an array ref
+    if ($ref_type eq 'ARRAY') {
+        # Make empty shared array ref
+        $out = &threads::shared::share([]);
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+        # Recursively copy and add contents
+        push(@$out, map { make_shared($_, $cloned) } @$in);
+    }
 
-        # Copy a scalar ref
-        elsif ($ref_type eq 'SCALAR') {
-            $out = \do{ my $scalar = $$in; };
+    # Copy a hash ref
+    elsif ($ref_type eq 'HASH') {
+        # Make empty shared hash ref
+        $out = &threads::shared::share({});
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+        # Recursively copy and add contents
+        foreach my $key (keys(%{$in})) {
+            $out->{$key} = make_shared($in->{$key}, $cloned);
+        }
+    }
+
+    # Copy a scalar ref
+    elsif ($ref_type eq 'SCALAR') {
+        $out = \do{ my $scalar = $$in; };
+        threads::shared::share($out);
+        if (Internals::SvREADONLY($$in)) {
+            Internals::SvREADONLY($$out, 1);
+        }
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+    }
+
+    # Copy of a ref of a ref
+    elsif ($ref_type eq 'REF') {
+        # Special handling for $x = \$x
+        if ($addr == Scalar::Util::refaddr($$in)) {
+            $out = \$out;
             threads::shared::share($out);
-            if (Internals::SvREADONLY($$in)) {
-                Internals::SvREADONLY($$out, 1);
-            }
-        }
-
-        # Copy of a ref of a ref
-        elsif ($ref_type eq 'REF') {
-            my $tmp = make_shared($$in);
+            $cloned->{$addr} = $out;
+        } else {
+            my $tmp;
             $out = \$tmp;
             threads::shared::share($out);
+            # Add to clone checking hash
+            $cloned->{$addr} = $out;
+            # Recursively copy and add contents
+            $tmp = make_shared($$in, $cloned);
         }
+
+    } else {
+        # Just return anything else
+        # NOTE: This will end up generating an error
+        return ($in);
     }
 
-    # If copy created above ...
-    if (defined($out)) {
-        # Clone READONLY flag
-        if (Internals::SvREADONLY($in)) {
-            Internals::SvREADONLY($out, 1);
-        }
-        # Return blessed copy, if applicable
-        if (my $class = Scalar::Util::blessed($in)) {
-            return (bless($out, $class));
-        }
-        # Return clone
-        return ($out);
+    # Return blessed copy, if applicable
+    if (my $class = Scalar::Util::blessed($in)) {
+        bless($out, $class);
     }
 
-    # Just return anything else
-    # NOTE: This will generate an error if we're thread-sharing,
-    #       and $in is not an ordinary scalar.
-    return ($in);
+    # Clone READONLY flag
+    if (Internals::SvREADONLY($in)) {
+        Internals::SvREADONLY($out, 1);
+    }
+
+    # Return clone
+    return ($out);
 }
 
 
@@ -179,108 +203,189 @@ sub make_shared
 # If thread-sharing, then make the copy thread-shared.
 sub shared_copy
 {
-    return (($threads::shared::threads_shared) ? shared_clone(@_) : clone(@_));
+    return (($threads::shared::threads_shared) ? clone_shared(@_) : clone(@_));
 }
 
 
 # Recursively make a copy of a complex data structure or object that is
 # thread-shared
-sub shared_clone
+sub clone_shared
 {
-    my $in = $_[0];
+    my $in = shift;
+    my $cloned = shift || {};
+
+    # Just return the item if not a ref
+    return $in if (! ref($in));
+
+    # Check for previously cloned references
+    #   (this takes care of circular refs as well)
+    my $addr = Scalar::Util::refaddr($in);
+    if (exists($cloned->{$addr})) {
+        # Return the already existing clone
+        return $cloned->{$addr};
+    }
 
     # Make copies of array, hash and scalar refs
     my $out;
-    if (my $ref_type = ref($in)) {
-        # Copy an array ref
-        if ($ref_type eq 'ARRAY') {
-            # Make empty shared array ref
-            $out = &threads::shared::share([]);
-            # Recursively copy and add contents
-            foreach my $val (@$in) {
-                push(@$out, shared_clone($val));
-            }
-        }
+    my $ref_type = Scalar::Util::reftype($in);
 
-        # Copy a hash ref
-        elsif ($ref_type eq 'HASH') {
-            # Make empty shared hash ref
-            $out = &threads::shared::share({});
-            # Recursively copy and add contents
-            foreach my $key (keys(%{$in})) {
-                $out->{$key} = shared_clone($in->{$key});
-            }
-        }
+    # Copy an array ref
+    if ($ref_type eq 'ARRAY') {
+        # Make empty shared array ref
+        $out = &threads::shared::share([]);
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+        # Recursively copy and add contents
+        push(@$out, map { clone_shared($_, $cloned) } @$in);
+    }
 
-        # Copy a scalar ref
-        elsif ($ref_type eq 'SCALAR') {
-            $out = \do{ my $scalar = $$in; };
+    # Copy a hash ref
+    elsif ($ref_type eq 'HASH') {
+        # Make empty shared hash ref
+        $out = &threads::shared::share({});
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+        # Recursively copy and add contents
+        foreach my $key (keys(%{$in})) {
+            $out->{$key} = clone_shared($in->{$key}, $cloned);
+        }
+    }
+
+    # Copy a scalar ref
+    elsif ($ref_type eq 'SCALAR') {
+        $out = \do{ my $scalar = $$in; };
+        threads::shared::share($out);
+        if (Internals::SvREADONLY($$in)) {
+            Internals::SvREADONLY($$out, 1);
+        }
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+    }
+
+    # Copy of a ref of a ref
+    elsif ($ref_type eq 'REF') {
+        # Special handling for $x = \$x
+        if ($addr == Scalar::Util::refaddr($$in)) {
+            $out = \$out;
             threads::shared::share($out);
+            $cloned->{$addr} = $out;
+        } else {
+            my $tmp;
+            $out = \$tmp;
+            threads::shared::share($out);
+            # Add to clone checking hash
+            $cloned->{$addr} = $out;
+            # Recursively copy and add contents
+            $tmp = clone_shared($$in, $cloned);
         }
+
+    } else {
+        # Just return anything else
+        # NOTE: This will end up generating an error
+        return ($in);
     }
 
-    # If copy created above ...
-    if (defined($out)) {
-        # Clone READONLY flag
-        if (Internals::SvREADONLY($in)) {
-            Internals::SvREADONLY($out, 1);
-        }
-        # Return clone
-        return ($out);
+    # Return blessed copy, if applicable
+    if (my $class = Scalar::Util::blessed($in)) {
+        bless($out, $class);
     }
 
-    # Just return anything else
-    # NOTE: This will generate an error if we're thread-sharing,
-    #       and $in is not an ordinary scalar.
-    return ($in);
+    # Clone READONLY flag
+    if (Internals::SvREADONLY($in)) {
+        Internals::SvREADONLY($out, 1);
+    }
+
+    # Return clone
+    return ($out);
 }
 
 
 # Recursively make a copy of a complex data structure or object
 sub clone
 {
-    my $in = $_[0];
+    my $in = shift;
+    my $cloned = shift || {};
+
+    # Just return the item if not a ref
+    return $in if (! ref($in));
+
+    # Check for previously cloned references
+    #   (this takes care of circular refs as well)
+    my $addr = Scalar::Util::refaddr($in);
+    if (exists($cloned->{$addr})) {
+        # Return the already existing clone
+        return $cloned->{$addr};
+    }
 
     # Make copies of array, hash and scalar refs
     my $out;
-    if (my $ref_type = ref($in)) {
-        # Copy an array ref
-        if ($ref_type eq 'ARRAY') {
-            # Make empty shared array ref
-            $out = [];
-            # Recursively copy and add contents
-            foreach my $val (@$in) {
-                push(@$out, clone($val));
-            }
-        }
+    my $ref_type = Scalar::Util::reftype($in);
 
-        # Copy a hash ref
-        if ($ref_type eq 'HASH') {
-            # Make empty shared hash ref
-            $out = {};
-            # Recursively copy and add contents
-            foreach my $key (keys(%{$in})) {
-                $out->{$key} = clone($in->{$key});
-            }
-        }
+    # Copy an array ref
+    if ($ref_type eq 'ARRAY') {
+        # Make empty shared array ref
+        $out = [];
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+        # Recursively copy and add contents
+        push(@$out, map { clone($_, $cloned) } @$in);
+    }
 
-        # Copy a scalar ref
-        if ($ref_type eq 'SCALAR') {
-            $out = \do{ my $scalar = $$in; };
+    # Copy a hash ref
+    elsif ($ref_type eq 'HASH') {
+        # Make empty shared hash ref
+        $out = {};
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
+        # Recursively copy and add contents
+        foreach my $key (keys(%{$in})) {
+            $out->{$key} = clone($in->{$key}, $cloned);
         }
     }
 
-    # If copy created above ...
-    if ($out) {
-        # Clone READONLY flag
-        if (Internals::SvREADONLY($in)) {
-            Internals::SvREADONLY($out, 1);
+    # Copy a scalar ref
+    elsif ($ref_type eq 'SCALAR') {
+        $out = \do{ my $scalar = $$in; };
+        if (Internals::SvREADONLY($$in)) {
+            Internals::SvREADONLY($$out, 1);
         }
-        return ($out);
+        # Add to clone checking hash
+        $cloned->{$addr} = $out;
     }
 
-    # Just return anything else
-    return ($in);
+    # Copy of a ref of a ref
+    elsif ($ref_type eq 'REF') {
+        # Special handling for $x = \$x
+        if ($addr == Scalar::Util::refaddr($$in)) {
+            $out = \$out;
+            $cloned->{$addr} = $out;
+        } else {
+            my $tmp;
+            $out = \$tmp;
+            # Add to clone checking hash
+            $cloned->{$addr} = $out;
+            # Recursively copy and add contents
+            $tmp = clone($$in, $cloned);
+        }
+
+    } else {
+        # Just return anything else
+        # NOTE: This will end up generating an error
+        return ($in);
+    }
+
+    # Return blessed copy, if applicable
+    if (my $class = Scalar::Util::blessed($in)) {
+        bless($out, $class);
+    }
+
+    # Clone READONLY flag
+    if (Internals::SvREADONLY($in)) {
+        Internals::SvREADONLY($out, 1);
+    }
+
+    # Return clone
+    return ($out);
 }
 
 

@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.39';
+our $VERSION = '3.41';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.39;
-use Object::InsideOut::Util 3.39 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.39;
+use Object::InsideOut::Exception 3.41;
+use Object::InsideOut::Util 3.41 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.41;
 
 require B;
 
@@ -1018,7 +1018,7 @@ sub process_fields :Sub(Private)
             # Share the field, if applicable
             if (is_sharing($pkg) && !threads::shared::_id($fld)) {
                 # Preserve any contents
-                my $contents = Object::InsideOut::Util::shared_clone($fld);
+                my $contents = Object::InsideOut::Util::clone_shared($fld);
 
                 # Share the field
                 threads::shared::share($fld);
@@ -1643,7 +1643,7 @@ sub clone
             lock($fld) if ($am_sharing);
             if (ref($fld) eq 'HASH') {
                 if ($fdeep && $am_sharing) {
-                    $$fld{$$clone} = Object::InsideOut::Util::shared_clone($$fld{$$parent});
+                    $$fld{$$clone} = Object::InsideOut::Util::clone_shared($$fld{$$parent});
                 } elsif ($fdeep) {
                     $$fld{$$clone} = Object::InsideOut::Util::clone($$fld{$$parent});
                 } else {
@@ -1654,7 +1654,7 @@ sub clone
                 }
             } else {
                 if ($fdeep && $am_sharing) {
-                    $$fld[$$clone] = Object::InsideOut::Util::shared_clone($$fld[$$parent]);
+                    $$fld[$$clone] = Object::InsideOut::Util::clone_shared($$fld[$$parent]);
                 } elsif ($fdeep) {
                     $$fld[$$clone] = Object::InsideOut::Util::clone($$fld[$$parent]);
                 } else {
