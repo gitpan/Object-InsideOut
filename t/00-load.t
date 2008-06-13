@@ -15,4 +15,6 @@ if ($Object::InsideOut::VERSION) {
     diag('Testing Object::InsideOut ' . $Object::InsideOut::VERSION);
 }
 
+exit(0);
+
 # EOF

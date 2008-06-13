@@ -50,4 +50,6 @@ $obj = Foo->new();
 is($obj->foo(), 1       => q/Default for 'foo'/);
 is($obj->bar(), 'bar'   => q/Default for 'bar'/);
 
+exit(0);
+
 # EOF

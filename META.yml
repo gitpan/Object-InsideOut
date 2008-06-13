@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Object-InsideOut
-version:             3.41
+version:             3.42
 abstract:            Comprehensive inside-out object support module
 license:             perl
 author:              
@@ -21,3 +21,6 @@ requires:
 meta-spec:
     url:     http://module-build.sourceforge.net/META-spec-v1.3.html
     version: 1.3
+recommends:
+    Math::Random::MT::Auto: 5.04
+    Want: 0.12

@@ -85,4 +85,6 @@ is(Bong->$code(), Bang::me()                    => q/->can('class::SUPER::method
 is(Bing->can('Bang::SUPER::me')->(), Bang->up() => q/->can('SUPER::method')/);
 is(Bong->can('Bong::SUPER::me')->(), Bong->up() => q/->can('SUPER::method')/);
 
+exit(0);
+
 # EOF

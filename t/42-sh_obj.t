@@ -3,8 +3,8 @@ use warnings;
 
 use Config;
 BEGIN {
-    if ($] < 5.010) {
-        print("1..0 # Skip Needs Perl 5.10.0 or later\n");
+    if ($] < 5.008009) {
+        print("1..0 # Skip Needs Perl 5.8.9 or later\n");
         exit(0);
     }
     if (! $Config{useithreads}) {

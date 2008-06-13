@@ -26,4 +26,6 @@ eval { Bar->create_field('@misc', ':Field', ':All(misc)'); };
 like($@->error, qr/Can't combine 'hash only'/, 'Hash only');
 #print($@);
 
+exit(0);
+
 # EOF

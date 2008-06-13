@@ -111,4 +111,6 @@ $SIG{__WARN__} = sub { push(@errs, @_); };
     undef($@); @errs = ();
 }
 
+exit(0);
+
 # EOF

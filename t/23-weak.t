@@ -61,4 +61,6 @@ ok(! $pump->foo()               => 'Data gone in pump');
 ok(! $initargs->foo()           => 'Data gone in initargs');
 ok(! $set->foo()                => 'Data gone in set');
 
+exit(0);
+
 # EOF

@@ -77,4 +77,6 @@ is($@->error, q/Can't call restricted method 'Foo->info' from class 'Bork'/
 ok(Bork->exempt($bar, 99)           => 'Exempt restricted set');
 is(Bork->exempt($bar), 99           => 'Exempt restricted get');
 
+exit(0);
+
 # EOF

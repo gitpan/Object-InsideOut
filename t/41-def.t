@@ -33,4 +33,6 @@ $bar2->bar()->{a} = 2;
 is($bar1->bar()->{a}, 1);
 is($bar2->bar()->{a}, 2);
 
+exit(0);
+
 # EOF

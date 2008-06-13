@@ -8,7 +8,7 @@ BEGIN {
                        $Config::Config{useithreads} &&
                        $Config::Config{ccflags} =~ /-DPERL_IMPLICIT_SYS/);
     if (! $pseudo_fork) {
-        print("1..0 # Skip: Not using pseudo-forks\n");
+        print("1..0 # SKIP Not using pseudo-forks\n");
         exit(0);
     }
 }
@@ -63,5 +63,7 @@ if ($$ == $main) {
     }
     unlink('stderr.tmp');
 }
+
+exit(0);
 
 # EOF

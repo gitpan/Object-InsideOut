@@ -72,4 +72,6 @@ threads->create(sub {
 
 }, $$obj)->join();
 
+exit(0);
+
 # EOF

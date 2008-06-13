@@ -80,4 +80,6 @@ MAIN:
     is($obj->ask, 'kapow!'              => 'Access to restricted class');
 }
 
+exit(0);
+
 # EOF

@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.41
+This document describes Object::InsideOut version 3.42
 
 =head1 SYNOPSIS
 
@@ -3057,13 +3057,12 @@ thread, and then manipulate the object inside the thread:
  threads->create(sub { $obj->set_data('bar'); })->join();
  my $data = $obj->get_data();
 
-With versions of Perl prior to 5.10.0, there are bugs associated with
-L<threads::shared> that may prevent you from using foreign inheritance with
-shared objects, or storing objects inside of shared objects.  With Perl 5.10.0
-(and later) together with L<threads::shared> 1.15 (and later), you can store
-shared objects inside of other shared objects, and you can use foreign
-inheritance with shared objects (provided the foreign class support shared
-objects as well).
+With Perl 5.8.8 and earlier, there are bugs associated with L<threads::shared>
+that may prevent you from storing objects inside of shared objects, or using
+foreign inheritance with shared objects.  With Perl 5.8.9 (and later) together
+with L<threads::shared> 1.15 (and later), you can store shared objects inside
+of other shared objects, and you can use foreign inheritance with shared
+objects (provided the foreign class supports shared objects as well).
 
 Due to internal complexities, the following actions are not supported in code
 that uses L<threads::shared> while there are any threads active:
@@ -3189,7 +3188,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.41/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.42/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

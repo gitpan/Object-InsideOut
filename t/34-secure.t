@@ -40,4 +40,6 @@ like($@->error, qr/Can't combine 'hash only'/, 'Hash only');
 
 ok($$obj != 1, "ID: $$obj");
 
+exit(0);
+
 # EOF

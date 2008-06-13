@@ -106,8 +106,23 @@ WriteMakefile(
 );
 
 
+package MY;
+
+# Add to metafile target
+sub metafile
+{
+    my $inherited = shift->SUPER::metafile_target(@_);
+    $inherited .= <<'_MOREMETA_';
+	$(NOECHO) $(ECHO) 'recommends:' >>$(DISTVNAME)/META.yml
+	$(NOECHO) $(ECHO) '    Math::Random::MT::Auto: 5.04' >>$(DISTVNAME)/META.yml
+	$(NOECHO) $(ECHO) '    Want: 0.12' >>$(DISTVNAME)/META.yml
+_MOREMETA_
+
+    return $inherited;
+}
+
 # Additional 'make' targets
-sub MY::postamble
+sub postamble
 {
     return <<'_EXTRAS_';
 fixfiles:

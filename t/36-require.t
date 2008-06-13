@@ -25,4 +25,6 @@ use Test::More 'no_plan';
     is($m->get_field(), 'a tutti', 'field value for $m');
 }
 
+exit(0);
+
 # EOF

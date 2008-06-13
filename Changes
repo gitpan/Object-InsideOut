@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.42 Fri Jun 13 17:35:27 2008
+	- End all tests with exit(0) and fix SKIPs
+	- Recommended modules in META.yml
+
 3.41 Fri May 16 11:16:30 EDT 2008
 	- Changed function shared_clone() to clone_shared() in Util.pm
 	- Handle circular refs when cloning data

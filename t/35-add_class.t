@@ -46,4 +46,6 @@ is($obj->is_selected(), 1,     'Selected');
 is($obj->data(), 'zip', 'Get data');
 is($obj->info(), 2,     'Get info');
 
+exit(0);
+
 # EOF

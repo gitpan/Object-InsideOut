@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.41';
+our $VERSION = '3.42';
 $VERSION = eval $VERSION;
 
 1;
@@ -20,7 +20,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.10              - Used for module testing
+Test::Harness 3.11              - Used for module testing
 
 Test::Simple 0.80               - Used for module testing
 
@@ -28,7 +28,7 @@ Scalar::Util 1.19               - Used by Object::InsideOut
 
 Pod::Escapes 1.04               - Used by Pod::Simple
 
-Pod::Simple 3.05                - Used by Test::Pod
+Pod::Simple 3.07                - Used by Test::Pod
 
 Test::Pod 1.26                  - Checks POD syntax
 
@@ -42,9 +42,9 @@ Pod::Coverage 0.19              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.69                    - Support for threads
+threads 1.71                    - Support for threads
 
-threads::shared 1.21            - Support for sharing objects between threads
+threads::shared 1.22            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
@@ -56,7 +56,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.24           - Error handling
 
-Object::InsideOut 3.41          - Inside-out object support
+Object::InsideOut 3.42          - Inside-out object support
 
 URI 1.36                        - Used by LWP::UserAgent
 
@@ -66,9 +66,9 @@ HTML::Parser 3.56               - Used by LWP::UserAgent
 
 LWP::UserAgent 5.810            - Used by Math::Random::MT::Auto
 
-Win32::API 0.46                 - Used by Math::Random::MT::Auto (Win XP only)
+Win32::API 0.55                 - Used by Math::Random::MT::Auto (Win XP only)
 
-Math::Random::MT::Auto 6.12     - Support for :SECURE mode
+Math::Random::MT::Auto 6.14     - Support for :SECURE mode
 
 =head1 DESCRIPTION
 
@@ -81,6 +81,9 @@ For ActivePerl on Win XP, if L<Win32::API> doesn't install using CPAN, then
 try installing it using PPM:
 
  ppm install Win32-API
+
+Obviously, Win32::API will not install on all platforms - just Windows and
+Cygwin.
 
 =head1 AUTHOR
 

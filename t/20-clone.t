@@ -49,4 +49,6 @@ is($data->{'bop'}, 'BOOM'               => 'Deep object clone');
 $data = $obj3->foo();
 is($data->[2], 'baz'                    => 'Deep object clone');
 
+exit(0);
+
 # EOF
