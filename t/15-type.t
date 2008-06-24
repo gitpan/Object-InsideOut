@@ -25,6 +25,7 @@ package My::Class; {
     my @ss :Field
            :Acc(ss)
            :Type(\&My::Class::is_scalar);
+    my @scal :Field :Acc(scal) :Type(scalar);
 
     my %init_args :InitArgs = (
         'DATA' => {
@@ -37,6 +38,10 @@ package My::Class; {
         'BAD' => {
             'Type'  => sub { shift > 0 }
         },
+        'SC' => {
+            'Field' => \@scal,
+            'Type'  => 'scalar',
+        }
     );
 }
 
@@ -44,7 +49,7 @@ package main;
 
 MAIN:
 {
-    my $obj = My::Class->new('DATA' => 5);
+    my $obj = My::Class->new('DATA' => 5, 'SC' => 'bork');
 
     $obj->aa('test');
     is_deeply($obj->aa(), ['test']              => 'Array single value');
@@ -108,11 +113,20 @@ MAIN:
     eval { $obj->ss([1]); };
     like($@->message, qr/failed type check/     => 'Scalar failure');
 
+    is($obj->scal(), 'bork'                     => 'Scalar');
+    $obj->scal('foo');
+    is($obj->scal(), 'foo'                      => 'Scalar');
+    eval { $obj->scal(bless({}, 'Foo')); };
+    like($@->message, qr/Bad argument/          => 'Scalar failure');
+
     eval { $obj2 = My::Class->new('DATA' => 'hello'); };
     like($@->message, qr/failed type check/     => 'Type failure');
 
     eval { $obj2 = My::Class->new('INFO' => ''); };
     like($@->message, qr/failed type check/     => 'Type failure');
+
+    eval { $obj2 = My::Class->new('SC' => []); };
+    like($@->message, qr/Bad value/             => 'Scalar failure');
 
     eval { $obj2 = My::Class->new('BAD' => ''); };
     like($@->message, qr/Problem with type check routine/  => 'Type sub failure');

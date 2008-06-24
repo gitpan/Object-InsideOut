@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.43 Tue Jun 24 18:05:10 2008
+	- Added 'scalar' type checking
+
 3.42 Fri Jun 13 17:35:27 2008
 	- End all tests with exit(0) and fix SKIPs
 	- Recommended modules in META.yml

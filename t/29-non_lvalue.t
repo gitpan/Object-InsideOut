@@ -424,7 +424,7 @@ MAIN:
     is($obj->num1(), 1                  => 'rvalue set void');
 
     eval { $obj->num1($b1); };
-    like($@, qr/must be numeric/        => 'rvalue set void - bad');
+    like($@, qr/must be a number/       => 'rvalue set void - bad');
 
     eval { $obj->num1(); };
     is($@, ''                           => 'rvalue get void');

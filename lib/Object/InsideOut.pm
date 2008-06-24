@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.42';
+our $VERSION = '3.43';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.42;
-use Object::InsideOut::Util 3.42 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.42;
+use Object::InsideOut::Exception 3.43;
+use Object::InsideOut::Util 3.43 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.43;
 
 require B;
 
@@ -1438,12 +1438,21 @@ sub _args :Sub(Private)
                 }
             }
 
+            # Is it supposed to be a scalar
+            elsif ($type =~ /^scalar$/i) {
+                if (ref($found{$key})) {
+                    OIO::Args->die(
+                        'message' => "Bad value for initializer '$key': $found{$key}",
+                        'Usage'   => "Initializer '$key' for class '$class' must be a scalar");
+                }
+            }
+
             # Is it supposed to be a number
             elsif ($type =~ /^num(?:ber|eric)?$/i) {
                 if (! Scalar::Util::looks_like_number($found{$key})) {
-                OIO::Args->die(
-                    'message' => "Bad value for initializer '$key': $found{$key}",
-                    'Usage'   => "Initializer '$key' for class '$class' must be a number");
+                    OIO::Args->die(
+                        'message' => "Bad value for initializer '$key': $found{$key}",
+                        'Usage'   => "Initializer '$key' for class '$class' must be a number");
                 }
             }
 
@@ -1475,13 +1484,22 @@ sub _args :Sub(Private)
 
             # Check type of each element in array
             if (defined($subtype)) {
-                if ($subtype =~ /^num(?:ber|eric)?$/i) {
+                if ($subtype =~ /^scalar$/i) {
+                    # Scalar elements
+                    foreach my $elem (@{$found{$key}}) {
+                        if (ref($elem)) {
+                            OIO::Args->die(
+                                'message' => "Bad value for initializer '$key': $elem",
+                                'Usage'   => "Values making up initializer '$key' for class '$class' must be scalars");
+                        }
+                    }
+                } elsif ($subtype =~ /^num(?:ber|eric)?$/i) {
                     # Numeric elements
                     foreach my $elem (@{$found{$key}}) {
                         if (! Scalar::Util::looks_like_number($elem)) {
-                        OIO::Args->die(
-                            'message' => "Bad value for initializer '$key': $elem",
-                            'Usage'   => "Values making up initializer '$key' for class '$class' must numeric");
+                            OIO::Args->die(
+                                'message' => "Bad value for initializer '$key': $elem",
+                                'Usage'   => "Values making up initializer '$key' for class '$class' must be numeric");
                         }
                     }
                 } else {
@@ -2083,10 +2101,14 @@ sub create_accessors :Sub(Private)
                         $subtype = $2;
                         if ($subtype =~ /^num(?:ber|eric)?$/i) {
                             $subtype = 'numeric';
+                        } elsif ($subtype =~ /^scalar$/i) {
+                            $subtype = 'scalar';
                         }
                     }
                     if ($val =~ /^num(?:ber|eric)?$/i) {
                         $val = 'numeric';
+                    } elsif ($val =~ /^scalar$/i) {
+                        $val = 'scalar';
                     } elsif ($val =~ /^(?:list|array)$/i) {
                         $val = 'list';
                     } elsif (uc($val) eq 'HASH') {
@@ -2538,13 +2560,24 @@ _CODE_
 _WEAK_
         }
 
+    } elsif ($type eq 'scalar') {
+        # One scalar argument
+        $code = <<"_SCALAR_";
+    if (ref($arg_str)) {
+        OIO::Args->die(
+            'message'  => "Bad argument: $arg_str",
+            'Usage'    => q/Argument to '$pkg->$name' must be a scalar/,
+            'location' => [ caller() ]);
+    }
+_SCALAR_
+
     } elsif ($type eq 'numeric') {
         # One numeric argument
         $code = <<"_NUMERIC_";
     if (! Scalar::Util::looks_like_number($arg_str)) {
         OIO::Args->die(
             'message'  => "Bad argument: $arg_str",
-            'Usage'    => q/Argument to '$pkg->$name' must be numeric/,
+            'Usage'    => q/Argument to '$pkg->$name' must be a number/,
             'location' => [ caller() ]);
     }
 _NUMERIC_
@@ -2597,7 +2630,18 @@ _REF_
 
     # Subtype checking code
     if ($subtype) {
-        if ($subtype =~ /^num(?:ber|eric)?$/i) {
+        if ($subtype =~ /^scalar$/i) {
+            $code .= <<"_SCALAR_SUBTYPE_";
+    foreach my \$elem (\@{\$arg}) {
+        if (ref(\$elem)) {
+            OIO::Args->die(
+                'message'  => q/Bad argument: Wrong type/,
+                'Usage'    => q/Values to '$pkg->$name' must be scalars/,
+                'location' => [ caller() ]);
+        }
+    }
+_SCALAR_SUBTYPE_
+        } elsif ($subtype =~ /^num(?:ber|eric)?$/i) {
             $code .= <<"_NUM_SUBTYPE_";
     foreach my \$elem (\@{\$arg}) {
         if (! Scalar::Util::looks_like_number(\$elem)) {

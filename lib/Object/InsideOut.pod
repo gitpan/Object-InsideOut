@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.42
+This document describes Object::InsideOut version 3.43
 
 =head1 SYNOPSIS
 
@@ -23,7 +23,7 @@ This document describes Object::InsideOut version 3.42
          'INPUT' => {
              'Regex'     => qr/^input$/i,
              'Mandatory' => 1,
-             'Type'      => 'numeriC',
+             'Type'      => 'numeric',
          },
      );
 
@@ -1261,6 +1261,10 @@ Available Types are:
 
 =over
 
+=item 'scalar'
+
+Permits anything that is not a reference.
+
 =item 'numeric'
 
 Can also be specified as C<Num> or C<Number>.  This uses
@@ -1281,6 +1285,10 @@ When specified, the contents of the resulting array ref are checked against
 the specified subtype:
 
 =over
+
+=item 'scalar'
+
+Same as for the basic type above.
 
 =item 'numeric'
 
@@ -1344,13 +1352,13 @@ examples:
      use Object::InsideOut;
 
      # Type checking using an anonymous subroutine
-     #  (This checks that the argument is a scalar)
-     my @data :Field :Type(sub { ! ref($_[0]) });
-                     :Acc(data)
+     #  (This checks that the argument is an object)
+     my @data :Field :Type(sub { Scalar::Util::blessed($_[0]) })
+                     :Acc(data);
 
      # Type checking using a fully-qualified subroutine name
-     my @num  :Field :Type(\&My::Class::positive);
-                     :Acc(num)
+     my @num  :Field :Type(\&My::Class::positive)
+                     :Acc(num);
 
      # The type checking subroutine may be made 'Private'
      sub positive :Private
@@ -3188,7 +3196,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.42/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.43/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>
