@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.44';
+our $VERSION = '3.45';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.44;
+use Object::InsideOut::Metadata 3.45;
 
 ### Module Initialization ###
 
@@ -216,8 +216,8 @@ sub clone_shared
     my $in = shift;
     my $cloned = shift || {};
 
-    # Just return the item if not a ref
-    return $in if (! ref($in));
+    # Just return the item if not a ref or if it's an object
+    return $in if (! ref($in) || Scalar::Util::blessed($in));
 
     # Check for previously cloned references
     #   (this takes care of circular refs as well)
@@ -310,8 +310,8 @@ sub clone
     my $in = shift;
     my $cloned = shift || {};
 
-    # Just return the item if not a ref
-    return $in if (! ref($in));
+    # Just return the item if not a ref or if it's an object
+    return $in if (! ref($in) || Scalar::Util::blessed($in));
 
     # Check for previously cloned references
     #   (this takes care of circular refs as well)
@@ -373,11 +373,6 @@ sub clone
         # Just return anything else
         # NOTE: This will end up generating an error
         return ($in);
-    }
-
-    # Return blessed copy, if applicable
-    if (my $class = Scalar::Util::blessed($in)) {
-        bless($out, $class);
     }
 
     # Clone READONLY flag

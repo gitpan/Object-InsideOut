@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Object-InsideOut
-version:             3.44
+version:             3.45
 abstract:            Comprehensive inside-out object support module
 license:             perl
 author:              

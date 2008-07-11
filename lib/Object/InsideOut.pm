@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.44';
+our $VERSION = '3.45';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.44;
-use Object::InsideOut::Util 3.44 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.44;
+use Object::InsideOut::Exception 3.45;
+use Object::InsideOut::Util 3.45 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.45;
 
 require B;
 
@@ -1660,30 +1660,18 @@ sub clone
             my $fdeep = $is_deep || $$deep{$fld};  # Deep clone the field?
             lock($fld) if ($am_sharing);
             if (ref($fld) eq 'HASH') {
-                my $item = $$fld{$$parent};
-                if (Scalar::Util::blessed($item)) {
-                    $$fld{$$clone} = $item;
-                } elsif ($fdeep && $am_sharing) {
-                    $$fld{$$clone} = Object::InsideOut::Util::clone_shared($item);
-                } elsif ($fdeep) {
-                    $$fld{$$clone} = Object::InsideOut::Util::clone($item);
-                } else {
-                    $$fld{$$clone} = $item;
-                }
+                $$fld{$$clone} = (! $fdeep) ? $$fld{$$parent}
+                               : ($am_sharing)
+                                    ? Object::InsideOut::Util::clone_shared($$fld{$$parent})
+                                    : Object::InsideOut::Util::clone($$fld{$$parent});
                 if ($$weak{$fld}) {
                     Scalar::Util::weaken($$fld{$$clone});
                 }
             } else {
-                my $item = $$fld[$$parent];
-                if (Scalar::Util::blessed($item)) {
-                    $$fld[$$clone] = $item;
-                } elsif ($fdeep && $am_sharing) {
-                    $$fld[$$clone] = Object::InsideOut::Util::clone_shared($item);
-                } elsif ($fdeep) {
-                    $$fld[$$clone] = Object::InsideOut::Util::clone($item);
-                } else {
-                    $$fld[$$clone] = $item;
-                }
+                $$fld[$$clone] = (! $fdeep) ? $$fld[$$parent]
+                               : ($am_sharing)
+                                    ? Object::InsideOut::Util::clone_shared($$fld[$$parent])
+                                    : Object::InsideOut::Util::clone($$fld[$$parent]);
                 if ($$weak{$fld}) {
                     Scalar::Util::weaken($$fld[$$clone]);
                 }

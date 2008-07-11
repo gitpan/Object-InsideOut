@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.45 Fri Jul 11 18:58:46 2008
+	- Don't clone deep internally held objects
+
 3.44 Fri Jul 11 17:39:35 2008
 	- Don't clone internally held objects
 

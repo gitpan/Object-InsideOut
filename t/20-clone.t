@@ -59,7 +59,15 @@ $baz->baz($obj);
 my $baz2 = $baz->clone(1);
 my $objx = $baz->baz();
 $data = $objx->bar();
-is($data->{'test'}, 'here'              => 'Shared data');
+is($data->{'test'}, 'here'              => 'Internal object');
+
+$baz = Baz->new();
+$baz->baz({'baz' => $obj});
+$baz2 = $baz->clone(1);
+$data = $baz->baz();
+$objx = $$data{'baz'};
+$data = $objx->bar();
+is($data->{'test'}, 'here'              => 'Deep internal object');
 
 exit(0);
 
