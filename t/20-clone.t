@@ -14,6 +14,11 @@ package Bar; {
     my @bar :Field('Acc' => 'bar');
 }
 
+package Baz; {
+    use Object::InsideOut;
+    my @baz :Field :All(baz);
+}
+
 package main;
 
 my $adat = [ 'foo', 'bar', 'baz' ];
@@ -48,6 +53,13 @@ $data = $obj3->bar();
 is($data->{'bop'}, 'BOOM'               => 'Deep object clone');
 $data = $obj3->foo();
 is($data->[2], 'baz'                    => 'Deep object clone');
+
+my $baz = Baz->new();
+$baz->baz($obj);
+my $baz2 = $baz->clone(1);
+my $objx = $baz->baz();
+$data = $objx->bar();
+is($data->{'test'}, 'here'              => 'Shared data');
 
 exit(0);
 

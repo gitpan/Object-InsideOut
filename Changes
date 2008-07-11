@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.44 Fri Jul 11 17:39:35 2008
+	- Don't clone internally held objects
+
 3.43 Tue Jun 24 18:05:10 2008
 	- Added 'scalar' type checking
 

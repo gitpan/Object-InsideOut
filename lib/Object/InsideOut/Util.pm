@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.43';
+our $VERSION = '3.44';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.43;
+use Object::InsideOut::Metadata 3.44;
 
 ### Module Initialization ###
 
@@ -154,9 +154,6 @@ sub make_shared
     elsif ($ref_type eq 'SCALAR') {
         $out = \do{ my $scalar = $$in; };
         threads::shared::share($out);
-        if (Internals::SvREADONLY($$in)) {
-            Internals::SvREADONLY($$out, 1);
-        }
         # Add to clone checking hash
         $cloned->{$addr} = $out;
     }
@@ -190,8 +187,13 @@ sub make_shared
     }
 
     # Clone READONLY flag
+    if ($ref_type eq 'SCALAR') {
+        if (Internals::SvREADONLY($$in)) {
+            Internals::SvREADONLY($$out, 1) if ($] >= 5.008003);
+        }
+    }
     if (Internals::SvREADONLY($in)) {
-        Internals::SvREADONLY($out, 1);
+        Internals::SvREADONLY($out, 1) if ($] >= 5.008003);
     }
 
     # Return clone
@@ -255,9 +257,6 @@ sub clone_shared
     elsif ($ref_type eq 'SCALAR') {
         $out = \do{ my $scalar = $$in; };
         threads::shared::share($out);
-        if (Internals::SvREADONLY($$in)) {
-            Internals::SvREADONLY($$out, 1);
-        }
         # Add to clone checking hash
         $cloned->{$addr} = $out;
     }
@@ -291,8 +290,13 @@ sub clone_shared
     }
 
     # Clone READONLY flag
+    if ($ref_type eq 'SCALAR') {
+        if (Internals::SvREADONLY($$in)) {
+            Internals::SvREADONLY($$out, 1) if ($] >= 5.008003);
+        }
+    }
     if (Internals::SvREADONLY($in)) {
-        Internals::SvREADONLY($out, 1);
+        Internals::SvREADONLY($out, 1) if ($] >= 5.008003);
     }
 
     # Return clone
@@ -346,9 +350,6 @@ sub clone
     # Copy a scalar ref
     elsif ($ref_type eq 'SCALAR') {
         $out = \do{ my $scalar = $$in; };
-        if (Internals::SvREADONLY($$in)) {
-            Internals::SvREADONLY($$out, 1);
-        }
         # Add to clone checking hash
         $cloned->{$addr} = $out;
     }
@@ -380,8 +381,13 @@ sub clone
     }
 
     # Clone READONLY flag
+    if ($ref_type eq 'SCALAR') {
+        if (Internals::SvREADONLY($$in)) {
+            Internals::SvREADONLY($$out, 1) if ($] >= 5.008003);
+        }
+    }
     if (Internals::SvREADONLY($in)) {
-        Internals::SvREADONLY($out, 1);
+        Internals::SvREADONLY($out, 1) if ($] >= 5.008003);
     }
 
     # Return clone
