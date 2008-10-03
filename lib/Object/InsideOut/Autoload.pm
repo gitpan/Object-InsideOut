@@ -172,7 +172,7 @@ sub AUTOLOAD
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.45)
+($Object::InsideOut::VERSION == 3.46)
     or die("Version mismatch\n");
 
 # EOF

@@ -24,8 +24,10 @@ sub install_UNIVERSAL
         if ($method =~ /^SUPER::/) {
             # Superclass WRT caller
             my $caller = caller();
+            no warnings;
             $code = $$GBL{'can'}->($thing, $caller.'::'.$method);
         } else {
+            no warnings;
             $code = $$GBL{'can'}->($thing, $method);
         }
         if ($code) {
@@ -71,6 +73,7 @@ sub install_UNIVERSAL
 
             # Check heritage
             if (exists($$heritage{$pkg})) {
+                no warnings;
                 foreach my $pkg2 (keys(%{$$heritage{$pkg}{'cl'}})) {
                     if ($code = $$GBL{'can'}->($pkg2, $method)) {
                         return ($code);
@@ -202,7 +205,7 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.45)
+($Object::InsideOut::VERSION == 3.46)
     or die("Version mismatch\n");
 
 # EOF

@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.45
+This document describes Object::InsideOut version 3.46
 
 =head1 SYNOPSIS
 
@@ -2989,10 +2989,25 @@ code.
 Object::InsideOut installs a C<__DIE__> handler (see L<perlfunc/"die LIST">
 and L<perlfunc/"eval BLOCK">) to catch any errant exceptions from
 class-specific code, namely, C<:Init>, C<:Replicate>, C<:Destroy>, etc.
-subroutines.  This handler may interfere with code that uses the C<die>
-function as a method of flow control for leaving an C<eval> block.  The proper
-method for handling this is to localize C<$SIG{'__DIE__'}> inside the C<eval>
-block:
+subroutines.  When using C<eval> blocks inside these subroutines, you should
+localize C<$SIG{'__DIE__'}> to keep Object::InsideOut's C<__DIE__> handler
+from interfering with exceptions generated inside the C<eval> blocks.  For
+example:
+
+ sub _init :Init {
+     ...
+     eval {
+         local $SIG{'__DIE__'};
+         ...
+     };
+     if $@ {
+         # Handle caught exception
+     }
+     ...
+ }
+
+Here's another example, where the C<die> function is used as a method of flow
+control for leaving an C<eval> block:
 
  eval {
      local $SIG{'__DIE__'};           # Suppress any existing __DIE__ handler
@@ -3007,9 +3022,9 @@ block:
  }
  # Handle 'not found' case
 
-Similarly, if calling code from other modules that work as above, but without
-localizing C<$SIG{'__DIE__'}>, you can workaround this deficiency with your
-own C<eval> block:
+Similarly, if calling code from other modules that use the above flow control
+mechanism, but without localizing C<$SIG{'__DIE__'}>, you can workaround this
+deficiency with your own C<eval> block:
 
  eval {
      local $SIG{'__DIE__'};     # Suppress any existing __DIE__ handler
@@ -3196,7 +3211,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.45/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.46/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

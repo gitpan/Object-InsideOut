@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.45';
+our $VERSION = '3.46';
 $VERSION = eval $VERSION;
 
 1;
@@ -20,7 +20,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.12              - Used for module testing
+Test::Harness 3.14              - Used for module testing
 
 Test::Simple 0.80               - Used for module testing
 
@@ -44,19 +44,19 @@ Test::Pod::Coverage 1.08        - Tests POD coverage
 
 threads 1.71                    - Support for threads
 
-threads::shared 1.24            - Support for sharing objects between threads
+threads::shared 1.26            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
-Storable 2.18                   - Object serialization support
+Storable 2.19                   - Object serialization support
 
-Devel::StackTrace 1.1901          - Used by Exception::Class
+Devel::StackTrace 1.1902          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.24           - Error handling
 
-Object::InsideOut 3.45          - Inside-out object support
+Object::InsideOut 3.46          - Inside-out object support
 
 URI 1.37                        - Used by LWP::UserAgent
 
@@ -64,9 +64,9 @@ HTML::Tagset 3.20               - Used by LWP::UserAgent
 
 HTML::Parser 3.56               - Used by LWP::UserAgent
 
-LWP::UserAgent 5.813            - Used by Math::Random::MT::Auto
+LWP::UserAgent 5.816            - Used by Math::Random::MT::Auto
 
-Win32::API 0.55                 - Used by Math::Random::MT::Auto (Win XP only)
+Win32::API 0.56                 - Used by Math::Random::MT::Auto (Win XP only)
 
 Math::Random::MT::Auto 6.14     - Support for :SECURE mode
 

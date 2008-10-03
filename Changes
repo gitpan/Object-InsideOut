@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.46 Fri Oct  3 21:01:59 2008
+	- Support Test::MockObject
+
 3.45 Fri Jul 11 18:58:46 2008
 	- Don't clone deep internally held objects
 
