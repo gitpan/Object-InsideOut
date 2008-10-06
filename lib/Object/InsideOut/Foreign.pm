@@ -25,7 +25,7 @@ sub inherit
         my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $$GBL{'isa'}->($obj_class, $pkg)) {
+        if (! $obj_class->isa($pkg)) {
             OIO::Method->die('message' => "Can't call restricted method 'inherit' from class '$pkg'");
         }
 
@@ -41,7 +41,7 @@ sub inherit
 
         # Must be called with at least one arg
         if (! @arg_objs) {
-            OIO::Args->die('message'  => q/Missing arg(s) to '->inherit()'/);
+            OIO::Args->die('message' => q/Missing arg(s) to '->inherit()'/);
         }
 
         # Get 'heritage' field and 'classes' hash
@@ -58,13 +58,13 @@ sub inherit
             # Must be an object
             my $arg_class = Scalar::Util::blessed($obj);
             if (! $arg_class) {
-                OIO::Args->die('message'  => q/Arg to '->inherit()' is not an object/);
+                OIO::Args->die('message' => q/Arg to '->inherit()' is not an object/);
             }
             # Must not be in class hierarchy
-            if ($$GBL{'isa'}->($obj_class, $arg_class) ||
-                $$GBL{'isa'}->($arg_class, $obj_class))
+            if ($obj_class->Object::InsideOut::SUPER::isa($arg_class) ||
+                $arg_class->isa($obj_class))
             {
-                OIO::Args->die('message'  => q/Args to '->inherit()' cannot be within class hierarchy/);
+                OIO::Args->die('message' => q/Args to '->inherit()' cannot be within class hierarchy/);
             }
             # Add arg to object list
             push(@{$objs}, $obj);
@@ -90,7 +90,7 @@ sub inherit
         my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $$GBL{'isa'}->($obj_class, $pkg)) {
+        if (! $obj_class->isa($pkg)) {
             OIO::Method->die('message' => "Can't call restricted method 'heritage' from class '$pkg'");
         }
 
@@ -138,7 +138,7 @@ sub inherit
         my $pkg = caller();
 
         # Restrict usage to inside class hierarchy
-        if (! $$GBL{'isa'}->($class, $pkg)) {
+        if (! $class->isa($pkg)) {
             OIO::Method->die('message' => "Can't call restricted method 'disinherit' from class '$pkg'");
         }
 
@@ -270,7 +270,7 @@ sub inherit
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.46)
+($Object::InsideOut::VERSION == 3.47)
     or die("Version mismatch\n");
 
 # EOF

@@ -133,6 +133,11 @@ sub check_bar
                        'kind'  => 'object',
                        'restricted' => 1 },
 
+          'can' => { 'class' => 'Object::InsideOut',
+                     'kind'  => 'object', },
+          'isa' => { 'class' => 'Object::InsideOut',
+                     'kind'  => 'object', },
+
           'id' => { 'class' => 'Foo',
                     'restricted' => 1 },
 
@@ -264,6 +269,11 @@ sub check_meta_meta
                        'kind'  => 'object',
                        'restricted' => 1 },
 
+          'can' => { 'class' => 'Object::InsideOut',
+                     'kind'  => 'object', },
+          'isa' => { 'class' => 'Object::InsideOut',
+                     'kind'  => 'object', },
+
           'dump' => { 'class' => 'Object::InsideOut',
                       'kind'  => 'object' },
           'pump' => { 'class' => 'Object::InsideOut',
@@ -342,6 +352,11 @@ sub check_res
           'set'   => { 'class' => 'Object::InsideOut::Results',
                        'kind'  => 'object',
                        'restricted' => 1 },
+
+          'can' => { 'class' => 'Object::InsideOut',
+                     'kind'  => 'object', },
+          'isa' => { 'class' => 'Object::InsideOut',
+                     'kind'  => 'object', },
 
           'dump' => { 'class' => 'Object::InsideOut',
                       'kind'  => 'object' },

@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.47 Mon Oct  6 18:50:26 2008
+	- Proper implementation of ->isa()/->can()
+
 3.46 Fri Oct  3 21:01:59 2008
 	- Support Test::MockObject
 

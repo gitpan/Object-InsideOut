@@ -22,7 +22,7 @@ sub create_field
 
         my ($class, $field, @attrs) = @_;
         # Verify valid class
-        if (! $$GBL{'isa'}->($class, __PACKAGE__)) {
+        if (! $class->isa(__PACKAGE__)) {
             OIO::Args->die(
                 'message' => 'Not an Object::InsideOut class',
                 'Arg'     => $class);
@@ -171,7 +171,7 @@ sub create_field
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.46)
+($Object::InsideOut::VERSION == 3.47)
     or die("Version mismatch\n");
 
 # EOF

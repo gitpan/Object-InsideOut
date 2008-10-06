@@ -50,8 +50,8 @@ sub generate_CUMULATIVE :Sub(Private)
         # Check for conflicting definitions of 'name'
         if ($$cu_td{$name}) {
             foreach my $other_package (keys(%{$$cu_td{$name}})) {
-                if ($$GBL{'isa'}->($other_package, $package) ||
-                    $$GBL{'isa'}->($package, $other_package))
+                if ($other_package->isa($package) ||
+                    $package->isa($other_package))
                 {
                     my ($pkg,  $file,  $line)  = @{$cum_loc{$name}{$other_package}};
                     my ($pkg2, $file2, $line2) = @{$$info{'loc'}};
@@ -157,8 +157,8 @@ sub create_CUMULATIVE :Sub(Private)
         if ($restr && exists($$restr{$class}{$name})) {
             my $caller = caller();
             if (! ((grep { $_ eq $caller } @{$$restr{$class}{$name}}) ||
-                   $$GBL{'isa'}->($caller, $class) ||
-                   $$GBL{'isa'}->($class, $caller)))
+                   $caller->isa($class) ||
+                   $class->isa($caller)))
             {
                 OIO::Method->die('message' => "Can't call restricted method '$class->$name' from class '$caller'");
             }
@@ -206,11 +206,11 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = '3.46';
+our $VERSION = '3.47';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut 3.46;
-use Object::InsideOut::Metadata 3.46;
+use Object::InsideOut 3.47;
+use Object::InsideOut::Metadata 3.47;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -260,7 +260,7 @@ add_meta(__PACKAGE__, {
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.46)
+($Object::InsideOut::VERSION == 3.47)
     or die("Version mismatch\n");
 
 # EOF

@@ -132,8 +132,7 @@ MAIN:
     like($@->message, qr/Problem with type check routine/  => 'Type sub failure');
 
     $obj = bless({}, 'SomeClass');
-    ok(UNIVERSAL::isa($obj, undef) ||
-       UNIVERSAL::isa($obj, '') ||
+    ok(UNIVERSAL::isa($obj, '') ||
        UNIVERSAL::isa($obj, 0) ||
        UNIVERSAL::isa($obj, 'SomeClass'), 'isa works');
 }

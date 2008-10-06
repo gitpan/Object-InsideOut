@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.46';
+our $VERSION = '3.47';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.46;
-use Object::InsideOut::Util 3.46 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.46;
+use Object::InsideOut::Exception 3.47;
+use Object::InsideOut::Util 3.47 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.47;
 
 require B;
 
@@ -26,16 +26,15 @@ if (! Scalar::Util->can('weaken')) {
 ### Global Data ###
 
 my %GBL;
-if (! exists($GBL{'isa'})) {
+if (! exists($GBL{'GBL_SET'})) {
     %GBL = (
+        'GBL_SET' => 1,         # Control flag for initializing this hash
+
         %GBL,                   # Contains 'perm', 'merge', 'attr', 'meta'
                                 #   from compilation phase
 
         init => 1,              # Initialization flag
         # term                  # Termination flag
-
-        isa => \&UNIVERSAL::isa,  # Original '->isa' method
-        can => \&UNIVERSAL::can,  # Original '->can' method
 
         export => [             # Exported subroutines (i.e., @EXPORT)
             qw(new clone meta set DESTROY)
@@ -110,33 +109,6 @@ if (! exists($GBL{'isa'})) {
         'inherit'                => {'restricted' => 1},
         'disinherit'             => {'restricted' => 1},
         'heritage'               => {'restricted' => 1},
-    };
-
-    # Our own versions of ->isa() and ->can() that supports metadata
-    no warnings 'redefine';
-
-    *UNIVERSAL::isa = sub
-    {
-        # Metadata call for classes
-        if (@_ == 1) {
-            return Object::InsideOut::meta($_[0])->get_classes();
-        }
-
-        # Workaround for Perl bug #47233
-        return ('') if (! defined($_[1]));
-
-        goto $GBL{'isa'};
-    };
-
-    *UNIVERSAL::can = sub
-    {
-        # Metadata call for methods
-        if (@_ == 1) {
-            my $meths = Object::InsideOut::meta($_[0])->get_methods();
-            return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
-        }
-
-        goto $GBL{'can'};
     };
 }
 
@@ -242,7 +214,7 @@ sub import
         }
 
         # Load the package, if needed
-        if (! $GBL{'isa'}->($class, $pkg)) {
+        if (! $class->isa($pkg)) {
             # If no package symbols, then load it
             if (! grep { $_ !~ /::$/ } keys(%{$pkg.'::'})) {
                 eval "require $pkg";
@@ -829,7 +801,7 @@ sub initialize :Sub(Private)
     # Process field attributes
     process_fields();
 
-    # Implement UNIVERSAL::can/isa with :AutoMethods
+    # Implement ->isa()/->can() with :AutoMethods
     if (%{$GBL{'sub'}{'auto'}}) {
         install_UNIVERSAL();
     }
@@ -1718,7 +1690,7 @@ sub set
     }
 
     # Restrict usage to inside class hierarchy
-    if (! $GBL{'isa'}->($self, 'Object::InsideOut')) {
+    if (! $self->isa('Object::InsideOut')) {
         my $caller = caller();
         OIO::Method->die('message' => "Can't call restricted method 'inherit' from class '$caller'");
     }
@@ -1893,6 +1865,39 @@ sub DESTROY
         $@ = OIO::combine($err, $@);
         die("$@") if (! $err);
     }
+}
+
+
+# OIO specific ->can()
+sub can :Method(Object)
+{
+    # Metadata call for methods
+    if (@_ == 1) {
+        my $meths = Object::InsideOut::meta(shift)->get_methods();
+        return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
+    }
+
+    # Try UNIVERSAL::can()
+    my ($thing, $method) = @_;
+    eval { $thing->Object::InsideOut::SUPER::can($method) };
+}
+
+
+# OIO specific ->isa()
+sub isa :Method(Object)
+{
+    # Metadata call for classes
+    if (@_ == 1) {
+        return Object::InsideOut::meta(shift)->get_classes();
+    }
+
+    my ($thing, $type) = @_;
+
+    # Workaround for Perl bug #47233
+    return ('') if (! defined($type));
+
+    # Try UNIVERSAL::isa()
+    eval { $thing->Object::InsideOut::SUPER::isa($type); }
 }
 
 
@@ -2709,8 +2714,8 @@ sub wrap_RESTRICTED :Sub(Private)
         # Caller must be in class hierarchy, or be specified as an exception
         my $caller = caller();
         if (! ((grep { $_ eq $caller } @$except) ||
-               $GBL{'isa'}->($caller, $pkg)      ||
-               $GBL{'isa'}->($pkg, $caller)))
+               $caller->isa($pkg) ||
+               $pkg->isa($caller)))
         {
             OIO::Method->die('message' => "Can't call restricted method '$pkg->$method' from class '$caller'");
         }
@@ -2808,7 +2813,7 @@ sub generate_OVERLOAD :Sub(Private)
     goto &generate_OVERLOAD;
 }
 
-sub install_UNIVERSAL :Sub
+sub install_UNIVERSAL :Sub(Private)
 {
     load('Universal');
     @_ = (\%GBL);

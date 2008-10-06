@@ -10,11 +10,11 @@ sub install_UNIVERSAL
 {
     my ($GBL) = @_;
 
-    *UNIVERSAL::can = sub
+    *Object::InsideOut::can = sub
     {
         # Metadata call for methods
         if (@_ == 1) {
-            my $meths = Object::InsideOut::meta($_[0])->get_methods();
+            my $meths = Object::InsideOut::meta(shift)->get_methods();
             return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
         }
 
@@ -24,11 +24,9 @@ sub install_UNIVERSAL
         if ($method =~ /^SUPER::/) {
             # Superclass WRT caller
             my $caller = caller();
-            no warnings;
-            $code = $$GBL{'can'}->($thing, $caller.'::'.$method);
+            eval { $code = $thing->Object::InsideOut::SUPER::can($caller.'::'.$method) };
         } else {
-            no warnings;
-            $code = $$GBL{'can'}->($thing, $method);
+            eval { $code = $thing->Object::InsideOut::SUPER::can($method) };
         }
         if ($code) {
             return ($code);
@@ -75,7 +73,7 @@ sub install_UNIVERSAL
             if (exists($$heritage{$pkg})) {
                 no warnings;
                 foreach my $pkg2 (keys(%{$$heritage{$pkg}{'cl'}})) {
-                    if ($code = $$GBL{'can'}->($pkg2, $method)) {
+                    if ($code = $pkg2->can($method)) {
                         return ($code);
                     }
                 }
@@ -166,27 +164,28 @@ sub install_UNIVERSAL
     };
 
 
-    *UNIVERSAL::isa = sub
+    *Object::InsideOut::isa = sub
     {
+        my ($thing, $type) = @_;
+
         # Metadata call for classes
         if (@_ == 1) {
-            return Object::InsideOut::meta($_[0])->get_classes();
+            return Object::InsideOut::meta($thing)->get_classes();
         }
 
         # Workaround for Perl bug #47233
-        return ('') if (! defined($_[1]));
+        return ('') if (! defined($type));
 
         # Try original UNIVERSAL::isa()
-        if (my $isa = $$GBL{'isa'}->(@_)) {
+        if (my $isa = eval { $thing->Object::InsideOut::SUPER::isa($type) }) {
             return ($isa);
         }
 
         # Next, check heritage
-        my ($thing, $type) = @_;
         foreach my $pkg (@{$$GBL{'tree'}{'bu'}{ref($thing) || $thing}}) {
             if (exists($$GBL{'heritage'}{$pkg})) {
                 foreach my $pkg (keys(%{$$GBL{'heritage'}{$pkg}{'cl'}})) {
-                    if (my $isa = $$GBL{'isa'}->($pkg, $type)) {
+                    if (my $isa = $pkg->isa($type)) {
                         return ($isa);
                     }
                 }
@@ -205,7 +204,7 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.46)
+($Object::InsideOut::VERSION == 3.47)
     or die("Version mismatch\n");
 
 # EOF

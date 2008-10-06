@@ -50,8 +50,8 @@ sub generate_CHAINED :Sub(Private)
         # Check for conflicting definitions of 'name'
         if ($$ch_td{$name}) {
             foreach my $other_package (keys(%{$$ch_td{$name}})) {
-                if ($$GBL{'isa'}->($other_package, $package) ||
-                    $$GBL{'isa'}->($package, $other_package))
+                if ($other_package->isa($package) ||
+                    $package->isa($other_package))
                 {
                     my ($pkg,  $file,  $line)  = @{$chain_loc{$name}{$other_package}};
                     my ($pkg2, $file2, $line2) = @{$$info{'loc'}};
@@ -157,8 +157,8 @@ sub create_CHAINED :Sub(Private)
         if ($restr && exists($$restr{$class}{$name})) {
             my $caller = caller();
             if (! ((grep { $_ eq $caller } @{$$restr{$class}{$name}}) ||
-                   $$GBL{'isa'}->($caller, $class) ||
-                   $$GBL{'isa'}->($class, $caller)))
+                   $caller->isa($class) ||
+                   $class->isa($caller)))
             {
                 OIO::Method->die('message' => "Can't call restricted method '$class->$name' from class '$caller'");
             }
@@ -181,7 +181,7 @@ sub create_CHAINED :Sub(Private)
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.46)
+($Object::InsideOut::VERSION == 3.47)
     or die("Version mismatch\n");
 
 # EOF
