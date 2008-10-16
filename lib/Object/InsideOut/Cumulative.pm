@@ -206,11 +206,11 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = '3.47';
+our $VERSION = '3.48';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut 3.47;
-use Object::InsideOut::Metadata 3.47;
+use Object::InsideOut 3.48;
+use Object::InsideOut::Metadata 3.48;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -250,7 +250,7 @@ sub as_hash :Hashify
 }
 
 # Our metadata
-add_meta(__PACKAGE__, {
+add_meta('Object::InsideOut::Results', {
     'new'          => {'hidden' => 1},
     'create_field' => {'hidden' => 1},
     'add_class'    => {'hidden' => 1},
@@ -260,7 +260,7 @@ add_meta(__PACKAGE__, {
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.47)
+($Object::InsideOut::VERSION == 3.48)
     or die("Version mismatch\n");
 
 # EOF

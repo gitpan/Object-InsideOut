@@ -31,7 +31,7 @@ sub create_lvalue_accessor
     *Object::InsideOut::create_lvalue_accessor = sub
     {
         my $caller = caller();
-        if ($caller ne __PACKAGE__) {
+        if ($caller ne 'Object::InsideOut') {
             OIO::Method->die('message' => "Can't call private subroutine 'Object::InsideOut::create_lvalue_accessor' from class '$caller'");
         }
 
@@ -157,7 +157,7 @@ _PRE_
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.47)
+($Object::InsideOut::VERSION == 3.48)
     or die("Version mismatch\n");
 
 # EOF

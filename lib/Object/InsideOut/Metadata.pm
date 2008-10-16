@@ -3,7 +3,7 @@ package Object::InsideOut::Metadata; {
 use strict;
 use warnings;
 
-our $VERSION = '3.47';
+our $VERSION = '3.48';
 $VERSION = eval $VERSION;
 
 # Stores method metadata
@@ -68,14 +68,14 @@ sub AUTOLOAD
     # Need 5.8.0 or later
     if ($] < 5.008) {
         OIO::Code->die('message' => q/Introspection API requires Perl 5.8.0 or later/,
-                       'ignore_package' => __PACKAGE__);
+                       'ignore_package' => 'Object::InsideOut::Metadata');
     }
 
     # It's a bug if not invoked by ->new()
     # This should only ever happen once
-    if (our $AUTOLOAD ne __PACKAGE__.'::new') {
+    if (our $AUTOLOAD ne 'Object::InsideOut::Metadata::new') {
         OIO::Method->die('message' => "Object::InsideOut::Metadata does not support AUTOLOAD of $AUTOLOAD",
-                         'ignore_package' => __PACKAGE__);
+                         'ignore_package' => 'Object::InsideOut::Metadata');
     }
 
     # Workaround to get %METADATA into our scope
@@ -99,7 +99,7 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut 3.47;
+use Object::InsideOut 3.48;
 
 my @CLASSES :Field;
 my @FOREIGN :Field;
@@ -268,7 +268,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 3.47
+This document describes Object::InsideOut::Metadata version 3.48
 
 =head1 SYNOPSIS
 

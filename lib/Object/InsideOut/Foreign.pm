@@ -220,7 +220,7 @@ sub inherit
     {
         # Private
         my $caller = caller();
-        if ($caller ne __PACKAGE__) {
+        if ($caller ne 'Object::InsideOut') {
             OIO::Method->die('message' => "Can't call private subroutine 'Object::InsideOut::create_heritage' from class '$caller'");
         }
 
@@ -270,7 +270,7 @@ sub inherit
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.47)
+($Object::InsideOut::VERSION == 3.48)
     or die("Version mismatch\n");
 
 # EOF

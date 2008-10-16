@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.47
+This document describes Object::InsideOut version 3.48
 
 =head1 SYNOPSIS
 
@@ -2152,12 +2152,12 @@ For example, suppose you had a simple I<state> class:
      my %state :Field :Set(state);
  }
 
-This could be added to another class at runtime by with:
+This could be added to another class at runtime using:
 
  My::Class->add_class('Trait::State');
 
 This permits, for example, application code to dynamically modify a class
-without having it create an actual subclass.
+without having it create an actual sub-class.
 
 =head1 PREPROCESSING
 
@@ -2924,6 +2924,12 @@ arrays (in this case C<@EXPORT_OK>) get populated properly.
 Object::InsideOut usage under L<mod_perl> and with runtime-loaded classes is
 supported automatically; no special coding is required.
 
+B<Caveat>:
+Runtime loading of classes should be performed before any objects are created
+within any of the classes in their hierarchies.  If Object::InsideOut cannot
+create a hierarchy because of previously created objects (even if all those
+objects have been destroyed), a runtime error will be generated.
+
 =head2 Singleton Classes
 
 A singleton class is a case where you would provide your own C<-E<gt>new()>
@@ -3211,7 +3217,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.47/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.48/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

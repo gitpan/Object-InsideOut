@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.48 Wed Oct 15 20:05:20 2008
+	- Fix runtime loading of classes with multiple inheritance
+
 3.47 Mon Oct  6 18:50:26 2008
 	- Proper implementation of ->isa()/->can()
 
@@ -30,7 +33,7 @@ Revision history for Perl extension Object::InsideOut.
 	- No shared copying if no threads
 
 3.37 Tue Feb 19 19:01:56 2008
-	- Fixed another preformance issue with reclaiming object IDs
+	- Fix another preformance issue with reclaiming object IDs
 	- Fix testing under Perl 5.8.0
 
 3.36 Fri Feb 15 19:45:37 2008
@@ -42,7 +45,7 @@ Revision history for Perl extension Object::InsideOut.
 	- Added a countdown indicator to Term::YAPI
 
 3.34 Wed Nov 28 01:47:52 2007
-	- Fixed preformance issue with reclaiming object IDs
+	- Fix preformance issue with reclaiming object IDs
 
 3.33 Fri Nov  9 13:16:56 2007
 	- Fix overload tests

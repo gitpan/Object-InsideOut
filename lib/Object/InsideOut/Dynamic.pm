@@ -16,13 +16,13 @@ sub create_field
     *Object::InsideOut::create_field = sub
     {
         # Handle being called as a method or subroutine
-        if ($_[0] eq __PACKAGE__) {
+        if ($_[0] eq 'Object::InsideOut') {
             shift;
         }
 
         my ($class, $field, @attrs) = @_;
         # Verify valid class
-        if (! $class->isa(__PACKAGE__)) {
+        if (! $class->isa('Object::InsideOut')) {
             OIO::Args->die(
                 'message' => 'Not an Object::InsideOut class',
                 'Arg'     => $class);
@@ -79,10 +79,10 @@ sub create_field
         if (ref($class)) {
             OIO::Method->die('message' => q/'add_class' called as an object method/);
         }
-        if ($class eq __PACKAGE__) {
+        if ($class eq 'Object::InsideOut') {
             OIO::Method->die('message' => q/'add_class' called on non-class 'Object::InsideOut'/);
         }
-        if (! $class->isa(__PACKAGE__)) {
+        if (! $class->isa('Object::InsideOut')) {
             OIO::Method->die('message' => "'add_class' called on non-Object::InsideOut class '$class'");
         }
 
@@ -171,7 +171,7 @@ sub create_field
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.47)
+($Object::InsideOut::VERSION == 3.48)
     or die("Version mismatch\n");
 
 # EOF

@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.47';
+our $VERSION = '3.48';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.47;
+use Object::InsideOut::Metadata 3.48;
 
 ### Module Initialization ###
 
@@ -47,7 +47,7 @@ sub import
             OIO::Code->die(
                 'message' => "Symbol '$sym' is not exported by Object::InsideOut::Util",
                 'Info'    => 'Exportable symbols: ' . join(' ', keys(%EXPORT_OK)),
-                'ignore_package' => __PACKAGE__);
+                'ignore_package' => 'Object::InsideOut::Util');
         }
     }
     if (%meta) {
@@ -80,7 +80,7 @@ sub create_object
             OIO::Args->die(
                 'message' => q/2nd argument to create_object() is not a code ref or scalar/,
                 'Usage'   => 'create_object($class, $scalar) or create_object($class, $code_ref, ...)',
-                'ignore_package' => __PACKAGE__);
+                'ignore_package' => 'Object::InsideOut::Util');
         }
 
     } else {

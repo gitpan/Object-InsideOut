@@ -113,7 +113,7 @@ sub dump
 
         # Check usage
         if ($input) {
-            if ($input eq __PACKAGE__) {
+            if ($input eq 'Object::InsideOut') {
                 $input = shift;    # Called as a class method
 
             } elsif (Scalar::Util::blessed($input)) {
@@ -205,7 +205,7 @@ sub dump
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.47)
+($Object::InsideOut::VERSION == 3.48)
     or die("Version mismatch\n");
 
 # EOF
