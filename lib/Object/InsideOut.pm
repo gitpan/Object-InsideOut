@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.48';
+our $VERSION = '3.49';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.48;
-use Object::InsideOut::Util 3.48 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.48;
+use Object::InsideOut::Exception 3.49;
+use Object::InsideOut::Util 3.49 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.49;
 
 require B;
 
@@ -1833,12 +1833,11 @@ sub DESTROY
             delete($$obj_cl{$$self});
         }
 
-        # Destroy object
+        # Dispatch any special destruction handling
         my $dest_err;
         my $dest_subs = $GBL{'sub'}{'dest'};
         my $fld_refs  = $GBL{'fld'}{'ref'};
         foreach my $pkg (@{$GBL{'tree'}{'bu'}{$class}}) {
-            # Dispatch any special destruction handling
             if (my $destroy = $$dest_subs{$pkg}) {
                 eval {
                     local $SIG{'__DIE__'} = 'OIO::trap';
@@ -1846,8 +1845,10 @@ sub DESTROY
                 };
                 $dest_err = OIO::combine($dest_err, $@);
             }
+        }
 
-            # Delete object field data
+        # Delete object field data
+        foreach my $pkg (@{$GBL{'tree'}{'bu'}{$class}}) {
             foreach my $fld (@{$$fld_refs{$pkg}}) {
                 # If sharing, then must lock object field
                 lock($fld) if ($is_sharing);

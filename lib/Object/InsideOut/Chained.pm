@@ -181,7 +181,7 @@ sub create_CHAINED :Sub(Private)
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.48)
+($Object::InsideOut::VERSION == 3.49)
     or die("Version mismatch\n");
 
 # EOF

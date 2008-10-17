@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.49 Fri Oct 17 18:33:46 2008
+	- Call all :Destroy methods before deleting field data
+
 3.48 Wed Oct 15 20:05:20 2008
 	- Fix runtime loading of classes with multiple inheritance
 
