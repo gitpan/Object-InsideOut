@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.49';
+our $VERSION = '3.51';
 $VERSION = eval $VERSION;
 
 1;
@@ -34,7 +34,7 @@ Test::Pod 1.26                  - Checks POD syntax
 
 Devel::Symdump 2.08             - Used by Pod::Coverage
 
-File::Spec 3.2702                 - Used by Pod::Parser
+File::Spec 3.2701               - Used by Pod::Parser
 
 Pod::Parser 1.35                - Used by Pod::Coverage
 
@@ -50,13 +50,13 @@ Want 0.18                       - :lvalue accessor support
 
 Storable 2.19                   - Object serialization support
 
-Devel::StackTrace 1.1902          - Used by Exception::Class
+Devel::StackTrace 1.1902        - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
-Exception::Class 1.24           - Error handling
+Exception::Class 1.25           - Error handling
 
-Object::InsideOut 3.49          - Inside-out object support
+Object::InsideOut 3.51          - Inside-out object support
 
 URI 1.37                        - Used by LWP::UserAgent
 
@@ -64,9 +64,9 @@ HTML::Tagset 3.20               - Used by LWP::UserAgent
 
 HTML::Parser 3.56               - Used by LWP::UserAgent
 
-LWP::UserAgent 5.817            - Used by Math::Random::MT::Auto
+LWP::UserAgent 5.819            - Used by Math::Random::MT::Auto
 
-Win32::API 0.56                 - Used by Math::Random::MT::Auto (Win XP only)
+Win32::API 0.57                 - Used by Math::Random::MT::Auto (Win XP only)
 
 Math::Random::MT::Auto 6.14     - Support for :SECURE mode
 

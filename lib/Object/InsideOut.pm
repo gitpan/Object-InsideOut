@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.49';
+our $VERSION = '3.51';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.49;
-use Object::InsideOut::Util 3.49 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.49;
+use Object::InsideOut::Exception 3.51;
+use Object::InsideOut::Util 3.51 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.51;
 
 require B;
 
