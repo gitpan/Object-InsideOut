@@ -96,7 +96,7 @@ WriteMakefile(
                          'B'                => 0,
                          'Data::Dumper'     => 0,
                          'Scalar::Util'     => $Scalar::Util::VERSION,
-                         'Exception::Class' => 1.22,
+                         'Exception::Class' => 1.26,
                          'Test::More'       => 0.50,
                        },
     ((ExtUtils::MakeMaker->VERSION() lt '6.25')

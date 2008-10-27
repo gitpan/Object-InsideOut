@@ -82,11 +82,7 @@ $SIG{__WARN__} = sub { push(@errs, @_); };
     my $obj = eval { Foo->new('INIT' => 1, 'DEST' => 1); };
     ok(! $obj, 'No object');
     like($@->Error(), qr/Die in init/, 'Die in init');
-    SKIP: {
-        skip(q/Can't test ->Chain() with Exception::Class >= 1.25/, 1)
-            if ($Exception::Class::VERSION >= 1.25);
-        like($@->Chain()->Error(), qr/Die in destruct/, 'Combined errors');
-    }
+    like($@->Chain()->Error(), qr/Die in destruct/, 'Combined errors');
     ok(! @errs, 'No warnings');
     undef($@); @errs = ();
 }

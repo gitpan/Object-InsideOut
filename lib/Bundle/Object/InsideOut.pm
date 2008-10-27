@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.51';
+our $VERSION = '3.52';
 $VERSION = eval $VERSION;
 
 1;
@@ -50,13 +50,13 @@ Want 0.18                       - :lvalue accessor support
 
 Storable 2.19                   - Object serialization support
 
-Devel::StackTrace 1.1902        - Used by Exception::Class
+Devel::StackTrace 1.20          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
-Exception::Class 1.25           - Error handling
+Exception::Class 1.26           - Error handling
 
-Object::InsideOut 3.51          - Inside-out object support
+Object::InsideOut 3.52          - Inside-out object support
 
 URI 1.37                        - Used by LWP::UserAgent
 
