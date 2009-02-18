@@ -21,6 +21,7 @@ sub create_field
         }
 
         my ($class, $field, @attrs) = @_;
+
         # Verify valid class
         if (! $class->isa('Object::InsideOut')) {
             OIO::Args->die(
@@ -66,6 +67,9 @@ sub create_field
                 'Error'   => $err,
                 'Code'    => $code);
         }
+
+        # Invalidate object initialization activity cache
+        delete($$GBL{'cache'});
 
         # Process the declaration
         process_fields();
@@ -162,6 +166,9 @@ sub create_field
         }
     };
 
+    # Invalidate object initialization activity cache
+    delete($$GBL{'cache'});
+
     # Do the original call
     @_ = @args;
     goto &$call;
@@ -171,7 +178,7 @@ sub create_field
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.52)
+($Object::InsideOut::VERSION == 3.53)
     or die("Version mismatch\n");
 
 # EOF

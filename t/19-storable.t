@@ -102,6 +102,17 @@ package Mat; {
     my @bom :Field( Standard => 'bom', Name => 'bom' );
 }
 
+package Bork; {
+    use Object::InsideOut 'Storable';
+
+    my @fld :Field;
+
+    sub set_fld
+    {
+        my ($self, $data) = @_;
+        $self->set(\@fld, $data);
+    }
+}
 
 
 package main;
@@ -128,6 +139,15 @@ MAIN:
 
     $f2 = thaw($f1->freeze());
     is($f2->get_bom(), $f2      => 'Storable works');
+
+    # Test that unnamed fields generate proper errors
+    $obj = Bork->new();
+    $obj->set_fld('foo');
+    $tmp = $obj->freeze();
+    undef($obj2);
+    eval { $obj2 = thaw($tmp); };
+    like($@, qr(Unnamed field encounted) => 'Unnamed field');
+    is($obj2, undef,  'thaw failed');
 }
 
 exit(0);
