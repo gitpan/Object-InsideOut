@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.53
+This document describes Object::InsideOut version 3.54
 
 =head1 SYNOPSIS
 
@@ -756,7 +756,7 @@ in the C<:InitArgs> hash:
 
 =over
 
-=item a.  L</"Parameter Pre-processing"> is performed.
+=item a.  L</"Parameter Preprocessing"> is performed.
 
 =item b.  Checks for L</"Mandatory Parameters"> are made.
 
@@ -1966,6 +1966,9 @@ use:
      $My::Class::storable = 1;
  }
  use My::Class;
+
+NOTE: The I<caveats> discussed above for the C<-E<gt>pump()> method are also
+applicable when using the Storable module.
 
 =head1 OBJECT COERCION
 
@@ -3217,7 +3220,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.53/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.54/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

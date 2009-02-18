@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.54 Wed Feb 18 18:04:51 2009
+	- Doc update only
+
 3.53 Wed Feb 18 15:34:20 2009
 	- Handle unnamed fields when using Storable
 	- Cache some object initialization activities
