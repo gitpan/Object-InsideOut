@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.54
+This document describes Object::InsideOut version 3.55
 
 =head1 SYNOPSIS
 
@@ -127,7 +127,7 @@ compiler such that any typos are easily caught using S<C<perl -c>>.
 
  $coment[$$self] = $value;    # Causes a compile-time error
     # or with hash-based fields
- $comment{$$slef} = $value;   # Also causes a compile-time error
+ $comment{$$self} = $value;   # Also causes a compile-time error
 
 =back
 
@@ -621,7 +621,7 @@ result that you might expect:
  my @foo :Field
          :Default({});
 
-This does b<not> result in a new empty hash reference being created for each
+This does B<not> result in a new empty hash reference being created for each
 new object.  Rather, a single empty hash reference is created when the module
 is loaded, and then that reference is assigned to each newly created object.
 In other words, it is equivalent to:
@@ -638,7 +638,9 @@ subroutine:
  {
      my ($self, $args) = @_;
 
-     $foo[$$self] = {};
+     if (! exists($foo[$$self])) {
+         $self->set(\@foo, {});
+     }
  }
 
 C<:Default> may be abbreviated to C<:Def>.
@@ -885,7 +887,7 @@ You can specify that the accessor should return the I<old> (previous) value
 
  my @data :Field :Acc('Name' => 'data', 'Ret' => 'Old');
 
-You may use <Previous>, C<Prev> or C<Prior> as synonyms for C<Old>.
+You may use C<Previous>, C<Prev> or C<Prior> as synonyms for C<Old>.
 
 Finally, you can specify that the accessor should return the object itself:
 
@@ -2082,7 +2084,7 @@ NOTE: If data in a I<weak> field is set directly (i.e., the C<-E<gt>set()>
 method is not used), then L<weaken()|Scalar::Util/"weaken REF"> must be
 invoked on the stored reference afterwards:
 
- $field[$$self] = $data;
+ $self->set(\@field, $data);
  Scalar::Util::weaken($field[$$self]);
 
 (This is another reason why the C<-E<gt>set()> method is recommended for
@@ -3220,7 +3222,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.54/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.55/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

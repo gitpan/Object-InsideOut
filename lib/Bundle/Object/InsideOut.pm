@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.54';
+our $VERSION = '3.55';
 $VERSION = eval $VERSION;
 
 1;
@@ -20,7 +20,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.14              - Used for module testing
+Test::Harness 3.17              - Used for module testing
 
 Test::Simple 0.86               - Used for module testing
 
@@ -38,13 +38,13 @@ File::Spec 3.29                 - Used by Pod::Parser
 
 Pod::Parser 1.37                - Used by Pod::Coverage
 
-Pod::Coverage 0.19              - Used by Test::Pod::Coverage
+Pod::Coverage 0.20              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.71                    - Support for threads
+threads 1.72                    - Support for threads
 
-threads::shared 1.27            - Support for sharing objects between threads
+threads::shared 1.28            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
@@ -54,9 +54,9 @@ Devel::StackTrace 1.20          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
-Exception::Class 1.26           - Error handling
+Exception::Class 1.29           - Error handling
 
-Object::InsideOut 3.54          - Inside-out object support
+Object::InsideOut 3.55          - Inside-out object support
 
 URI 1.37                        - Used by LWP::UserAgent
 
@@ -64,7 +64,7 @@ HTML::Tagset 3.20               - Used by LWP::UserAgent
 
 HTML::Parser 3.60               - Used by LWP::UserAgent
 
-LWP::UserAgent 5.824            - Used by Math::Random::MT::Auto
+LWP::UserAgent 5.826            - Used by Math::Random::MT::Auto
 
 Win32::API 0.58                 - Used by Math::Random::MT::Auto (Win XP only)
 

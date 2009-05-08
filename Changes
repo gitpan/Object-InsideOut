@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.55 Fri May  8 11:38:53 2009
+	- Upgraded dependencies to Exception::Class 1.29
+
 3.54 Wed Feb 18 18:04:51 2009
 	- Doc update only
 
