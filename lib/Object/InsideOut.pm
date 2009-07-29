@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.55';
+our $VERSION = '3.56';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.55;
-use Object::InsideOut::Util 3.55 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.55;
+use Object::InsideOut::Exception 3.56;
+use Object::InsideOut::Util 3.56 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.56;
 
 require B;
 
@@ -1354,7 +1354,7 @@ sub _args :Sub(Private)
     }
 
     # Check on what we've found
-    CHECK:
+    CHECKIT:
     foreach my $key (keys(%{$spec})) {
         my $spec_item = $$spec{$key};
         # No specs to check
@@ -1365,7 +1365,7 @@ sub _args :Sub(Private)
             if (! defined($found{$key})) {
                 delete($found{$key});
             }
-            next CHECK;
+            next CHECKIT;
         }
 
         # Preprocess the argument
@@ -1404,7 +1404,7 @@ sub _args :Sub(Private)
             # If no default, then remove it from the found args hash
             if (! defined($found{$key})) {
                 delete($found{$key});
-                next CHECK;
+                next CHECKIT;
             }
         }
 

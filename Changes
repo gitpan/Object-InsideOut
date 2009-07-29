@@ -1,5 +1,11 @@
 Revision history for Perl extension Object::InsideOut.
 
+-
+	-
+
+3.56 Wed Jul 29 19:11:02 2009
+	- Changed label that was a keyword
+
 3.55 Fri May  8 11:38:53 2009
 	- Upgraded dependencies to Exception::Class 1.29
 

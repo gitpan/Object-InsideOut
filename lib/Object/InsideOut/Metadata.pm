@@ -3,7 +3,7 @@ package Object::InsideOut::Metadata; {
 use strict;
 use warnings;
 
-our $VERSION = '3.55';
+our $VERSION = '3.56';
 $VERSION = eval $VERSION;
 
 # Stores method metadata
@@ -99,7 +99,7 @@ __DATA__
 
 ### Object Interface ###
 
-use Object::InsideOut 3.55;
+use Object::InsideOut 3.56;
 
 my @CLASSES :Field;
 my @FOREIGN :Field;
@@ -268,7 +268,7 @@ Object::InsideOut::Metadata - Introspection for Object::InsideOut classes
 
 =head1 VERSION
 
-This document describes Object::InsideOut::Metadata version 3.55
+This document describes Object::InsideOut::Metadata version 3.56
 
 =head1 SYNOPSIS
 
