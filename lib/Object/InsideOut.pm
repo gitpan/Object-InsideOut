@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.56';
+our $VERSION = '3.57';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.56;
-use Object::InsideOut::Util 3.56 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.56;
+use Object::InsideOut::Exception 3.57;
+use Object::InsideOut::Util 3.57 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.57;
 
 require B;
 
@@ -1924,14 +1924,19 @@ sub DESTROY
 # OIO specific ->can()
 sub can :Method(Object)
 {
+    my ($thing, $method) = @_;
+
+    return if (! defined($thing));
+
     # Metadata call for methods
     if (@_ == 1) {
-        my $meths = Object::InsideOut::meta(shift)->get_methods();
+        my $meths = Object::InsideOut::meta($thing)->get_methods();
         return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
     }
 
+    return if (! defined($method));
+
     # Try UNIVERSAL::can()
-    my ($thing, $method) = @_;
     eval { $thing->Object::InsideOut::SUPER::can($method) };
 }
 
@@ -1939,12 +1944,14 @@ sub can :Method(Object)
 # OIO specific ->isa()
 sub isa :Method(Object)
 {
+    my ($thing, $type) = @_;
+
+    return ('') if (! defined($thing));
+
     # Metadata call for classes
     if (@_ == 1) {
-        return Object::InsideOut::meta(shift)->get_classes();
+        return Object::InsideOut::meta($thing)->get_classes();
     }
-
-    my ($thing, $type) = @_;
 
     # Workaround for Perl bug #47233
     return ('') if (! defined($type));

@@ -1,7 +1,7 @@
 Revision history for Perl extension Object::InsideOut.
 
--
-	-
+3.57 Thu Nov  5 01:42:26 2009
+	- Check args to ->isa()/->can()
 
 3.56 Wed Jul 29 19:11:02 2009
 	- Changed label that was a keyword

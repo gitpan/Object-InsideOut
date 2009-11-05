@@ -12,14 +12,19 @@ sub install_UNIVERSAL
 
     *Object::InsideOut::can = sub
     {
+        my ($thing, $method) = @_;
+
+        return if (! defined($thing));
+
         # Metadata call for methods
         if (@_ == 1) {
             my $meths = Object::InsideOut::meta(shift)->get_methods();
             return (wantarray()) ? (keys(%$meths)) : [ keys(%$meths) ];
         }
 
+        return if (! defined($method));
+
         # First, try the original UNIVERSAL::can()
-        my ($thing, $method) = @_;
         my $code;
         if ($method =~ /^SUPER::/) {
             # Superclass WRT caller
@@ -168,6 +173,8 @@ sub install_UNIVERSAL
     {
         my ($thing, $type) = @_;
 
+        return ('') if (! defined($thing));
+
         # Metadata call for classes
         if (@_ == 1) {
             return Object::InsideOut::meta($thing)->get_classes();
@@ -204,7 +211,7 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.56)
+($Object::InsideOut::VERSION == 3.57)
     or die("Version mismatch\n");
 
 # EOF
