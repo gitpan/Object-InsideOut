@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.58 Wed Dec 23 12:45:55 2009
+	- Support type checking for scalar refs
+
 3.57 Thu Nov  5 01:42:26 2009
 	- Check args to ->isa()/->can()
 

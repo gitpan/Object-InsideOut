@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.57
+This document describes Object::InsideOut version 3.58
 
 =head1 SYNOPSIS
 
@@ -1327,6 +1327,11 @@ For object initialization parameters, only a single ref is permitted.
 
 This specifies that only a single hash reference is permitted.  Can also be
 specified as C<HASHref>.
+
+=item 'SCALAR_ref'
+
+This type permits an accessor to accept a single scalar reference.  Can also
+be specified as C<SCALARref>.
 
 =item A class name
 
@@ -3222,7 +3227,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.57/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.58/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

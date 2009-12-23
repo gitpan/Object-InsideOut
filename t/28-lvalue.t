@@ -52,6 +52,11 @@ package Foo; {
         :Type(Array_Ref(HASH))
         :LV(bork);
 
+    my @zork
+        :Field
+        :Type(ScalarRef)
+        :LV(zork);
+
     sub me
     {
         my $self = shift;
@@ -591,6 +596,12 @@ MAIN:
     $obj->bork() = [ {a=>5,b=>'foo'}, {}, {99=>'bork'} ];
     is_deeply($obj->bork(), [ {a=>5,b=>'foo'}, {}, {99=>'bork'} ]
                                         => 'lv array_ref subtype=hash');
+
+    my $x = 42;
+    $obj->zork() = \$x;
+    is($obj->zork(), \$x                => 'lv scalar_ref');
+    my $y = $obj->zork();
+    is($$y, 42                          => 'lv scalar_ref value')
 }
 
 exit(0);

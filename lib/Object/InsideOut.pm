@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.57';
+our $VERSION = '3.58';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.57;
-use Object::InsideOut::Util 3.57 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.57;
+use Object::InsideOut::Exception 3.58;
+use Object::InsideOut::Util 3.58 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.58;
 
 require B;
 
@@ -1469,7 +1469,7 @@ sub _args :Sub(Private)
             # Otherwise, check for a specific class or ref type
             # Exact spelling and case required
             else {
-                if ($type =~ /^(array|hash)(?:_?ref)?\s*(?:\(\s*(\S+)\s*\))*$/i) {
+                if ($type =~ /^(array|hash|scalar)(?:_?ref)?\s*(?:\(\s*(\S+)\s*\))*$/i) {
                     $type = uc($1);
                     if (defined($2)) {
                         $subtype = $2;
@@ -2179,7 +2179,7 @@ sub create_accessors :Sub(Private)
                         $val = 'list';
                     } elsif (uc($val) eq 'HASH') {
                         $val = 'HASH';
-                    } elsif ($val =~ /^(hash|array)_?ref$/i) {
+                    } elsif ($val =~ /^(hash|array|scalar)_?ref$/i) {
                         $val = uc($1) . '_ref';
                     }
                     if ($subtype) {
@@ -2370,7 +2370,7 @@ sub create_accessors :Sub(Private)
     }
 
     # Get type checking (if any)
-    my ($type, $subtype, $ah_ref) = ('NONE', '', 0);
+    my ($type, $subtype, $is_ref) = ('NONE', '', 0);
     if ($$fld_type{$field_ref}) {
         $type = $$fld_type{$field_ref}{'type'};
         if (! ref($type)) {
@@ -2378,9 +2378,9 @@ sub create_accessors :Sub(Private)
                 $type = $1;
                 $subtype = $2;
             }
-            if ($type =~ /^(HASH|ARRAY)_ref$/) {
+            if ($type =~ /^(HASH|ARRAY|SCALAR)_ref$/) {
                 $type = $1;
-                $ah_ref = 1;
+                $is_ref = 1;
             }
         }
     }
@@ -2431,7 +2431,7 @@ sub create_accessors :Sub(Private)
     # Create an :lvalue accessor
     if ($lvalue) {
         $code .= create_lvalue_accessor($pkg, $set, $field_ref, $get,
-                                        $type, $ah_ref, $subtype,
+                                        $type, $is_ref, $subtype,
                                         $name, $return, $private,
                                         $restricted, $weak, $pre);
     }
@@ -2483,7 +2483,7 @@ _PRE_
 
         # Add data type checking
         my ($type_code, $arg_str) = type_code($pkg, $set, $weak,
-                                              $type, $ah_ref, $subtype);
+                                              $type, $is_ref, $subtype);
         $code .= $type_code;
 
         # Add field locking code if sharing
@@ -2588,7 +2588,7 @@ _RESTRICTED_
 # Generate type checking code
 sub type_code :Sub(Private)
 {
-    my ($pkg, $name, $weak, $type, $ah_ref, $subtype) = @_;
+    my ($pkg, $name, $weak, $type, $is_ref, $subtype) = @_;
     my $code = '';
     my $arg_str = '$_[1]';
 
@@ -2662,7 +2662,7 @@ _NUMERIC_
 _ARRAY_
         $arg_str = '$arg';
 
-    } elsif ($type eq 'HASH' && !$ah_ref) {
+    } elsif ($type eq 'HASH' && !$is_ref) {
         # Hash - pairs of args or hash ref
         $code = <<"_HASH_";
     my \$arg;

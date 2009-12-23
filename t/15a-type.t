@@ -41,6 +41,9 @@ package My::Class; {
     my @ss :Field
            :Acc(ss)
            :Type(\&My::Class::is_scalar);
+    my @sr :Field
+           :Acc(sr)
+           :Type(SCALARref);
 
     my %init_args :InitArgs = (
         'DATA' => {
@@ -130,6 +133,14 @@ MAIN:
     is($obj->ss(), 'hello'                      => 'Scalar');
     eval { $obj->ss([1]); };
     like($@->message, qr/failed type check/     => 'Scalar failure');
+
+    eval { $obj->sr('test'); };
+    like($@->message, qr/Wrong type/            => 'Not scalar ref');
+    my $x = 42;
+    $obj->sr(\$x);
+    is($obj->sr(), \$x                          => 'Scalar ref');
+    my $y = $obj->sr();
+    is($$y, 42                                  => 'Scalar ref value');
 
     eval { $obj2 = My::Class->new('DATA' => 'hello'); };
     like($@->message, qr/failed type check/     => 'Type failure');

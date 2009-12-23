@@ -35,7 +35,7 @@ sub create_lvalue_accessor
             OIO::Method->die('message' => "Can't call private subroutine 'Object::InsideOut::create_lvalue_accessor' from class '$caller'");
         }
 
-        my ($pkg, $set, $field_ref, $get, $type, $ah_ref, $subtype,
+        my ($pkg, $set, $field_ref, $get, $type, $is_ref, $subtype,
             $name, $return, $private, $restricted, $weak, $pre) = @_;
 
         # Field string
@@ -109,7 +109,7 @@ _PRE_
 
         # Add data type checking
         my ($type_code, $arg_str) = type_code($pkg, $set, $weak,
-                                              $type, $ah_ref, $subtype);
+                                              $type, $is_ref, $subtype);
         $code .= $type_code;
 
         # Grab 'OLD' value
@@ -157,7 +157,7 @@ _PRE_
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.57)
+($Object::InsideOut::VERSION == 3.58)
     or die("Version mismatch\n");
 
 # EOF

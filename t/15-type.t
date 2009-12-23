@@ -22,6 +22,7 @@ package My::Class; {
     my @hr :Field('acc'=>'hr', 'type' => 'hashref');
     my @mc :Field({'acc'=>'mc', 'type' => 'My::Class'});
     my @nn :Field({'acc'=>'nn', 'type' => 'num'});
+    my @sr :Field({'acc'=>'sr', 'type' => 'scalar_ref'});
     my @ss :Field
            :Acc(ss)
            :Type(\&My::Class::is_scalar);
@@ -118,6 +119,14 @@ MAIN:
     is($obj->scal(), 'foo'                      => 'Scalar');
     eval { $obj->scal(bless({}, 'Foo')); };
     like($@->message, qr/Bad argument/          => 'Scalar failure');
+
+    eval { $obj->sr('test'); };
+    like($@->message, qr/Wrong type/            => 'Not scalar ref');
+    my $x = 42;
+    $obj->sr(\$x);
+    is($obj->sr(), \$x                          => 'Scalar ref');
+    my $y = $obj->sr();
+    is($$y, 42                                  => 'Scalar ref value');
 
     eval { $obj2 = My::Class->new('DATA' => 'hello'); };
     like($@->message, qr/failed type check/     => 'Type failure');
