@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.59 Wed Mar  3 19:11:50 2010
+	- Fixed shared object destruction when using Thread::Queue
+
 3.58 Wed Dec 23 12:45:55 2009
 	- Support type checking for scalar refs
 

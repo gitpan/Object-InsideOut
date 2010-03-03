@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.58';
+our $VERSION = '3.59';
 $VERSION = eval $VERSION;
 
 1;
@@ -20,7 +20,7 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.17              - Used for module testing
+Test::Harness 3.21              - Used for module testing
 
 Test::Simple 0.94               - Used for module testing
 
@@ -30,7 +30,7 @@ Pod::Escapes 1.04               - Used by Pod::Simple
 
 Pod::Simple 3.13                - Used by Test::Pod
 
-Test::Pod 1.40                  - Checks POD syntax
+Test::Pod 1.41                  - Checks POD syntax
 
 Devel::Symdump 2.08             - Used by Pod::Coverage
 
@@ -58,9 +58,9 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.29           - Error handling
 
-Object::InsideOut 3.58          - Inside-out object support
+Object::InsideOut 3.59          - Inside-out object support
 
-URI 1.51                        - Used by LWP::UserAgent
+URI 1.52                        - Used by LWP::UserAgent
 
 HTML::Tagset 3.20               - Used by LWP::UserAgent
 

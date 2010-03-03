@@ -206,11 +206,11 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = '3.58';
+our $VERSION = '3.59';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut 3.58;
-use Object::InsideOut::Metadata 3.58;
+use Object::InsideOut 3.59;
+use Object::InsideOut::Metadata 3.59;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -260,7 +260,7 @@ add_meta('Object::InsideOut::Results', {
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.58)
+($Object::InsideOut::VERSION == 3.59)
     or die("Version mismatch\n");
 
 # EOF

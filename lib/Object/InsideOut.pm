@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.58';
+our $VERSION = '3.59';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.58;
-use Object::InsideOut::Util 3.58 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.58;
+use Object::InsideOut::Exception 3.59;
+use Object::InsideOut::Util 3.59 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.59;
 
 require B;
 
@@ -1166,7 +1166,7 @@ sub CLONE
     }
 
     # Process thread-shared objects
-    {
+    if (($] < 5.010) || ($threads::shared::VERSION lt '1.15')) {
         my $sh_obj = $GBL{'share'}{'obj'};
         lock($sh_obj) if $GBL{'share'}{'ok'};
 
@@ -1279,12 +1279,14 @@ sub _obj :Sub(Private)
         threads::shared::share($self);
 
         # Add thread tracking list for this thread-shared object
-        my $sh_obj = $GBL{'share'}{'obj'};
-        lock($sh_obj) if $GBL{'share'}{'ok'};
-        if (exists($$sh_obj{$class})) {
-            $$sh_obj{$class}{$$self} = make_shared([ $GBL{'tid'} ]);
-        } else {
-            $$sh_obj{$class} = make_shared({ $$self => [ $GBL{'tid'} ] });
+        if (($] < 5.010) || ($threads::shared::VERSION lt '1.15')) {
+            my $sh_obj = $GBL{'share'}{'obj'};
+            lock($sh_obj) if $GBL{'share'}{'ok'};
+            if (exists($$sh_obj{$class})) {
+                $$sh_obj{$class}{$$self} = make_shared([ $GBL{'tid'} ]);
+            } else {
+                $$sh_obj{$class} = make_shared({ $$self => [ $GBL{'tid'} ] });
+            }
         }
 
     } elsif ($threads::threads) {
@@ -1830,7 +1832,7 @@ sub DESTROY
             if ($GBL{'term'}) {
                 return if ($tid);   # Continue only if main thread
 
-            } else {
+            } elsif (($] < 5.010) || ($threads::shared::VERSION lt '1.15')) {
                 my $so_cl = $GBL{'share'}{'obj'}{$class};
                 if (! exists($$so_cl{$$self})) {
                     warn("ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $tid twice\n");
@@ -1838,8 +1840,12 @@ sub DESTROY
                 }
 
                 # Remove thread ID from this object's thread tracking list
+                # NOTE:  The threads->object() test was added for the case
+                # where OIO objects are passed via Thead::Queue.  I don't
+                # know if this will cause problems with detached threads as
+                # threads->object() returns undef for them.
                 lock($so_cl);
-                if (@{$$so_cl{$$self}} = grep { $_ != $tid } @{$$so_cl{$$self}}) {
+                if (@{$$so_cl{$$self}} = grep { $_ != $tid && threads->object($_) } @{$$so_cl{$$self}}) {
                     return;
                 }
 
