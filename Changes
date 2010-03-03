@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.61 Wed Mar  3 21:37:19 2010
+	- Code cleanup
+
 3.59 Wed Mar  3 19:11:50 2010
 	- Fixed shared object destruction when using Thread::Queue
 

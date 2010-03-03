@@ -270,7 +270,7 @@ sub inherit
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.59)
+($Object::InsideOut::VERSION == 3.61)
     or die("Version mismatch\n");
 
 # EOF

@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.59';
+our $VERSION = '3.61';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.59;
-use Object::InsideOut::Util 3.59 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.59;
+use Object::InsideOut::Exception 3.61;
+use Object::InsideOut::Util 3.61 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.61;
 
 require B;
 
@@ -97,8 +97,8 @@ if (! exists($GBL{'GBL_SET'})) {
 
         share => {              # Object sharing between threads
             cl  => {},
-            obj => make_shared({}),
             ok  => $threads::shared::threads_shared,
+            # obj               # Tracks TIDs for shared objects
         },
 
         # cache                 # Object initialization activity cache
@@ -790,8 +790,8 @@ sub initialize :Sub(Private)
         }
     }
 
-    # If needed, process any thread object sharing flags
     if ($GBL{'share'}{'ok'}) {
+        # If needed, process any thread object sharing flags
         my $sh_cl = $GBL{'share'}{'cl'};
         foreach my $flag_class (keys(%{$sh_cl})) {
             # Find the class in any class tree
@@ -823,6 +823,13 @@ sub initialize :Sub(Private)
                     }
                 }
             }
+        }
+
+        # Set up for shared object tracking
+        if (! exists($GBL{'share'}{'obj'}) &&
+            (($] < 5.010) || ($threads::shared::VERSION lt '1.15')))
+        {
+            $GBL{'share'}{'obj'} = make_shared({});
         }
     }
 
@@ -1166,9 +1173,9 @@ sub CLONE
     }
 
     # Process thread-shared objects
-    if (($] < 5.010) || ($threads::shared::VERSION lt '1.15')) {
+    if (exists($GBL{'share'}{'obj'})) {
         my $sh_obj = $GBL{'share'}{'obj'};
-        lock($sh_obj) if $GBL{'share'}{'ok'};
+        lock($sh_obj);
 
         # Add thread ID to every object in the thread tracking registry
         foreach my $class (keys(%{$sh_obj})) {
@@ -1279,9 +1286,9 @@ sub _obj :Sub(Private)
         threads::shared::share($self);
 
         # Add thread tracking list for this thread-shared object
-        if (($] < 5.010) || ($threads::shared::VERSION lt '1.15')) {
+        if (exists($GBL{'share'}{'obj'})) {
             my $sh_obj = $GBL{'share'}{'obj'};
-            lock($sh_obj) if $GBL{'share'}{'ok'};
+            lock($sh_obj);
             if (exists($$sh_obj{$class})) {
                 $$sh_obj{$class}{$$self} = make_shared([ $GBL{'tid'} ]);
             } else {
@@ -1816,7 +1823,11 @@ sub DESTROY
     # Workaround for Perl's "in cleanup" bug
     if ($threads::shared::threads_shared && ! $GBL{'term'}) {
         eval {
-            my $bug = keys(%{$GBL{'id'}{'obj'}}) + keys(%{$GBL{'id'}{'reuse'}}) + keys(%{$GBL{'share'}{'obj'}});
+            my $bug = keys(%{$GBL{'id'}{'obj'}})
+                    + keys(%{$GBL{'id'}{'reuse'}})
+                    + ((exists($GBL{'share'}{'obj'}))
+                        ? keys(%{$GBL{'share'}{'obj'}})
+                        : 0);
         };
         if ($@) {
             $GBL{'term'} = 1;
@@ -1832,7 +1843,7 @@ sub DESTROY
             if ($GBL{'term'}) {
                 return if ($tid);   # Continue only if main thread
 
-            } elsif (($] < 5.010) || ($threads::shared::VERSION lt '1.15')) {
+            } elsif (exists($GBL{'share'}{'obj'})) {
                 my $so_cl = $GBL{'share'}{'obj'}{$class};
                 if (! exists($$so_cl{$$self})) {
                     warn("ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $tid twice\n");
