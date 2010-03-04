@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Object-InsideOut
-version:            3.61
+version:            3.62
 abstract:           Comprehensive inside-out object support module
 author:
     - Jerry D. Hedden <jdhedden AT cpan DOT org>

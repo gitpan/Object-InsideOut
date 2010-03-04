@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.61';
+our $VERSION = '3.62';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.61;
-use Object::InsideOut::Util 3.61 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.61;
+use Object::InsideOut::Exception 3.62;
+use Object::InsideOut::Util 3.62 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.62;
 
 require B;
 
@@ -827,7 +827,7 @@ sub initialize :Sub(Private)
 
         # Set up for shared object tracking
         if (! exists($GBL{'share'}{'obj'}) &&
-            (($] < 5.010) || ($threads::shared::VERSION lt '1.15')))
+            (($] < 5.008009) || ($threads::shared::VERSION lt '1.15')))
         {
             $GBL{'share'}{'obj'} = make_shared({});
         }
