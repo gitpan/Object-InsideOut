@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.62';
+our $VERSION = '3.63';
 $VERSION = eval $VERSION;
 
 1;
@@ -58,7 +58,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.29           - Error handling
 
-Object::InsideOut 3.62          - Inside-out object support
+Object::InsideOut 3.63          - Inside-out object support
 
 URI 1.52                        - Used by LWP::UserAgent
 
@@ -70,7 +70,7 @@ LWP::UserAgent 5.834            - Used by Math::Random::MT::Auto
 
 Win32::API 0.59                 - Used by Math::Random::MT::Auto (Win XP only)
 
-Math::Random::MT::Auto 6.14     - Support for :SECURE mode
+Math::Random::MT::Auto 6.15     - Support for :SECURE mode
 
 =head1 DESCRIPTION
 

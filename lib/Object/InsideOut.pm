@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.62';
+our $VERSION = '3.63';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.62;
-use Object::InsideOut::Util 3.62 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.62;
+use Object::InsideOut::Exception 3.63;
+use Object::InsideOut::Util 3.63 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.63;
 
 require B;
 
@@ -1854,9 +1854,12 @@ sub DESTROY
                 # NOTE:  The threads->object() test was added for the case
                 # where OIO objects are passed via Thead::Queue.  I don't
                 # know if this will cause problems with detached threads as
-                # threads->object() returns undef for them.
+                # threads->object() returns undef for them.  Also, the main
+                # thread (0) is always a valid thread.
                 lock($so_cl);
-                if (@{$$so_cl{$$self}} = grep { $_ != $tid && threads->object($_) } @{$$so_cl{$$self}}) {
+                if (@{$$so_cl{$$self}} = grep { ($_ != $tid) &&
+                                                (($_ == 0) || threads->object($_)) }
+                                            @{$$so_cl{$$self}}) {
                     return;
                 }
 
