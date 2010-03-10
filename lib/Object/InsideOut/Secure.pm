@@ -2,10 +2,10 @@ package Object::InsideOut::Secure; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.63';
+    our $VERSION = '3.64';
     $VERSION = eval $VERSION;
 
-    use Object::InsideOut 3.63 ':hash_only';
+    use Object::InsideOut 3.64 ':hash_only';
 
     # Holds used IDs
     my %used :Field = ( 0 => undef );

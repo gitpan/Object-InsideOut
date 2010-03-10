@@ -80,6 +80,8 @@ t/42-sh_obj.t
 t/43-overload.t
 t/44-data.t
 t/45-unused.t
+t/46-singleton.t
+t/46a-singleton.t
 t/99-pod.t
 t/test.pl
 t/EmptyParent.pm
