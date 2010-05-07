@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.64';
+our $VERSION = '3.65';
 $VERSION = eval $VERSION;
 
 1;
@@ -24,13 +24,13 @@ Test::Harness 3.21              - Used for module testing
 
 Test::Simple 0.94               - Used for module testing
 
-Scalar::Util 1.22               - Used by Object::InsideOut
+Scalar::Util 1.23               - Used by Object::InsideOut
 
 Pod::Escapes 1.04               - Used by Pod::Simple
 
-Pod::Simple 3.13                - Used by Test::Pod
+Pod::Simple 3.14                - Used by Test::Pod
 
-Test::Pod 1.41                  - Checks POD syntax
+Test::Pod 1.44                  - Checks POD syntax
 
 Devel::Symdump 2.08             - Used by Pod::Coverage
 
@@ -42,29 +42,29 @@ Pod::Coverage 0.20              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.76                    - Support for threads
+threads 1.77                    - Support for threads
 
 threads::shared 1.33            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
-Data::Dumper 2.125              - Object serialization support
+Data::Dumper 2.126              - Object serialization support
 
-Storable 2.21                   - Object serialization support
+Storable 2.22                   - Object serialization support
 
 Devel::StackTrace 1.22          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
-Exception::Class 1.29           - Error handling
+Exception::Class 1.30           - Error handling
 
-Object::InsideOut 3.64          - Inside-out object support
+Object::InsideOut 3.65          - Inside-out object support
 
-URI 1.52                        - Used by LWP::UserAgent
+URI 1.54                        - Used by LWP::UserAgent
 
 HTML::Tagset 3.20               - Used by LWP::UserAgent
 
-HTML::Parser 3.64               - Used by LWP::UserAgent
+HTML::Parser 3.65               - Used by LWP::UserAgent
 
 LWP::UserAgent 5.834            - Used by Math::Random::MT::Auto
 

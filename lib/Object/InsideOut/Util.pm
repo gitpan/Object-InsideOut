@@ -5,10 +5,10 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.64';
+our $VERSION = '3.65';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Metadata 3.64;
+use Object::InsideOut::Metadata 3.65;
 
 ### Module Initialization ###
 

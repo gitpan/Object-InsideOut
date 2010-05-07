@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.65 Fri May  7 19:05:34 2010
+	- Fix tests for $@ changes that will be coming with Perl 5.14
+
 3.64 Mon Mar  8 17:59:51 2010
 	- Added tests related to shared object destruction
 
