@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.65';
+our $VERSION = '3.66';
 $VERSION = eval $VERSION;
 
 1;
@@ -58,7 +58,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.30           - Error handling
 
-Object::InsideOut 3.65          - Inside-out object support
+Object::InsideOut 3.66          - Inside-out object support
 
 URI 1.54                        - Used by LWP::UserAgent
 
@@ -66,7 +66,7 @@ HTML::Tagset 3.20               - Used by LWP::UserAgent
 
 HTML::Parser 3.65               - Used by LWP::UserAgent
 
-LWP::UserAgent 5.834            - Used by Math::Random::MT::Auto
+LWP::UserAgent 5.836            - Used by Math::Random::MT::Auto
 
 Win32::API 0.59                 - Used by Math::Random::MT::Auto (Win XP only)
 

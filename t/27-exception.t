@@ -73,7 +73,7 @@ $SIG{__WARN__} = sub { push(@errs, @_); };
     my $obj = Foo->new('DEST' => 1);
     ok($obj && !$@ && !@errs, 'Have object');
     undef($obj);
-    if ($] < 5.013) {
+    if ($] < 5.013001) {
         ok($@, 'Got destroy exception');
         like($@, qr/Die in destruct/, 'Die in destroy');
     } else {
@@ -87,7 +87,7 @@ $SIG{__WARN__} = sub { push(@errs, @_); };
     my $obj = eval { Foo->new('INIT' => 1, 'DEST' => 1); };
     ok(! $obj, 'No object');
     like($@->Error(), qr/Die in init/, 'Die in init');
-    if ($] < 5.013) {
+    if ($] < 5.013001) {
         like($@->Chain()->Error(), qr/Die in destruct/, 'Combined errors');
         ok(! @errs, 'No warnings');
     } else {
