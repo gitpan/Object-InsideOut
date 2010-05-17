@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.67 Mon May 17 23:22:44 2010
+	- More fixes for $@ changes
+
 3.66 Fri May 14 13:31:04 2010
 	- More fixes for $@ changes
 
