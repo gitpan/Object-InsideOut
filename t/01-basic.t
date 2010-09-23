@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 39;
+use Test::More 'tests' => 39;
 
 package MyBase; {
     use Object::InsideOut;

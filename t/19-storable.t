@@ -17,8 +17,7 @@ BEGIN {
     }
 }
 
-
-use Test::More qw(no_plan);
+use Test::More 'tests' => 7;
 
 # Borg is a foreign hash-based class
 package Borg; {

@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More 'no_plan';
+use Test::More 'tests' => 12;
 
 # Borg is a foreign hash-based class
 package Borg; {

@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.67
+This document describes Object::InsideOut version 3.68
 
 =head1 SYNOPSIS
 
@@ -795,6 +795,16 @@ L<:Init|/"Object Initialization Subroutines"> subroutine for processing
 parameters.  In such a case, it is not possible for Object::InsideOut to
 determine which if any of the parameters are not handled by the C<:Init>
 subroutine.
+
+If you add the following construct to the start of your application:
+
+ BEGIN {
+     no warnings 'once';
+     $OIO::Args::Unhandled::WARN_ONLY = 1;
+ }
+
+then unhandled parameters will only generate warnings rather than causing
+exceptions to be thrown.
 
 =head2 Modifying C<:InitArgs>
 
@@ -3055,6 +3065,14 @@ with a patch that adds the missing S<C<local $SIG{'__DIE__'};>> statement.
 
 =head1 BUGS AND LIMITATIONS
 
+If you receive an error similar to this:
+
+ ERROR: Attempt to DESTROY object ID 1 of class Foo twice
+
+the cause may be that some module used by your application is doing
+C<require threads> somewhere in the background.  L<DBI> is one such module.
+The workaround is to add C<use threads;> at the start of your application.
+
 The equality operator (e.g., C<if ($obj1 == $obj2) { ...>) is overloaded
 for C<:SHARED> classes when L<threads::shared> is loaded.  The L<overload>
 subroutine compares object classes and IDs because references to the same
@@ -3227,7 +3245,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.67/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.68/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>

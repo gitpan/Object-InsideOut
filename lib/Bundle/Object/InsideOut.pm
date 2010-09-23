@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.67';
+our $VERSION = '3.68';
 $VERSION = eval $VERSION;
 
 1;
@@ -20,9 +20,9 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.21              - Used for module testing
+Test::Harness 3.22              - Used for module testing
 
-Test::Simple 0.94               - Used for module testing
+Test::Simple 0.96               - Used for module testing
 
 Scalar::Util 1.23               - Used by Object::InsideOut
 
@@ -34,11 +34,11 @@ Test::Pod 1.44                  - Checks POD syntax
 
 Devel::Symdump 2.08             - Used by Pod::Coverage
 
-File::Spec 3.31                 - Used by Pod::Parser
+File::Spec 3.33                 - Used by Pod::Parser
 
 Pod::Parser 1.37                - Used by Pod::Coverage
 
-Pod::Coverage 0.20              - Used by Test::Pod::Coverage
+Pod::Coverage 0.21              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
@@ -48,23 +48,23 @@ threads::shared 1.33            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
-Data::Dumper 2.126              - Object serialization support
+Data::Dumper 2.128              - Object serialization support
 
 Storable 2.22                   - Object serialization support
 
-Devel::StackTrace 1.22          - Used by Exception::Class
+Devel::StackTrace 1.25          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
-Exception::Class 1.30           - Error handling
+Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.67          - Inside-out object support
+Object::InsideOut 3.68          - Inside-out object support
 
-URI 1.54                        - Used by LWP::UserAgent
+URI 1.55                        - Used by LWP::UserAgent
 
 HTML::Tagset 3.20               - Used by LWP::UserAgent
 
-HTML::Parser 3.65               - Used by LWP::UserAgent
+HTML::Parser 3.68               - Used by LWP::UserAgent
 
 LWP::UserAgent 5.836            - Used by Math::Random::MT::Auto
 

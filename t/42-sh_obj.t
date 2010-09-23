@@ -23,7 +23,7 @@ BEGIN {
     }
 }
 
-use Test::More 'no_plan';
+use Test::More 'tests' => 29;
 
 package Container; {
     use Object::InsideOut qw(:SHARED);

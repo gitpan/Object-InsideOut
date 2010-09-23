@@ -13,7 +13,7 @@ BEGIN {
     }
 }
 
-use Test::More 'no_plan';
+use Test::More 'tests' => 4;
 
 package Foo; {
     use Object::InsideOut ':SECURE';

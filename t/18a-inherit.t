@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 1;
+use Test::More 'tests' => 1;
 
 # Borg is a foreign hash-based class that overloads bool
 package Borg;

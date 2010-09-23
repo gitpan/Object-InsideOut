@@ -8,7 +8,7 @@ BEGIN {
     }
 }
 
-use Test::More 'no_plan';
+use Test::More 'tests' => 6;
 
 package My::Data; {
     use Object::InsideOut;

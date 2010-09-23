@@ -12,7 +12,7 @@ BEGIN {
     $HAVE_STORABLE = !$@;
 }
 
-use Test::More 'no_plan';
+use Test::More 'tests' => 43;
 
 package Foo; {
     use Object::InsideOut;

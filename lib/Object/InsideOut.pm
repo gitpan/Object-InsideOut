@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.67';
+our $VERSION = '3.68';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.67;
-use Object::InsideOut::Util 3.67 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.67;
+use Object::InsideOut::Exception 3.68;
+use Object::InsideOut::Util 3.68 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.68;
 
 require B;
 
@@ -1617,7 +1617,7 @@ sub new :MergeArgs
         } elsif (exists($pkg_args{$pkg})) {
             if (%{$pkg_args{$pkg}}) {
                 # It's an error if there are unhandled args, but no :Init sub
-                OIO::Args->die(
+                OIO::Args::Unhandled->die(
                     'message' => "Unhandled parameter for class '$class': " . join(', ', keys(%{$pkg_args{$pkg}})),
                     'Usage'   => q/Add appropriate 'Field =>' designators to the :InitArgs hash/);
             }
@@ -1629,7 +1629,7 @@ sub new :MergeArgs
                     'message' => "Bad class initializer for '$class'",
                     'Usage'   => q/Class initializers must be a hash ref/);
             }
-            OIO::Args->die(
+            OIO::Args::Unhandled->die(
                 'message' => "Unhandled parameter for class '$class': " . join(', ', keys(%{$$all_args{$pkg}})),
                 'Usage'   => q/Add :Init subroutine or :InitArgs hash/);
         }
@@ -1643,12 +1643,12 @@ sub new :MergeArgs
             if (exists($pkgs{$key})) {
                 foreach my $subkey (keys(%{$$all_args{$key}})) {
                     if (! exists($$used_args{$key}{$subkey})) {
-                        OIO::Args->die('message' => "Unhandled parameter for class '$key': $subkey");
+                        OIO::Args::Unhandled->die('message' => "Unhandled parameter for class '$key': $subkey");
                     }
                 }
             } else {
                 if (! exists($$used_args{$key})) {
-                    OIO::Args->die('message' => "Unhandled parameter: $key");
+                    OIO::Args::Unhandled->die('message' => "Unhandled parameter: $key");
                 }
             }
         }

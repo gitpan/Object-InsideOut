@@ -3,7 +3,7 @@ use warnings;
 
 use lib 't';
 
-use Test::More 'no_plan';
+use Test::More 'tests' => 8;
 
 {
     my $class = 'Req2';
