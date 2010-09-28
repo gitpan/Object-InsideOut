@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More 'tests' => 19;
+use Test::More 'tests' => (($] <= 5.013) ? 19 : 17);
 
 package Foreign::Exception; {
     use Exception::Class (
@@ -73,7 +73,7 @@ $SIG{__WARN__} = sub { push(@errs, @_); };
     my $obj = Foo->new('DEST' => 1);
     ok($obj && !$@ && !@errs, 'Have object');
     undef($obj);
-    if ($] < 5.013) {
+    if ($] <= 5.013) {
         ok($@, 'Got destroy exception');
         like($@, qr/Die in destruct/, 'Die in destroy');
     } elsif ($] > 5.013) {
@@ -87,7 +87,7 @@ $SIG{__WARN__} = sub { push(@errs, @_); };
     my $obj = eval { Foo->new('INIT' => 1, 'DEST' => 1); };
     ok(! $obj, 'No object');
     like($@->Error(), qr/Die in init/, 'Die in init');
-    if ($] < 5.013) {
+    if ($] <= 5.013) {
         like($@->Chain()->Error(), qr/Die in destruct/, 'Combined errors');
         ok(! @errs, 'No warnings');
     } elsif ($] > 5.013) {

@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.69 Tue Sep 28 20:38:53 2010
+	- Fix test counts in t/27-exception.t
+
 3.68 Thu Sep 23 17:09:21 2010
 	- POD note to 'use threads' in DBI applications [bug #58394]
 	- Allow warnings for unhandled args
