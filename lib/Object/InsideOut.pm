@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.69';
+our $VERSION = '3.71';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.69;
-use Object::InsideOut::Util 3.69 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.69;
+use Object::InsideOut::Exception 3.71;
+use Object::InsideOut::Util 3.71 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.71;
 
 require B;
 
@@ -634,19 +634,23 @@ sub _ID :Sub
 
     # Save deleted IDs for later reuse
     my $reuse = $GBL{'id'}{'reuse'};
+    lock($reuse) if $GBL{'share'}{'ok'};
     if ($id) {
-        lock($reuse) if $GBL{'share'}{'ok'};
         if (! exists($$reuse{$tree})) {
             $$reuse{$tree} = make_shared([]);
         }
         my $r_tree = $$reuse{$tree};
         if (! exists($$r_tree[$thread_id])) {
-            $$r_tree[$thread_id] = make_shared({});
-        } elsif (exists($$r_tree[$thread_id]{$id})) {
-            warn("ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
-            return;
+            $$r_tree[$thread_id] = make_shared([]);
+        } else {
+            foreach  (@{$$r_tree[$thread_id]}) {
+                if ($_ == $id) {
+                    warn("ERROR: Duplicate reclaimed object ID ($id) in class tree for $tree in thread $thread_id\n");
+                    return;
+                }
+            }
         }
-        $$r_tree[$thread_id]{$id} = $id;
+        push(@{$$r_tree[$thread_id]}, $id);
         return;
     }
 
@@ -654,9 +658,9 @@ sub _ID :Sub
     if (exists($$reuse{$tree}) &&
         exists($$reuse{$tree}[$thread_id]))
     {
-        keys(%{$$reuse{$tree}[$thread_id]});
-        if ((my $id) = each(%{$$reuse{$tree}[$thread_id]})) {
-            return (delete($$reuse{$tree}[$thread_id]{$id}));
+        my $id = pop(@{$$reuse{$tree}[$thread_id]});
+        if (defined($id)) {
+            return $id;
         }
     }
 

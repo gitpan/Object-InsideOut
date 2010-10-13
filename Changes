@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.71 Wed Oct 13 18:25:20 2010
+	- Fixed a memory leak
+
 3.69 Tue Sep 28 20:38:53 2010
 	- Fix test counts in t/27-exception.t
 
