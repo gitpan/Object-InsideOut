@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.72 Mon Oct 18 21:15:53 2010
+	- Fix obj ID handling for non-shared objects in threaded app
+
 3.71 Wed Oct 13 18:25:20 2010
 	- Fixed a memory leak
 

@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.71';
+our $VERSION = '3.72';
 $VERSION = eval $VERSION;
 
 1;
@@ -52,13 +52,13 @@ Data::Dumper 2.128              - Object serialization support
 
 Storable 2.22                   - Object serialization support
 
-Devel::StackTrace 1.25          - Used by Exception::Class
+Devel::StackTrace 1.26          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.71          - Inside-out object support
+Object::InsideOut 3.72          - Inside-out object support
 
 URI 1.56                        - Used by LWP::UserAgent
 

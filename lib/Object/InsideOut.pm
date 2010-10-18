@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.71';
+our $VERSION = '3.72';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.71;
-use Object::InsideOut::Util 3.71 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.71;
+use Object::InsideOut::Exception 3.72;
+use Object::InsideOut::Util 3.72 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.72;
 
 require B;
 
@@ -46,8 +46,8 @@ if (! exists($GBL{'GBL_SET'})) {
         },
 
         id => {
-            obj   => make_shared({}),  # Object IDs
-            reuse => make_shared({}),  # Reclaimed obj IDs
+            obj   => {},        # Object IDs
+            reuse => {},        # Reclaimed obj IDs
         },
 
         fld => {
@@ -628,20 +628,22 @@ sub _ID :Sub
     my ($class, $id) = @_;            # The object's class and id
     my $tree = $GBL{'sub'}{'id'}{$class}{'pkg'};
 
+
     # If class is sharing, then all ID tracking is done as though in thread 0,
     # else tracking is done per thread
-    my $thread_id = (is_sharing($class)) ? 0 : $GBL{'tid'};
+    my $sharing = is_sharing($class);
+    my $thread_id = ($sharing) ? 0 : $GBL{'tid'};
 
     # Save deleted IDs for later reuse
     my $reuse = $GBL{'id'}{'reuse'};
-    lock($reuse) if $GBL{'share'}{'ok'};
     if ($id) {
         if (! exists($$reuse{$tree})) {
-            $$reuse{$tree} = make_shared([]);
+            $$reuse{$tree} = ($sharing) ? make_shared([]) : [];
         }
+        lock($$reuse{$tree}) if $sharing;
         my $r_tree = $$reuse{$tree};
         if (! exists($$r_tree[$thread_id])) {
-            $$r_tree[$thread_id] = make_shared([]);
+            $$r_tree[$thread_id] = ($sharing) ? make_shared([]) : [];
         } else {
             foreach  (@{$$r_tree[$thread_id]}) {
                 if ($_ == $id) {
@@ -655,21 +657,28 @@ sub _ID :Sub
     }
 
     # Use a reclaimed ID if available
-    if (exists($$reuse{$tree}) &&
-        exists($$reuse{$tree}[$thread_id]))
-    {
-        my $id = pop(@{$$reuse{$tree}[$thread_id]});
-        if (defined($id)) {
-            return $id;
+    if (exists($$reuse{$tree})) {
+        lock($$reuse{$tree}) if $sharing;
+        if (exists($$reuse{$tree}[$thread_id])) {
+            my $id = pop(@{$$reuse{$tree}[$thread_id]});
+            if (defined($id)) {
+                return $id;
+            }
         }
     }
 
     # Return the next ID
     my $g_id = $GBL{'id'}{'obj'};
-    lock($g_id) if $GBL{'share'}{'ok'};
-    if (! exists($$g_id{$tree})) {
-        $$g_id{$tree} = make_shared([]);
+    if (exists($$g_id{$tree})) {
+        lock($$g_id{$tree}) if $sharing;
+        return (++$$g_id{$tree}[$thread_id]);
     }
+    if ($sharing) {
+        $$g_id{$tree} = make_shared([]);
+        lock($$g_id{$tree});
+        return (++$$g_id{$tree}[$thread_id]);
+    }
+    $$g_id{$tree} = [];
     return (++$$g_id{$tree}[$thread_id]);
 }
 
@@ -1225,6 +1234,13 @@ sub CLONE
             if ($id_sub == \&_ID) {
                 # Objects using internal ID sub keep their same ID
                 $obj = $$obj_cl{$old_id};
+
+                # Set 'next object ID'
+                my $pkg = $GBL{'sub'}{'id'}{$class}{'pkg'};
+                my $g_id = $GBL{'id'}{'obj'}{$pkg};
+                if (! $$g_id[$tid] || ($$g_id[$tid] < $$obj)) {
+                    $$g_id[$tid] = $$obj;
+                }
 
             } else {
                 # Get cloned object associated with old ID
