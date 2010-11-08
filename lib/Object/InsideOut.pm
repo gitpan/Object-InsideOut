@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.72';
+our $VERSION = '3.73';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.72;
-use Object::InsideOut::Util 3.72 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.72;
+use Object::InsideOut::Exception 3.73;
+use Object::InsideOut::Util 3.73 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.73;
 
 require B;
 
@@ -835,6 +835,17 @@ sub initialize :Sub(Private)
                         }
                     }
                 }
+            }
+            # Set up for obj ID sequences for shared classes using _ID
+            if (exists($$id_subs{$flag_class}) &&
+                ($$id_subs{$flag_class}{'code'} == \&_ID))
+            {
+                my $share_tree = $$id_subs{$flag_class}{'pkg'};
+                if (! exists($$obj_ids{$share_tree})) {
+                    $$obj_ids{$share_tree} = make_shared([]);
+                    $$obj_ids{$share_tree}[0] = 0;
+                }
+
             }
         }
 
