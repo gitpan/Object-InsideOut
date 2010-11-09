@@ -64,7 +64,7 @@ MAIN:
     $th2->join();
     $th1->join();
 
-    is($ot1->data(), 1, 'Obj data is TID in main');
+    is($ot1->data(), 1, "Obj data is TID in main: \$threads::shared::VERSION = $threads::shared::VERSION");
     is($ot2->data(), 2, 'Obj data is TID in main');
 
     my $obj = My::Obj->new();

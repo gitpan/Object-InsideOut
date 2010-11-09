@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.73
+This document describes Object::InsideOut version 3.74
 
 =head1 SYNOPSIS
 
@@ -159,10 +159,6 @@ Supports classes that may be loaded at runtime (i.e., using
 S<C<eval { require ...; };>>).  This makes it usable from within L<mod_perl>,
 as well.  Also supports additions to class hierarchies, and dynamic creation
 of object fields during runtime.
-
-=item * Perl 5.6 and 5.8
-
-Tested on Perl v5.6.0 through v5.6.2, v5.8.0 through v5.8.8, and v5.9.4.
 
 =item * Exception Objects
 
@@ -3245,7 +3241,7 @@ Object::InsideOut Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/Object-InsideOut>
 
 Annotated POD for Object::InsideOut:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.73/lib/Object/InsideOut.pm>
+L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.74/lib/Object/InsideOut.pm>
 
 Source repository:
 L<http://code.google.com/p/object-insideout/>
