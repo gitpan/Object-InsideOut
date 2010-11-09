@@ -205,7 +205,7 @@ sub dump
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.74)
+($Object::InsideOut::VERSION == 3.75)
     or die("Version mismatch\n");
 
 # EOF

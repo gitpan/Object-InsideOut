@@ -64,8 +64,11 @@ MAIN:
     $th2->join();
     $th1->join();
 
-    is($ot1->data(), 1, "Obj data is TID in main: \$threads::shared::VERSION = $threads::shared::VERSION");
-    is($ot2->data(), 2, 'Obj data is TID in main');
+    SKIP: {
+        skip('Shared in shared not supported', 2) if (($] < 5.008009) || ($threads::shared::VERSION lt '1.15'));
+        is($ot1->data(), 1, 'Obj data is TID in main');
+        is($ot2->data(), 2, 'Obj data is TID in main');
+    }
 
     my $obj = My::Obj->new();
     $obj->x(5);
