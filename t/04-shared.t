@@ -41,31 +41,32 @@ package main;
 
 MAIN:
 {
-    # Test that obj IDs work for shared objects
-    my $ot1 :shared;
-    my $ot2 :shared;
-
-    sub th
-    {
-        my $tid = threads->tid();
-
-        if ($tid == 1) {
-            $ot1 = My::Obj->new('data' => $tid);
-            is($ot1->data(), $tid, 'Obj data is TID in thread');
-        } else {
-            $ot2 = My::Obj->new('data' => $tid);
-            is($ot2->data(), $tid, 'Obj data is TID in thread');
-        }
-    }
-
-    my $th1 = threads->create(\&th);
-    my $th2 = threads->create(\&th);
-
-    $th2->join();
-    $th1->join();
-
     SKIP: {
-        skip('Shared in shared not supported', 2) if (($] < 5.008009) || ($threads::shared::VERSION lt '1.15'));
+        skip('Shared in shared not supported', 4) if (($] < 5.008009) || ($threads::shared::VERSION lt '1.15'));
+
+        # Test that obj IDs work for shared objects
+        my $ot1 :shared;
+        my $ot2 :shared;
+
+        sub th
+        {
+            my $tid = threads->tid();
+
+            if ($tid == 1) {
+                $ot1 = My::Obj->new('data' => $tid);
+                is($ot1->data(), $tid, 'Obj data is TID in thread');
+            } else {
+                $ot2 = My::Obj->new('data' => $tid);
+                is($ot2->data(), $tid, 'Obj data is TID in thread');
+            }
+        }
+
+        my $th1 = threads->create(\&th);
+        my $th2 = threads->create(\&th);
+
+        $th2->join();
+        $th1->join();
+
         is($ot1->data(), 1, 'Obj data is TID in main');
         is($ot2->data(), 2, 'Obj data is TID in main');
     }
