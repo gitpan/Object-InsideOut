@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.77 Tue Dec 21 14:29:37 2010
+	- Test fixes for $@ changes
+	- Test change for ??? syntax error
+
 3.76 Mon Nov 15 00:01:50 2010
 	- Skip some more shared tests under 5.8.8 and prior
 

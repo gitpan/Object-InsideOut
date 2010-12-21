@@ -1,6 +1,6 @@
 package t::ErrorParent;
 
-???       # syntax error
+---       # syntax error
 
 sub parent_func {
     return 1;
