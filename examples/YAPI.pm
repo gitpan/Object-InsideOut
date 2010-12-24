@@ -2,7 +2,7 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.78';
+    our $VERSION = '3.79';
 
     #####
     #
@@ -22,7 +22,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.78;
+    use Object::InsideOut 3.79;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field

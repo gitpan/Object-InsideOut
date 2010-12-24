@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.78';
+our $VERSION = '3.79';
 $VERSION = eval $VERSION;
 
 1;
@@ -42,9 +42,9 @@ Pod::Coverage 0.21              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.81                    - Support for threads
+threads 1.82                    - Support for threads
 
-threads::shared 1.34            - Support for sharing objects between threads
+threads::shared 1.36            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
@@ -58,7 +58,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.78          - Inside-out object support
+Object::InsideOut 3.79          - Inside-out object support
 
 URI 1.56                        - Used by LWP::UserAgent
 
@@ -70,7 +70,7 @@ LWP::UserAgent 5.836            - Used by Math::Random::MT::Auto
 
 Win32::API 0.59                 - Used by Math::Random::MT::Auto (Win XP only)
 
-Math::Random::MT::Auto 6.15     - Support for :SECURE mode
+Math::Random::MT::Auto 6.16     - Support for :SECURE mode
 
 =head1 DESCRIPTION
 
