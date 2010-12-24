@@ -211,7 +211,7 @@ sub install_UNIVERSAL
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.77)
+($Object::InsideOut::VERSION == 3.78)
     or die("Version mismatch\n");
 
 # EOF

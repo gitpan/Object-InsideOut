@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.77';
+our $VERSION = '3.78';
 $VERSION = eval $VERSION;
 
 1;
@@ -28,7 +28,7 @@ Scalar::Util 1.23               - Used by Object::InsideOut
 
 Pod::Escapes 1.04               - Used by Pod::Simple
 
-Pod::Simple 3.14                - Used by Test::Pod
+Pod::Simple 3.15                - Used by Test::Pod
 
 Test::Pod 1.44                  - Checks POD syntax
 
@@ -50,7 +50,7 @@ Want 0.18                       - :lvalue accessor support
 
 Data::Dumper 2.128              - Object serialization support
 
-Storable 2.22                   - Object serialization support
+Storable 2.25                   - Object serialization support
 
 Devel::StackTrace 1.26          - Used by Exception::Class
 
@@ -58,7 +58,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.77          - Inside-out object support
+Object::InsideOut 3.78          - Inside-out object support
 
 URI 1.56                        - Used by LWP::UserAgent
 

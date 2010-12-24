@@ -2,7 +2,7 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.77';
+    our $VERSION = '3.78';
 
     #####
     #
@@ -22,7 +22,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.77;
+    use Object::InsideOut 3.78;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field
@@ -548,9 +548,6 @@ Trying to use asynchronous progress indicators on non-threaded Perls will
 not cause an error, but will only display 'wait...'.
 
 =head1 SEE ALSO
-
-Annotated POD for Term::YAPI:
-L<http://annocpan.org/~JDHEDDEN/Object-InsideOut-3.77/examples/YAPI.pm>
 
 L<Object::InsideOut>, L<threads>, L<Thread::Queue>
 
