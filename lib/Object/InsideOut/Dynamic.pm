@@ -164,6 +164,7 @@ sub create_field
             $$tree_bu{$cl} = \@tree;
             @{$$tree_td{$cl}} = reverse(@tree);
         }
+        $$GBL{'asi'}{$pkg}{$class} = undef;
     };
 
     # Invalidate object initialization activity cache
@@ -178,7 +179,7 @@ sub create_field
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.79)
+($Object::InsideOut::VERSION == 3.81)
     or die("Version mismatch\n");
 
 # EOF

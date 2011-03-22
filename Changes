@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.81 Tue Mar 22 02:20:49 2011
+	- Faster initialization (from O(n^3) to O(n))
+
 3.79 Fri Dec 24 18:06:02 2010
 	- Bundle update
 

@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.79';
+our $VERSION = '3.81';
 $VERSION = eval $VERSION;
 
 1;
@@ -20,17 +20,17 @@ Bundle::Object::InsideOut - A bundle of modules for full Object::InsideOut suppo
 
 =head1 CONTENTS
 
-Test::Harness 3.22              - Used for module testing
+Test::Harness 3.23              - Used for module testing
 
-Test::Simple 0.96               - Used for module testing
+Test::Simple 0.98               - Used for module testing
 
 Scalar::Util 1.23               - Used by Object::InsideOut
 
 Pod::Escapes 1.04               - Used by Pod::Simple
 
-Pod::Simple 3.15                - Used by Test::Pod
+Pod::Simple 3.16                - Used by Test::Pod
 
-Test::Pod 1.44                  - Checks POD syntax
+Test::Pod 1.45                  - Checks POD syntax
 
 Devel::Symdump 2.08             - Used by Pod::Coverage
 
@@ -52,21 +52,21 @@ Data::Dumper 2.128              - Object serialization support
 
 Storable 2.25                   - Object serialization support
 
-Devel::StackTrace 1.26          - Used by Exception::Class
+Devel::StackTrace 1.27          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.79          - Inside-out object support
+Object::InsideOut 3.81          - Inside-out object support
 
-URI 1.56                        - Used by LWP::UserAgent
+URI 1.58                        - Used by LWP::UserAgent
 
 HTML::Tagset 3.20               - Used by LWP::UserAgent
 
 HTML::Parser 3.68               - Used by LWP::UserAgent
 
-LWP::UserAgent 5.836            - Used by Math::Random::MT::Auto
+LWP::UserAgent 6.00             - Used by Math::Random::MT::Auto
 
 Win32::API 0.59                 - Used by Math::Random::MT::Auto (Win XP only)
 

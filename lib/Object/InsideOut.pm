@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.79';
+our $VERSION = '3.81';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.79;
-use Object::InsideOut::Util 3.79 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.79;
+use Object::InsideOut::Exception 3.81;
+use Object::InsideOut::Util 3.81 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.81;
 
 require B;
 
@@ -44,6 +44,8 @@ if (! exists($GBL{'GBL_SET'})) {
             td => {},           #  Top down
             bu => {},           #  Bottom up
         },
+
+        asi => {},              # Reverse 'isa'
 
         id => {
             obj   => {},        # Object IDs
@@ -261,6 +263,7 @@ sub import
             foreach my $ancestor (@{$GBL{'tree'}{'td'}{$parent}}) {
                 if (! exists($seen{$ancestor})) {
                     push(@tree, $ancestor);
+                    $GBL{'asi'}{$ancestor}{$class} = undef;
                     $seen{$ancestor} = undef;
                 }
             }
@@ -715,89 +718,113 @@ sub initialize :Sub(Private)
     return if (! delete($GBL{'init'}));
 
     my $trees = $GBL{'tree'}{'td'};
+    my $id_subs = $GBL{'sub'}{'id'};
+    my $obj_ids = $GBL{'id'}{'obj'};
 
     no warnings 'redefine';
     no strict 'refs';
 
-    # Purge existing references to the default :ID sub (i.e., _ID)
+    # Determine classes that need ID subs
+    # Purge existing references to the default ID sub (i.e., _ID)
     #   if no objects exist in that heirarchy
-    my $id_subs = $GBL{'sub'}{'id'};
-    my $obj_ids = $GBL{'id'}{'obj'};
+    my %need_id_sub;
     foreach my $class (keys(%{$trees})) {
-        foreach my $pkg (@{$$trees{$class}}) {
-            if (exists($$id_subs{$pkg}) &&
-                ($$id_subs{$pkg}{'code'} == \&_ID) &&
-                ! exists($$obj_ids{$$id_subs{$pkg}{'pkg'}}))
-            {
-                delete($$id_subs{$pkg});
-            }
+        if (! exists($$id_subs{$class})) {
+            $need_id_sub{$class} = undef;
+        } elsif (($$id_subs{$class}{'code'} == \&_ID) &&
+                 ! exists($$obj_ids{$$id_subs{$class}{'pkg'}}))
+        {
+            delete($$id_subs{$class});
+            $need_id_sub{$class} = undef;
         }
     }
 
-    my $reapply = 1;
-    while ($reapply) {
-        $reapply = 0;
+    # Get ID subs to propagate
+    my %to_propagate;
+    foreach my $class (keys(%{$id_subs})) {
+        $to_propagate{$$id_subs{$class}{'pkg'}} = undef;
+    }
 
-        # Propagate ID subs through the class hierarchies
-        foreach my $class (keys(%{$trees})) {
-            # Find ID sub for this class somewhere in its hierarchy
-            my $id_sub_pkg;
-            foreach my $pkg (@{$$trees{$class}}) {
-                next if (! exists($$id_subs{$pkg}));
-                if (! defined($id_sub_pkg)) {
-                    $id_sub_pkg = $pkg;
-                    next;
-                }
-                # Verify that all the ID subs in hierarchy are the same
-                if (($$id_subs{$pkg}{'code'} != $$id_subs{$id_sub_pkg}{'code'}) ||
-                    ($$id_subs{$pkg}{'pkg'}  ne $$id_subs{$id_sub_pkg}{'pkg'}))
+    # Propagate ID subs to classes
+    while (%need_id_sub) {
+        # Get ID sub package
+        my $pkg;
+        if (%to_propagate) {
+            ($pkg) = keys(%to_propagate);
+            delete($to_propagate{$pkg});
+        } else {
+            (my $class) = keys(%need_id_sub);
+            $pkg = $$trees{$class}[0];
+            delete($need_id_sub{$pkg});
+            if (! defined($pkg)) {
+                # bug
+                OIO::Internal->die(
+                    'message' => "Class '$class' has empty tree",
+                );
+            }
+            if (exists($$id_subs{$pkg})) {
+                # bug
+                OIO::Internal->die(
+                    'message' => "ID sub for '$pkg' exists but was not propagated properly",
+                );
+            }
+            $$id_subs{$pkg} = {
+                pkg  => $pkg,
+                code => \&_ID,
+                loc  => [ '', 'Default :ID sub', 0 ],
+            };
+        }
+
+        # Add ID sub to classes using package
+        next if (! exists($GBL{'asi'}{$pkg}));
+        my @propagate_to = keys(%{$GBL{'asi'}{$pkg}});
+        my %seen = map { $_ => undef } @propagate_to;
+        while (my $class = pop(@propagate_to)) {
+            if (exists($$id_subs{$class})) {
+                # Verify it's the same ID sub
+                if (($$id_subs{$class}{'code'} != $$id_subs{$pkg}{'code'}) ||
+                    ($$id_subs{$class}{'pkg'}  ne $$id_subs{$pkg}{'pkg'}))
                 {
                     # Runtime merging of heirarchies with existing objects
-                    if (($$id_subs{$pkg}{'code'} == \&_ID) ||
-                        ($$id_subs{$id_sub_pkg}{'code'} == \&_ID))
+                    if (($$id_subs{$class}{'code'} == \&_ID) ||
+                        ($$id_subs{$pkg}{'code'} == \&_ID))
                     {
                         OIO::Runtime->die(
                             'message' => "Possible extant objects prevent runtime creation of hierarchy for class '$class'",
                             'Info'    => "Runtime loading of classes needs to be performed before any objects are created within their hierarchies",
-                            ((($$id_subs{$pkg}{'code'} == \&_ID) && ($$id_subs{$id_sub_pkg}{'code'} == \&_ID))
+                            ((($$id_subs{$class}{'code'} == \&_ID) && ($$id_subs{$pkg}{'code'} == \&_ID))
                                 ? ()
-                                : ('Class1'  => "The hierarchy for '$$id_subs{$pkg}{'pkg'}' is using object IDs generated by " .
-                                                (($$id_subs{$pkg}{'code'} == \&_ID) ? 'Object::InsideOut' : 'a custom :ID subroutine'),
-                                   'Class2'  => "The hierarchy for '$$id_subs{$id_sub_pkg}{'pkg'}' is using object IDs generated by " .
-                                                (($$id_subs{$id_sub_pkg}{'code'} == \&_ID) ? 'Object::InsideOut' : 'a custom :ID subroutine'))));
+                                : ('Class1'  => "The hierarchy for '$$id_subs{$class}{'pkg'}' is using object IDs generated by " .
+                                                (($$id_subs{$class}{'code'} == \&_ID) ? 'Object::InsideOut' : 'a custom :ID subroutine'),
+                                   'Class2'  => "The hierarchy for '$$id_subs{$pkg}{'pkg'}' is using object IDs generated by " .
+                                                (($$id_subs{$pkg}{'code'} == \&_ID) ? 'Object::InsideOut' : 'a custom :ID subroutine'))));
                     }
                     # Multiple :ID subs in heirarchy
-                    my (undef, $file,  $line)  = @{$$id_subs{$pkg}{'loc'}};
-                    my (undef, $file2, $line2) = @{$$id_subs{$id_sub_pkg}{'loc'}};
+                    my (undef, $file,  $line)  = @{$$id_subs{$class}{'loc'}};
+                    my (undef, $file2, $line2) = @{$$id_subs{$pkg}{'loc'}};
                     OIO::Attribute->die(
                         'message' => "Multiple :ID subs defined within hierarchy for class '$class'",
-                        'Info'    => ":ID subs in class '$$id_subs{$pkg}{'pkg'}' (file '$file', line $line), and class '$$id_subs{$id_sub_pkg}{'pkg'}' (file '$file2', line $line2)");
+                        'Info'    => ":ID subs in class '$$id_subs{$class}{'pkg'}' (file '$file', line $line), and class '$$id_subs{$pkg}{'pkg'}' (file '$file2', line $line2)");
                 }
-            }
-
-            # If ID sub found, propagate it through the class hierarchy
-            if (defined($id_sub_pkg)) {
-                foreach my $pkg (@{$$trees{$class}}) {
-                    if (! exists($$id_subs{$pkg})) {
-                        $$id_subs{$pkg} = $$id_subs{$id_sub_pkg};
-                        $reapply = 1;
+            } else {
+                # Add ID sub to class
+                $$id_subs{$class} = $$id_subs{$pkg};
+                delete($need_id_sub{$class});
+                # Propagate to classes in this class's tree
+                foreach my $add (@{$$trees{$class}}) {
+                    if (! defined($seen{$add})) {
+                        push(@propagate_to, $add);
+                        $seen{$add} = undef;
                     }
                 }
-            }
-        }
-
-        # Check for any classes without ID subs
-        if (! $reapply) {
-            foreach my $class (keys(%{$trees})) {
-                if (! exists($$id_subs{$class})) {
-                    # Default to internal ID sub and propagate it
-                    $$id_subs{$class} = {
-                        pkg  => $$trees{$class}[0],
-                        code => \&_ID,
-                        loc  => [ '', 'Default :ID sub', 0 ],
-                    };
-                    $reapply = 1;
-                    last;
+                # Propagate to classes that use this one
+                if (exists($GBL{'asi'}{$class})) {
+                    foreach my $add (keys(%{$GBL{'asi'}{$class}})) {
+                        if (! defined($seen{$add})) {
+                            push(@propagate_to, $add);
+                            $seen{$add} = undef;
+                        }
+                    }
                 }
             }
         }
