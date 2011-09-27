@@ -82,6 +82,7 @@ t/44-data.t
 t/45-unused.t
 t/46-singleton.t
 t/46a-singleton.t
+t/47-sh_reuse.t
 t/99-pod.t
 t/test.pl
 t/EmptyParent.pm
@@ -93,4 +94,5 @@ t/Req1.pm
 t/Req2.pm
 t/Req3.pm
 examples/YAPI.pm
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)

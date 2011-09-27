@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.81';
+our $VERSION = '3.82';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.81;
-use Object::InsideOut::Util 3.81 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.81;
+use Object::InsideOut::Exception 3.82;
+use Object::InsideOut::Util 3.82 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.82;
 
 require B;
 
@@ -863,7 +863,9 @@ sub initialize :Sub(Private)
                     }
                 }
             }
-            # Set up for obj ID sequences for shared classes using _ID
+            # Set up for obj ID sequences, and obj ID reuse
+            #   for shared classes using _ID
+            my $reuse = $GBL{'id'}{'reuse'};
             if (exists($$id_subs{$flag_class}) &&
                 ($$id_subs{$flag_class}{'code'} == \&_ID))
             {
@@ -872,7 +874,13 @@ sub initialize :Sub(Private)
                     $$obj_ids{$share_tree} = make_shared([]);
                     $$obj_ids{$share_tree}[0] = 0;
                 }
-
+                if (! exists($$reuse{$share_tree})) {
+                    $$reuse{$share_tree} = make_shared([]);
+                }
+                my $r_tree = $$reuse{$share_tree};
+                if (! exists($$r_tree[0])) {
+                    $$r_tree[0] = make_shared([]);
+                }
             }
         }
 

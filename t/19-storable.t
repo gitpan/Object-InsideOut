@@ -17,7 +17,7 @@ BEGIN {
     }
 }
 
-use Test::More 'tests' => 7;
+use Test::More 'tests' => 8;
 
 # Borg is a foreign hash-based class
 package Borg; {
@@ -118,6 +118,7 @@ package main;
 MAIN:
 {
     my $obj = Baz->new('borg' => 'Picard');
+    isa_ok($obj, 'Baz', 'Baz->new()');
 
     my $tmp = $obj->freeze();
     my $obj2 = thaw($tmp);

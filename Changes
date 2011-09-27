@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.82 Tue Sep 27 23:28:33 2011
+	- Fix obj ID reuse for shared objects in threaded app
+	- Documented limitation regarding removing shared internal objects
+
 3.81 Tue Mar 22 02:20:49 2011
 	- Faster initialization (from O(n^3) to O(n))
 

@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.81
+This document describes Object::InsideOut version 3.82
 
 =head1 SYNOPSIS
 
@@ -1893,7 +1893,7 @@ declarations (see above), or provide a C<:Dumper>/C<:Pumper> pair of
 subroutines as described below.
 
 Dynamically altering a class (e.g., using
-L<-E<gt>create_field()|/"DYNAMIC FIELD CREATION"> after objects have been
+L<-E<gt>create_field()|/"DYNAMIC FIELD CREATION">) after objects have been
 dumped will result in C<undef> fields when pumped back in regardless of
 whether or not the added fields have defaults.
 
@@ -3109,6 +3109,13 @@ thread, and then manipulate the object inside the thread:
  my $obj = Foo->new();   # Class 'Foo' is set ':SHARED'
  threads->create(sub { $obj->set_data('bar'); })->join();
  my $data = $obj->get_data();
+
+Due to a limitation in L<threads::shared> version 1.39 and earlier, if storing
+shared objects inside other shared objects, you should use C<delete()> to
+remove them from internal fields (e.g., C<delete($field[$$self]);>) when
+necessary so that the objects' destructor gets called.  Upgrading to version
+1.40 or later alleviates most of this issue except during global destruction.
+See L<threads::shared|/"BUGS AND LIMITATIONS"> for more.
 
 With Perl 5.8.8 and earlier, there are bugs associated with L<threads::shared>
 that may prevent you from storing objects inside of shared objects, or using

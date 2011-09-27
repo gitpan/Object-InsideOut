@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.81';
+our $VERSION = '3.82';
 $VERSION = eval $VERSION;
 
 1;
@@ -28,7 +28,7 @@ Scalar::Util 1.23               - Used by Object::InsideOut
 
 Pod::Escapes 1.04               - Used by Pod::Simple
 
-Pod::Simple 3.16                - Used by Test::Pod
+Pod::Simple 3.19                - Used by Test::Pod
 
 Test::Pod 1.45                  - Checks POD syntax
 
@@ -42,15 +42,15 @@ Pod::Coverage 0.21              - Used by Test::Pod::Coverage
 
 Test::Pod::Coverage 1.08        - Tests POD coverage
 
-threads 1.82                    - Support for threads
+threads 1.85                    - Support for threads
 
-threads::shared 1.36            - Support for sharing objects between threads
+threads::shared 1.40            - Support for sharing objects between threads
 
 Want 0.18                       - :lvalue accessor support
 
-Data::Dumper 2.128              - Object serialization support
+Data::Dumper 2.131              - Object serialization support
 
-Storable 2.25                   - Object serialization support
+Storable 2.30                   - Object serialization support
 
 Devel::StackTrace 1.27          - Used by Exception::Class
 
@@ -58,17 +58,17 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.81          - Inside-out object support
+Object::InsideOut 3.82          - Inside-out object support
 
-URI 1.58                        - Used by LWP::UserAgent
+URI 1.59                        - Used by LWP::UserAgent
 
 HTML::Tagset 3.20               - Used by LWP::UserAgent
 
 HTML::Parser 3.68               - Used by LWP::UserAgent
 
-LWP::UserAgent 6.00             - Used by Math::Random::MT::Auto
+LWP::UserAgent 6.02             - Used by Math::Random::MT::Auto
 
-Win32::API 0.59                 - Used by Math::Random::MT::Auto (Win XP only)
+Win32::API 0.64                 - Used by Math::Random::MT::Auto (Win XP only)
 
 Math::Random::MT::Auto 6.16     - Support for :SECURE mode
 
