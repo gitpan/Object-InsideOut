@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.82';
+our $VERSION = '3.83';
 $VERSION = eval $VERSION;
 
 1;
@@ -58,7 +58,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.82          - Inside-out object support
+Object::InsideOut 3.83          - Inside-out object support
 
 URI 1.59                        - Used by LWP::UserAgent
 

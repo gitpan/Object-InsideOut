@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.83 Thu Oct  6 23:53:04 2011
+	- Fix bug with NOT_SHARED in threads::shared app
+	- Document error caused by returning non-shared objects from threads
+
 3.82 Tue Sep 27 23:28:33 2011
 	- Fix obj ID reuse for shared objects in threaded app
 	- Documented limitation regarding removing shared internal objects

@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.82
+This document describes Object::InsideOut version 3.83
 
 =head1 SYNOPSIS
 
@@ -3068,6 +3068,22 @@ If you receive an error similar to this:
 the cause may be that some module used by your application is doing
 C<require threads> somewhere in the background.  L<DBI> is one such module.
 The workaround is to add C<use threads;> at the start of your application.
+
+Another cause of the above is returning a non-shared object from a thread
+either explicitly or implicitly when the result of the last statement in the
+thread subroutine is an object.  For example:
+
+ sub thr_func {
+     my $obj = MyClass->new();
+ }
+
+which is equivalent to:
+
+ sub thr_func {
+     return MyClass->new();
+ }
+
+This can be avoided by ensuring your thread subroutine ends with C<return;>.
 
 The equality operator (e.g., C<if ($obj1 == $obj2) { ...>) is overloaded
 for C<:SHARED> classes when L<threads::shared> is loaded.  The L<overload>

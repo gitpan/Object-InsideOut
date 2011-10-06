@@ -83,6 +83,7 @@ t/45-unused.t
 t/46-singleton.t
 t/46a-singleton.t
 t/47-sh_reuse.t
+t/48-not_shared.t
 t/99-pod.t
 t/test.pl
 t/EmptyParent.pm

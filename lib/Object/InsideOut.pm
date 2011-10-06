@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.82';
+our $VERSION = '3.83';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.82;
-use Object::InsideOut::Util 3.82 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.82;
+use Object::InsideOut::Exception 3.83;
+use Object::InsideOut::Util 3.83 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.83;
 
 require B;
 
@@ -865,21 +865,23 @@ sub initialize :Sub(Private)
             }
             # Set up for obj ID sequences, and obj ID reuse
             #   for shared classes using _ID
-            my $reuse = $GBL{'id'}{'reuse'};
-            if (exists($$id_subs{$flag_class}) &&
-                ($$id_subs{$flag_class}{'code'} == \&_ID))
-            {
-                my $share_tree = $$id_subs{$flag_class}{'pkg'};
-                if (! exists($$obj_ids{$share_tree})) {
-                    $$obj_ids{$share_tree} = make_shared([]);
-                    $$obj_ids{$share_tree}[0] = 0;
-                }
-                if (! exists($$reuse{$share_tree})) {
-                    $$reuse{$share_tree} = make_shared([]);
-                }
-                my $r_tree = $$reuse{$share_tree};
-                if (! exists($$r_tree[0])) {
-                    $$r_tree[0] = make_shared([]);
+            if ($$sh_cl{$flag_class}{'share'}) {
+                my $reuse = $GBL{'id'}{'reuse'};
+                if (exists($$id_subs{$flag_class}) &&
+                    ($$id_subs{$flag_class}{'code'} == \&_ID))
+                {
+                    my $share_tree = $$id_subs{$flag_class}{'pkg'};
+                    if (! exists($$obj_ids{$share_tree})) {
+                        $$obj_ids{$share_tree} = make_shared([]);
+                        $$obj_ids{$share_tree}[0] = 0;
+                    }
+                    if (! exists($$reuse{$share_tree})) {
+                        $$reuse{$share_tree} = make_shared([]);
+                    }
+                    my $r_tree = $$reuse{$share_tree};
+                    if (! exists($$r_tree[0])) {
+                        $$r_tree[0] = make_shared([]);
+                    }
                 }
             }
         }
@@ -1912,8 +1914,10 @@ sub DESTROY
             } elsif (exists($GBL{'share'}{'obj'})) {
                 my $so_cl = $GBL{'share'}{'obj'}{$class};
                 if (! exists($$so_cl{$$self})) {
+                    # This can happen when an non-shared object
+                    #   is returned from a thread
                     warn("ERROR: Attempt to DESTROY object ID $$self of class $class in thread ID $tid twice\n");
-                    return;   # Object already deleted (shouldn't happen)
+                    return;
                 }
 
                 # Remove thread ID from this object's thread tracking list
