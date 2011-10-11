@@ -96,10 +96,11 @@ sub dump
         # Create a string version of dumped data if arg is true
         if ($_[0]) {
             require Data::Dumper;
+            local $Data::Dumper::Indent = 1;
             $output = Data::Dumper::Dumper($output);
             chomp($output);
-            $output =~ s/^.{8}//gm;   # Remove initial 8 chars from each line
-            $output =~ s/;$//s;       # Remove trailing semi-colon
+            $output =~ s/^\$VAR1 = //;  # Remove leading '$VAR1 = '
+            $output =~ s/;$//s;         # Remove trailing semi-colon
         }
 
         # Done - send back the dumped data
@@ -205,7 +206,7 @@ sub dump
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.83)
+($Object::InsideOut::VERSION == 3.84)
     or die("Version mismatch\n");
 
 # EOF

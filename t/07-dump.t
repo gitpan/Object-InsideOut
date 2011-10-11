@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More 'tests' => 14;
+use Test::More 'tests' => 15;
 
 package MyBase; {
     use Object::InsideOut;
@@ -56,6 +56,13 @@ package MyDer; {
     }
 }
 
+package MyClass;
+{
+    use Object::InsideOut;
+
+    my @content :Field :Acc(content);
+}
+
 package main;
 
 MAIN:
@@ -96,7 +103,35 @@ MAIN:
 
     eval { my $obj2 = Object::InsideOut::pump($dump); };
     is($@->error(), q/Unnamed field encounted in class 'MyDer'/
-                                              => 'Unnamed field')
+                                              => 'Unnamed field');
+
+    my $content = <<CONTENT;
+A;B;C
+1;2;3
+4;5;6
+7;8;9
+10;11;12
+CONTENT
+
+    my $result = <<RESULT;
+[
+  'MyClass',
+  {
+    'MyClass' => {
+      'content' => 'A;B;C
+1;2;3
+4;5;6
+7;8;9
+10;11;12
+'
+    }
+  }
+]
+RESULT
+
+    $obj = MyClass->new();
+    $obj->content($content);
+    is($obj->dump(1)."\n", $result, 'Dump string contents verified');
 }
 
 exit(0);

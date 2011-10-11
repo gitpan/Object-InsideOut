@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.84 Tue Oct 11 22:42:26 2011
+	- Fixed bug in string dump of objects
+
 3.83 Thu Oct  6 23:53:04 2011
 	- Fix bug with NOT_SHARED in threads::shared app
 	- Document error caused by returning non-shared objects from threads
