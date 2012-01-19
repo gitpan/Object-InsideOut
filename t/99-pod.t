@@ -153,4 +153,9 @@ Runtime
 runtime
 someone's
 
+delegator
+delegators
+forwards
+autogenerating
+
 __END__

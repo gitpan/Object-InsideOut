@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.85';
+our $VERSION = '3.86';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.85;
-use Object::InsideOut::Util 3.85 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.85;
+use Object::InsideOut::Exception 3.86;
+use Object::InsideOut::Util 3.86 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.86;
 
 require B;
 
@@ -476,9 +476,9 @@ sub MODIFY_HASH_ATTRIBUTES :Sub
     # Process attributes
     foreach my $attr (@attrs) {
         # Declaration for object field hash
-        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|Arg|Type)/i) {
-            # Save save hash ref and attribute
-            # Accessors will be build during initialization
+        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|Arg|Type|Hand)/i) {
+            # Save hash ref and attribute
+            # Accessors will be built during initialization
             if ($attr =~ /^(?:Field|Type)/i) {
                 unshift(@{$GBL{'fld'}{'new'}{$pkg}}, [ $hash, $attr ]);
             } else {
@@ -559,9 +559,9 @@ sub MODIFY_ARRAY_ATTRIBUTES :Sub
     # Process attributes
     foreach my $attr (@attrs) {
         # Declaration for object field array
-        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|Arg|Type)/i) {
-            # Save save array ref and attribute
-            # Accessors will be build during initialization
+        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|Arg|Type|Hand)/i) {
+            # Save array ref and attribute
+            # Accessors will be built during initialization
             if ($attr =~ /^(?:Field|Type)/i) {
                 unshift(@{$GBL{'fld'}{'new'}{$pkg}}, [ $array, $attr ]);
             } else {
@@ -2155,6 +2155,9 @@ sub create_accessors :Sub(Private)
     } elsif (($kind =~ /^Type/i) && ($decl =~ /^(?:sub|\\&)/)) {
         $type_code = $decl;
         $decl = "{'$kind'=>$decl}";
+    } elsif ($kind =~ /^Hand/i) {
+        $decl =~ s/['",]/ /g;
+        $decl = "{'$kind'=>'$decl'}";
     } elsif ($kind !~ /^Field/i) {
         if (! ($decl =~ s/'?name'?\s*=>/'$kind'=>/i)) {
             OIO::Attribute->die(
@@ -2186,8 +2189,9 @@ sub create_accessors :Sub(Private)
 
     my $fld_type = $GBL{'fld'}{'type'};
 
-    # Get info for accessors
-    my ($get, $set, $return, $private, $restricted, $lvalue, $arg, $pre);
+    # Get info for accessors/delegators
+    my ($get, $set, $return, $private, $restricted, $lvalue, $arg, $pre, $delegate);
+    my $accessor_type = 'accessor';
     if ($kind !~ /^arg$/i) {
         foreach my $key (keys(%{$acc_spec})) {
             my $key_uc = uc($key);
@@ -2337,6 +2341,11 @@ sub create_accessors :Sub(Private)
                         'Attribute' => $attr);
                 }
             }
+            # Delegator
+            elsif ($key_uc =~ /^HAND/) {
+                $delegate = $val;
+                $accessor_type = 'delegator';
+            }
             # Unknown parameter
             elsif ($key_uc ne 'IGNORE') {
                 OIO::Attribute->die(
@@ -2419,7 +2428,7 @@ sub create_accessors :Sub(Private)
                 'Info'      => "'$set' already specified for another field using '$$dump{$set}{'src'}'",
                 'Attribute' => $attr);
         }
-    } elsif (! $return && ! $lvalue) {
+    } elsif (! $return && ! $lvalue && ! $delegate) {
         return;
     }
 
@@ -2622,6 +2631,35 @@ _PRE_
                . ((ref($field_ref) eq 'HASH')
                     ? "    \$field->{\${\$_[0]}};\n};\n"
                     : "    \$field->[\${\$_[0]}];\n};\n");
+    }
+
+    # Create delegation accessor
+    if ($delegate) {
+        $delegate =~ s/\s*-->\s*/-->/g;
+        my @methods = split(/[,\s]+/, $delegate);
+        @methods = grep { $_ } @methods;
+        for my $method (@methods) {
+            my ($from, $to) = split(/-->/, $method);
+            if (! defined($to)) {
+                $to = $from;
+            }
+            no strict 'refs';
+            if (*{$pkg.'::'.$from}{CODE}) {
+                OIO::Attribute->die(
+                    'message'   => q/Can't create delegator method/,
+                    'Info'      => "Method '$from' already exists in class '$pkg'",
+                    'Attribute' => $attr);
+            }
+            $code .= "*${pkg}::$from = sub {\n"
+
+                . preamble_code($pkg, $method, $private, $restricted)
+
+                . "    my \$self = shift;\n"
+
+                . ((ref($field_ref) eq 'HASH')
+                        ? "    \$field->{\${\$self}}->$to(\@_);\n};\n"
+                        : "    \$field->[\${\$self}]->$to(\@_);\n};\n");
+        }
     }
 
     # Compile the subroutine(s) in the smallest possible lexical scope
