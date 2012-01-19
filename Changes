@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.87 Thu Jan 19 13:46:51 2012
+	- Added missing test file for delegators
+
 3.86 Thu Jan 19 04:37:33 2012
 	- Added delegators per contribution by Damian Conway
 

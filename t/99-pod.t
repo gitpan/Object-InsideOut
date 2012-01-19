@@ -158,4 +158,11 @@ delegators
 forwards
 autogenerating
 
+designator
+destructor
+subtype
+URI
+decrementing
+incrementing
+
 __END__

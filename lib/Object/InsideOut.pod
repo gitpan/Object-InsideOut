@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.86
+This document describes Object::InsideOut version 3.87
 
 =head1 SYNOPSIS
 
@@ -1082,8 +1082,8 @@ operations:
 And so on.
 
 If you need to add attribute parameters that affect the C<:Arg> portion
-(e.g., 'Default', 'Mandatory', etc.), then you cannot use C<:All>.  Fall back
-to using the separate attributes.  For example:
+(e.g., C<Default>, C<Mandatory>, etc.), then you cannot use C<:All>.  Fall
+back to using the separate attributes.  For example:
 
  my @data :Field :Arg('Name' => 'data', 'Mand' => 1)
                  :Acc('Name' => 'data', 'Ret' => 'Old');
@@ -1094,10 +1094,10 @@ In addition to autogenerating accessors for a given field, you can also
 autogenerate I<delegators> to that field. A delegator is a method that
 forwards its call to one of the object's fields.
 
-For example, if your Car object has an C<@engine> field, then you might need
-to send all acceleration requests to the Engine object stored in that field.
-Likewise, all braking requests may need to be forwarded to Car's field that
-stores the Brakes object:
+For example, if your I<Car> object has an C<@engine> field, then you might
+need to send all acceleration requests to the I<Engine> object stored in that
+field.  Likewise, all braking requests may need to be forwarded to I<Car>'s
+field that stores the I<Brakes> object:
 
  package Car; {
      use Object::InsideOut;
@@ -1128,10 +1128,11 @@ stores the Brakes object:
      }
  }
 
-If the Car needs to forward other method calls to its Engine or Brakes, this
-quickly becomes tedious, repetitive, and error-prone. So, instead, you can
-just tell Object::InsideOut that a particular method should be automatically
-forwarded to a particular field, by specifying a 'Handles' option:
+If the I<Car> needs to forward other method calls to its I<Engine> or
+I<Brakes>, this quickly becomes tedious, repetitive, and error-prone. So,
+instead, you can just tell Object::InsideOut that a particular method should
+be automatically forwarded to a particular field, by specifying a C<:Handles>
+attribute:
 
  package Car; {
      use Object::InsideOut;
@@ -1157,7 +1158,7 @@ example. The delegator simply calls the corresponding method on the object
 stored in the field, passing it the same argument list it received.
 
 Sometimes, however, you may need to delegate a particular method to a field,
-but under a different name. For example, if the Brake class provides an
+but under a different name.  For example, if the I<Brake> class provides an
 C<engage()> method, rather than a C<brake()> method, then you'd need
 C<Car::brake()> to be implemented as:
 
@@ -1173,8 +1174,18 @@ You can achieve that using the C<:Handles> attribute, like so:
                 :Handles(brake-->engage);
 
 The long arrow version still creates a delegator method C<brake()>, but makes
-that method delegate to your Brakes object by calling its C<engage()> method
+that method delegate to your I<Brakes> object by calling its C<engage()> method
 instead.
+
+C<Handles> may be abbreviated to C<Handle> or C<Hand>.
+
+NOTES: Failure to add the appropriate object to the delegation field will lead
+to errors such as:  B<Can't call method "bar" on an undefined value>.
+
+Typos in C<:Handles> attribute declarations will lead to errors such as:
+B<Can't locate object method "bat" via package "Foo">.  Adding an object of
+the wrong class to the delegation field will lead to the same error, but can
+be avoided by adding a C<:Type> attribute for the appropriate class.
 
 =head1 PERMISSIONS
 
