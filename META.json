@@ -34,10 +34,10 @@
          "requires" : {
             "B" : 0,
             "Config" : 0,
-            "Data::Dumper" : 0,
-            "Exception::Class" : "1.29",
+            "Data::Dumper" : "2.131",
+            "Exception::Class" : "1.32",
             "Scalar::Util" : "1.23",
-            "Test::More" : "0.5",
+            "Test::More" : "0.98",
             "attributes" : 0,
             "overload" : 0,
             "strict" : 0,
@@ -46,5 +46,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "3.87"
+   "version" : "3.88"
 }

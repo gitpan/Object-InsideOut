@@ -12,23 +12,17 @@ use ExtUtils::MakeMaker;
 eval { require Scalar::Util; };
 if ($@) {
     # Not found - require minimum version
-    $Scalar::Util::VERSION = 1.10;
+    $Scalar::Util::VERSION = 1.23;
 } elsif (! Scalar::Util->can('weaken')) {
     # Scalar::Util is 'pure Perl' version
-    if ($Scalar::Util::VERSION eq '1.20') {
+    if ($Scalar::Util::VERSION ge '1.20') {
         die <<_NO_WEAKEN_;
 You must reinstall Scalar::Util in order to install Object::InsideOut
 because the currently installed Scalar::Util is a 'pure perl' version
 that is missing the 'weaken()' function.
 _NO_WEAKEN_
     }
-    if ($Scalar::Util::VERSION lt '1.10') {
-        # Require minimum version
-        $Scalar::Util::VERSION = 1.10;
-    } else {
-        # Require next higher version
-        $Scalar::Util::VERSION += 0.01;
-    }
+    $Scalar::Util::VERSION = 1.23;
 }
 
 
@@ -44,11 +38,11 @@ ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
 of the modules indicated above before proceeding with this installation
 
 _WANT_
-} elsif ($Want::VERSION < 0.12) {
+} elsif ($Want::VERSION < 0.18) {
     print(<<_WANT_);
 
 Checking prerequisites...
- * Want ($Want::VERSION) is installed, but we prefer to have 0.12 or later
+ * Want ($Want::VERSION) is installed, but we prefer to have 0.18 or later
 
 ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
 of the modules indicated above before proceeding with this installation
@@ -69,11 +63,11 @@ ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
 of the modules indicated above before proceeding with this installation
 
 _MRMA_
-} elsif ($Math::Random::MT::Auto::VERSION < 5.04) {
+} elsif ($Math::Random::MT::Auto::VERSION < 6.18) {
     print(<<_MRMA_);
 
 Checking prerequisites...
- * Math::Random::MT::Auto ($Math::Random::MT::Auto::VERSION) is installed, but we prefer to have 5.04 or later
+ * Math::Random::MT::Auto ($Math::Random::MT::Auto::VERSION) is installed, but we prefer to have 6.18 or later
 
 ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
 of the modules indicated above before proceeding with this installation
@@ -94,10 +88,10 @@ WriteMakefile(
                          'overload'         => 0,
                          'Config'           => 0,
                          'B'                => 0,
-                         'Data::Dumper'     => 0,
+                         'Data::Dumper'     => 2.131,
                          'Scalar::Util'     => $Scalar::Util::VERSION,
-                         'Exception::Class' => 1.29,
-                         'Test::More'       => 0.50,
+                         'Exception::Class' => 1.32,
+                         'Test::More'       => 0.98,
                        },
     ((ExtUtils::MakeMaker->VERSION() lt '6.25')
                               ? ('PL_FILES' => { })    : ()),
@@ -114,8 +108,8 @@ sub metafile
     my $inherited = shift->SUPER::metafile_target(@_);
     $inherited .= <<'_MOREMETA_';
 	$(NOECHO) $(ECHO) 'recommends:' >>$(DISTVNAME)/META.yml
-	$(NOECHO) $(ECHO) '    Math::Random::MT::Auto: 5.04' >>$(DISTVNAME)/META.yml
-	$(NOECHO) $(ECHO) '    Want: 0.12' >>$(DISTVNAME)/META.yml
+	$(NOECHO) $(ECHO) '    Math::Random::MT::Auto: 6.18' >>$(DISTVNAME)/META.yml
+	$(NOECHO) $(ECHO) '    Want: 0.18' >>$(DISTVNAME)/META.yml
 _MOREMETA_
 
     return $inherited;

@@ -20,15 +20,15 @@ no_index:
 requires:
   B: 0
   Config: 0
-  Data::Dumper: 0
-  Exception::Class: 1.29
+  Data::Dumper: 2.131
+  Exception::Class: 1.32
   Scalar::Util: 1.23
-  Test::More: 0.5
+  Test::More: 0.98
   attributes: 0
   overload: 0
   strict: 0
   warnings: 0
-version: 3.87
+version: 3.88
 recommends:
-    Math::Random::MT::Auto: 5.04
-    Want: 0.12
+    Math::Random::MT::Auto: 6.18
+    Want: 0.18
