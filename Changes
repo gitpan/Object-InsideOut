@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.89 Thu Feb 16 19:08:31 2012
+	- Added generated defaults per contribution by Damian Conway
+
 3.88 Thu Jan 26 14:56:59 2012
 	- Update build prereqs
 

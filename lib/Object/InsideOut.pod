@@ -4,7 +4,7 @@ Object::InsideOut - Comprehensive inside-out object support module
 
 =head1 VERSION
 
-This document describes Object::InsideOut version 3.88
+This document describes Object::InsideOut version 3.89
 
 =head1 SYNOPSIS
 
@@ -579,10 +579,12 @@ synonymous.
 =head2 Default Values
 
 For optional parameters, defaults can be specified for field-specific
-parameters:
+parameters using either of these syntaxes:
 
  my @data :Field
           :Arg('Name' => 'data', 'Default' => 'foo');
+
+ my @info :Field  :Arg(info)  :Default('bar');
 
 If an optional parameter with a specified default is missing from the argument
 list to C<-E<gt>new()>, then the default is assigned to the field when the
@@ -600,46 +602,95 @@ In this case, if the parameter is missing from the argument list to
 C<-E<gt>new()>, then the parameter key is paired with the default value and
 added to the C<:Init> argument hash ref (e.g., S<C<{ 'data' =E<gt> 'foo' }>>).
 
-C<Default> may be abbreviated to C<Def>.
-
 Fields can also be assigned a default value even if not associated with an
 initialization parameter:
 
- my @data :Field
-          :Default('foo');
+ my @hash  :Field  :Default({});
+ my @tuple :Field  :Default([1, 'bar']);
 
-Note that when using C<:Default>, the value must be properly specified (e.g.,
-strings must be quoted as illustrated above).
+Note that when using C<:Default>, the value must be properly structured Perl
+code (e.g., strings must be quoted as illustrated above).
 
-Using an array or hash reference as a default will probably not produce the
-result that you might expect:
+C<Default> and C<:Default> may be abbreviated to C<Def> and C<:Def>
+respectively.
 
- my @foo :Field
-         :Default({});
+=head3 Generated Default Values
 
-This does B<not> result in a new empty hash reference being created for each
-new object.  Rather, a single empty hash reference is created when the module
-is loaded, and then that reference is assigned to each newly created object.
-In other words, it is equivalent to:
+It is also possible to I<generate> default values on a per object basis by
+using code in the C<:Default> directive.
 
- my %bar = ();
+ my @bar :Field  :Default(rand 100);
+ my @foo :Field  :Default(our $next; ++$next);
 
- my @foo :Field
-         :Default(\%bar);
+The above, for example, will initialize the C<bar> attribute of each new
+object to a different random number, and C<foo> will be a sequential integer.
 
-To get the other result, assign a new empty hash reference using an C<:Init>
-subroutine:
+The code in a C<:Default> specifier can also refer to the object being
+initialized, either as C<$_[0]> or as C<$self>.  For example:
 
- sub _init :Init
+ my @unique_ID :Field  :Default($self->gen_unique_ID);
+
+Note that (due to the limitations of the Perl variable attribute mechanism)
+any code specified as a default will I<not> have access to the surrounding
+lexical scope, nor can you use parens in that code.  For example, this will
+not work (nor even compile):
+
+ my $MAX = 100;
+ my $MIN = 0;
+
+ my @bar :Field
+         :Default($MIN + rand($MAX-$MIX));     # Error
+
+For anything complex or lexical, you should factor the initializer out into
+a utility subroutine:
+
+ sub _rand_max :Restricted
  {
-     my ($self, $args) = @_;
-
-     if (! exists($foo[$$self])) {
-         $self->set(\@foo, {});
-     }
+     $MIN + rand($MAX-$MIX)
  }
 
-C<:Default> may be abbreviated to C<:Def>.
+ my @bar :Field
+         :Default(_rand_max);
+
+When specifying a generated default using the C<Default> tag inside an C<:Arg>
+directive, you will need to wrap the code in a C<sub { }>, and C<$_[0]> (but
+not C<$self>) can be used to access the object being initialized:
+
+ my @baz :Field
+         :Arg(Name => 'baz', Default => sub { $_[0]->biz });
+
+System functions need to similarly be wrapped in C<sub { }>:
+
+ my @rand :Field
+          :Type(numeric)
+          :Arg(Name => 'Rand', Default => sub { rand });
+
+Subroutines can be accessed using a code reference:
+
+ my @data :Field
+          :Arg(Name => 'Data', Default => \&gen_default);
+
+On the other hand, the above can also be simplified by using the C<:Default>
+directive instead:
+
+ my @baz  :Field  :Arg(baz)   :Default($self->biz);
+ my @rand :Field  :Arg(Rand)  :Default(rand)  :Type(numeric);
+ my @data :Field  :Arg(Data)  :Default(gen_default);
+
+Using generated defaults in the C<:InitArgs> hash requires the use of the same
+types of syntax as with the C<Default> tag in an C<:Arg> directive:
+
+ my %init_args :InitArgs = (
+     'Baz' => {
+         'Default' => sub { $_[0]->biz },
+     },
+     'Rand' => {
+         'Default' => sub { rand },
+     },
+     'Data' => {
+         'Default' => \&gen_default,
+     },
+ );
 
 =head2 Parameter Name Matching
 

@@ -164,5 +164,6 @@ subtype
 URI
 decrementing
 incrementing
+syntaxes
 
 __END__

@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.88';
+our $VERSION = '3.89';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.88;
-use Object::InsideOut::Util 3.88 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.88;
+use Object::InsideOut::Exception 3.89;
+use Object::InsideOut::Util 3.89 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.89;
 
 require B;
 
@@ -502,7 +502,7 @@ sub MODIFY_HASH_ATTRIBUTES :Sub
         # Defaults
         elsif ($attr =~ /^Def(?:ault)?[(]([^)]+)[)]$/i) {
             my $val;
-            eval "\$val = $1";
+            eval "package $pkg; use $]; \$val = sub { my \$self = \$_[0]; $1 }";
             if ($@) {
                 OIO::Attribute->die(
                     'location'  => [ $pkg, (caller(2))[1,2] ],
@@ -585,7 +585,7 @@ sub MODIFY_ARRAY_ATTRIBUTES :Sub
         # Defaults
         elsif ($attr =~ /^Def(?:ault)?[(]([^)]+)[)]$/i) {
             my $val;
-            eval "\$val = $1";
+            eval "package $pkg; use $]; \$val = sub { my \$self = \$_[0]; $1 }";
             if ($@) {
                 OIO::Attribute->die(
                     'location'  => [ $pkg, (caller(2))[1,2] ],
@@ -1476,7 +1476,13 @@ sub _args :Sub(Private)
             }
 
             # Assign default value
-            $found{$key} = Object::InsideOut::Util::clone($$spec_item{'_D'});
+            if (exists($$spec_item{'_D'})) {
+                if (ref($$spec_item{'_D'}) eq 'CODE') {
+                    $found{$key} = $$spec_item{'_D'}->($self);
+                } else {
+                    $found{$key} = Object::InsideOut::Util::clone($$spec_item{'_D'});
+                }
+            }
 
             # If no default, then remove it from the found args hash
             if (! defined($found{$key})) {
@@ -1649,7 +1655,7 @@ sub new :MergeArgs
     if ($cache{'def'} || ! $have_cache) {
         foreach my $pkg (@{$tree}) {
             if (my $def = $GBL{'fld'}{'def'}{$pkg}) {
-                $self->set($_->[0], Object::InsideOut::Util::clone($_->[1]))
+                $self->set($_->[0], $_->[1]->($self))
                     foreach (@{$def});
                 if ($have_cache) {
                     last if (! (--$cache{'def'}));
@@ -2169,14 +2175,15 @@ sub create_accessors :Sub(Private)
     # Parse the accessor declaration
     my $acc_spec;
     {
+        # Ensure the attribute declaration is a hash
+        if ($decl !~ /^{/) {
+            $decl = "{ $decl }";
+        }
+
         my @errs;
         local $SIG{'__WARN__'} = sub { push(@errs, @_); };
 
-        if ($decl =~ /^{/) {
-            eval "\$acc_spec = $decl";
-        } else {
-            eval "\$acc_spec = { $decl }";
-        }
+        eval "package $pkg; use $]; \$acc_spec = $decl";
 
         if ($@ || @errs) {
             my ($err) = split(/ at /, $@ || join(" | ", @errs));
