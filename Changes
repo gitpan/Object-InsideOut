@@ -1,5 +1,9 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.91 Wed Feb 22 16:35:09 2012
+	- Added sequential defaults per contribution by Damian Conway
+	- Extended delegator capabilities per contribution by Damian Conway
+
 3.89 Thu Feb 16 19:08:31 2012
 	- Added generated defaults per contribution by Damian Conway
 

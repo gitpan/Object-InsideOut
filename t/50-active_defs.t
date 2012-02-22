@@ -1,17 +1,45 @@
-use Test::More tests => 52;
+use Test::More tests => 58;
+{
+    package Iterator;
+    use Object::InsideOut;
+
+    my @next : Field Arg(start);
+
+    sub next {
+        my ($self) = @_;
+        my $next = $next[$$self];
+        $next[$$self]++;
+        $next[$$self] = substr($next[$$self],-1) . substr($next[$$self],0,-1);
+        return $next;
+    }
+}
+
 {
     package Foo;
     use Object::InsideOut;
 
-    my @ID    : Field Get(ID)    Default(our $next; ++$next);
-    my @seven : Field Get(Seven) Default(7);
-    my @ID2   : Field Get(ID2)   Default($self->ID + 1);
+    sub triple { shift(@_) x 3 }
+
+    my @ID     : Field Get(ID)     SequenceFrom(1);
+    my @rating : Field Get(Rating) SeqFrom('XXX');
+    my @ccv    : Field Get(CCV)    SeqFrom(Iterator->new(start=>triple('A')));
+
+    my @seven  : Field Get(Seven)  Default(7);
+    my @ID2    : Field Get(ID2)    Default($self->ID() + 1);
 }
 
-# Test incremental default...
-is(Foo->new->ID, 1 => 'First default');
-is(Foo->new->ID, 2 => 'Second default');
-is(Foo->new->ID, 3 => 'Third default');
+# Test sequential defaults...
+is(Foo->new->ID, 1 => 'First ID in sequence');
+is(Foo->new->ID, 2 => 'Second ID in sequence');
+is(Foo->new->ID, 3 => 'Third ID in sequence');
+
+is(Foo->new->Rating, 'XYA' => 'Fourth rating in sequence');
+is(Foo->new->Rating, 'XYB' => 'Fifth rating in sequence');
+is(Foo->new->Rating, 'XYC' => 'Sixth rating in sequence');
+
+is(Foo->new->CCV, 'CCC' => 'Seventh CCV in sequence');
+is(Foo->new->CCV, 'DCC' => 'Eighth CCV in sequence');
+is(Foo->new->CCV, 'DDC' => 'Ninth CCV in sequence');
 
 # Test constant default...
 is(Foo->new->Seven, 7 => "Seven is 7");

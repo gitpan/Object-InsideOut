@@ -72,6 +72,7 @@ SKIP: {
                             qr/^_obj$/,
                             qr/^import$/,
                             qr/^add_dump_field$/,
+                            qr/^get_class_methods$/,
                         ]
                     }
     );

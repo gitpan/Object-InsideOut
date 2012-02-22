@@ -28,7 +28,7 @@ requires:
   overload: 0
   strict: 0
   warnings: 0
-version: 3.89
+version: 3.91
 recommends:
     Math::Random::MT::Auto: 6.18
     Want: 0.18

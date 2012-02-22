@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.89';
+our $VERSION = '3.91';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.89;
-use Object::InsideOut::Util 3.89 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.89;
+use Object::InsideOut::Exception 3.91;
+use Object::InsideOut::Util 3.91 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.91;
 
 require B;
 
@@ -459,6 +459,8 @@ sub MODIFY_CODE_ATTRIBUTES
     return (@unused_attrs);
 }
 
+my $BALANCED_PARENS; # Must declare before assigning (so var in scope for regex)
+$BALANCED_PARENS = qr{(?>(?:(?>[^()]+)|[(](??{$BALANCED_PARENS})[)])*)};
 
 # Handles hash field and :InitArgs attributes.
 sub MODIFY_HASH_ATTRIBUTES :Sub
@@ -500,13 +502,33 @@ sub MODIFY_HASH_ATTRIBUTES :Sub
         }
 
         # Defaults
-        elsif ($attr =~ /^Def(?:ault)?[(]([^)]+)[)]$/i) {
+        elsif ($attr =~ /^Def(?:ault)?[(]($BALANCED_PARENS)[)]$/i) {
             my $val;
             eval "package $pkg; use $]; \$val = sub { my \$self = \$_[0]; $1 }";
             if ($@) {
                 OIO::Attribute->die(
                     'location'  => [ $pkg, (caller(2))[1,2] ],
                     'message'   => "Bad ':Default' attribute in package '$pkg'",
+                    'Attribute' => $attr,
+                    'Error'     => $@);
+            }
+            push(@{$GBL{'fld'}{'def'}{$pkg}}, [ $hash, $val ]);
+        }
+
+        # Sequentials
+        elsif ($attr =~ /^Seq(?:uence)?(?:From)?[(]($BALANCED_PARENS)[)]$/i) {
+            my $val = $1;
+            eval qq{
+                package $pkg;
+                my \$next = $val;
+                \$val = eval{ \$next->can('next') }
+                        ? sub { \$next->next() }
+                        : sub { \$next++ };
+            };
+            if ($@) {
+                OIO::Attribute->die(
+                    'location'  => [ $pkg, (caller(2))[1,2] ],
+                    'message'   => "Bad ':SequenceFrom' attribute in package '$pkg'",
                     'Attribute' => $attr,
                     'Error'     => $@);
             }
@@ -583,13 +605,33 @@ sub MODIFY_ARRAY_ATTRIBUTES :Sub
         }
 
         # Defaults
-        elsif ($attr =~ /^Def(?:ault)?[(]([^)]+)[)]$/i) {
+        elsif ($attr =~ /^Def(?:ault)?[(]($BALANCED_PARENS)[)]$/i) {
             my $val;
             eval "package $pkg; use $]; \$val = sub { my \$self = \$_[0]; $1 }";
             if ($@) {
                 OIO::Attribute->die(
                     'location'  => [ $pkg, (caller(2))[1,2] ],
                     'message'   => "Bad ':Default' attribute in package '$pkg'",
+                    'Attribute' => $attr,
+                    'Error'     => $@);
+            }
+            push(@{$GBL{'fld'}{'def'}{$pkg}}, [ $array, $val ]);
+        }
+
+        # Sequentials
+        elsif ($attr =~ /^Seq(?:uence)?(?:From)?[(]($BALANCED_PARENS)[)]$/i) {
+            my $val = $1;
+            eval qq{
+                package $pkg;
+                my \$next = $val;
+                \$val = eval{ \$next->can('next') }
+                        ? sub { \$next->next() }
+                        : sub { \$next++ };
+            };
+            if ($@) {
+                OIO::Attribute->die(
+                    'location'  => [ $pkg, (caller(2))[1,2] ],
+                    'message'   => "Bad ':SequenceFrom' attribute in package '$pkg'",
                     'Attribute' => $attr,
                     'Error'     => $@);
             }
@@ -2139,6 +2181,36 @@ sub add_dump_field :Sub(Private)
 }
 
 
+# Utility sub to handler :Handles(Class::*) feature...
+sub get_class_methods :Sub(Private)
+{
+    my ($class_delegated_from, $class_delegated_to) = @_;
+
+    # Not expandable...
+    return $class_delegated_to if $class_delegated_to !~ /::/;
+
+    # Clean up any trailing ::...
+    $class_delegated_to =~ s/::+$//;
+
+    # Grab all known method names of specified class...
+    my $methods = $class_delegated_to->meta()->get_methods();
+
+    # Select the "real" ones...
+    no strict 'refs';
+    return grep {
+        # Ignore "infrastructure" methods...
+        !/^(?:new|clone|meta|set)$/
+
+        # Ignore Object::InsideOut internal methods...
+        && $methods->{$_}{class} eq $class_delegated_to
+
+        # Ignore methods already installed...
+        && !*{"${class_delegated_from}::$_"}{CODE}
+
+    } keys %{$methods};
+}
+
+
 # Creates object data accessors for classes
 sub create_accessors :Sub(Private)
 {
@@ -2645,6 +2717,7 @@ _PRE_
         $delegate =~ s/\s*-->\s*/-->/g;
         my @methods = split(/[,\s]+/, $delegate);
         @methods = grep { $_ } @methods;
+        @methods = map  { get_class_methods($pkg, $_) } @methods;
         for my $method (@methods) {
             my ($from, $to) = split(/-->/, $method);
             if (! defined($to)) {
