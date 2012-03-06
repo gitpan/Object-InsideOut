@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.91';
+our $VERSION = '3.92';
 $VERSION = eval $VERSION;
 
 1;
@@ -28,7 +28,7 @@ Scalar::Util 1.23               - Used by Object::InsideOut
 
 Pod::Escapes 1.04               - Used by Pod::Simple
 
-Pod::Simple 3.19                - Used by Test::Pod
+Pod::Simple 3.20                - Used by Test::Pod
 
 Test::Pod 1.45                  - Checks POD syntax
 
@@ -46,7 +46,7 @@ threads 1.86                    - Support for threads
 
 threads::shared 1.40            - Support for sharing objects between threads
 
-Want 0.20                       - :lvalue accessor support
+Want 0.21                       - :lvalue accessor support
 
 Data::Dumper 2.131              - Object serialization support
 
@@ -58,7 +58,7 @@ Class::Data::Inheritable 0.08   - Used by Exception::Class
 
 Exception::Class 1.32           - Error handling
 
-Object::InsideOut 3.91          - Inside-out object support
+Object::InsideOut 3.92          - Inside-out object support
 
 URI 1.59                        - Used by LWP::UserAgent
 

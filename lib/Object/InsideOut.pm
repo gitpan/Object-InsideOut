@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.91';
+our $VERSION = '3.92';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.91;
-use Object::InsideOut::Util 3.91 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.91;
+use Object::InsideOut::Exception 3.92;
+use Object::InsideOut::Util 3.92 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.92;
 
 require B;
 
@@ -478,7 +478,7 @@ sub MODIFY_HASH_ATTRIBUTES :Sub
     # Process attributes
     foreach my $attr (@attrs) {
         # Declaration for object field hash
-        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|Arg|Type|Hand)/i) {
+        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|R(?:ead)?O(?:nly)?|Arg|Type|Hand)/i) {
             # Save hash ref and attribute
             # Accessors will be built during initialization
             if ($attr =~ /^(?:Field|Type)/i) {
@@ -581,7 +581,7 @@ sub MODIFY_ARRAY_ATTRIBUTES :Sub
     # Process attributes
     foreach my $attr (@attrs) {
         # Declaration for object field array
-        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|Arg|Type|Hand)/i) {
+        if ($attr =~ /^(?:Field|[GS]et|Acc|Com|Mut|St(?:an)?d|LV(alue)?|All|R(?:ead)?O(?:nly)?|Arg|Type|Hand)/i) {
             # Save array ref and attribute
             # Accessors will be built during initialization
             if ($attr =~ /^(?:Field|Type)/i) {
@@ -2282,13 +2282,21 @@ sub create_accessors :Sub(Private)
                 if ($key_uc eq 'ALL') {
                     $key_uc = 'ACC';
                 }
+            } elsif ($key_uc =~ /R(?:EAD)?O(?:NLY)?/) {
+                $arg = $val;
+                if ($key_uc =~ /^R(?:EAD)?O(?:NLY)?$/) {
+                    $key_uc = 'GET';
+                }
             } elsif ($key_uc =~ /ARG/) {
                 $arg = $val;
                 $key_uc = 'IGNORE';
             }
 
             # Standard accessors
-            if ($key_uc =~ /^ST.*D/) {
+            if ($key_uc =~ /^ST.*D.*R(?:EAD)?O(?:NLY)?/) {
+                $get = 'get_' . $val;
+            }
+            elsif ($key_uc =~ /^ST.*D/) {
                 $get = 'get_' . $val;
                 $set = 'set_' . $val;
             }
@@ -2705,7 +2713,7 @@ _PRE_
     if ($get && (!$set || ($get ne $set))) {
         $code .= "*${pkg}::$get = sub {\n"
 
-               . preamble_code($pkg, $get, $private, $restricted)
+               . preamble_code($pkg, $get, $private, $restricted, 'readonly')
 
                . ((ref($field_ref) eq 'HASH')
                     ? "    \$field->{\${\$_[0]}};\n};\n"
@@ -2766,8 +2774,17 @@ _PRE_
 # Generate code for start of accessor
 sub preamble_code :Sub(Private)
 {
-    my ($pkg, $name, $private, $restricted) = @_;
+    my ($pkg, $name, $private, $restricted, $readonly) = @_;
     my $code = '';
+
+    # Argument checking code
+    if (defined($readonly)) {
+        $code = <<"_READONLY_";
+    if (\@_ > 1) {
+        OIO::Method->die('message' => "Can't call readonly accessor method '$pkg->$name' with an argument");
+    }
+_READONLY_
+    }
 
     # Permission checking code
     if (defined($private)) {

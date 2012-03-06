@@ -167,4 +167,6 @@ decrementing
 incrementing
 syntaxes
 
+READONLY
+
 __END__
