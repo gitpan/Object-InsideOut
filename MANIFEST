@@ -85,6 +85,7 @@ t/46a-singleton.t
 t/47-sh_reuse.t
 t/48-not_shared.t
 t/49-delegators.t
+t/49a-delegators-non-OIO.t
 t/50-active_defs.t
 t/51-readonly.t
 t/99-pod.t

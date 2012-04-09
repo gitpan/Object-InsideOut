@@ -73,6 +73,7 @@ SKIP: {
                             qr/^import$/,
                             qr/^add_dump_field$/,
                             qr/^get_class_methods$/,
+                            qr/^get_symtab_methods_for$/,
                         ]
                     }
     );

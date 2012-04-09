@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.92';
+our $VERSION = '3.93';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.92;
-use Object::InsideOut::Util 3.92 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.92;
+use Object::InsideOut::Exception 3.93;
+use Object::InsideOut::Util 3.93 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.93;
 
 require B;
 
@@ -2181,7 +2181,36 @@ sub add_dump_field :Sub(Private)
 }
 
 
-# Utility sub to handler :Handles(Class::*) feature...
+# Utility sub to infer class API from symbol table...
+# (replaces ->meta->get_methods for non-OIO classes)
+sub get_symtab_methods_for :Sub(Private)
+{
+    my ($class_delegated_to) = @_;
+
+    my %methods;   #...collects the methods that are found
+
+    # Walk the class's inheritance tree...
+    my @hierarchy = ($class_delegated_to);
+    while (my $classname = shift @hierarchy) {
+        no strict 'refs'; #...because symbols are inherently symbolic
+
+        # Accumulate ancestors for subsequent investigation...
+        push(@hierarchy, @{$classname.'::ISA'});
+
+        # Grab and remember all subs from this class's symbol table...
+        for my $symname (keys(%{$classname.'::'})) {
+            # Only want symbols that define subroutines...
+            next if !*{$classname.'::'.$symname}{CODE};
+            # Save the necessary info...
+            $methods{$symname}{'class'} = $class_delegated_to;
+        }
+    }
+
+    return \%methods
+}
+
+
+# Utility sub to handle :Handles(Class::*) feature...
 sub get_class_methods :Sub(Private)
 {
     my ($class_delegated_from, $class_delegated_to) = @_;
@@ -2193,7 +2222,9 @@ sub get_class_methods :Sub(Private)
     $class_delegated_to =~ s/::+$//;
 
     # Grab all known method names of specified class...
-    my $methods = $class_delegated_to->meta()->get_methods();
+    my $methods = $class_delegated_to->can('meta')
+                        ? $class_delegated_to->meta()->get_methods()
+                        : get_symtab_methods_for($class_delegated_to);
 
     # Select the "real" ones...
     no strict 'refs';

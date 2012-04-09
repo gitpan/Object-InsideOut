@@ -38,11 +38,11 @@ ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
 of the modules indicated above before proceeding with this installation
 
 _WANT_
-} elsif ($Want::VERSION < 0.18) {
+} elsif ($Want::VERSION < 0.21) {
     print(<<_WANT_);
 
 Checking prerequisites...
- * Want ($Want::VERSION) is installed, but we prefer to have 0.18 or later
+ * Want ($Want::VERSION) is installed, but we prefer to have 0.21 or later
 
 ERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the versions
 of the modules indicated above before proceeding with this installation
@@ -108,8 +108,8 @@ sub metafile
     my $inherited = shift->SUPER::metafile_target(@_);
     $inherited .= <<'_MOREMETA_';
 	$(NOECHO) $(ECHO) 'recommends:' >>$(DISTVNAME)/META.yml
-	$(NOECHO) $(ECHO) '    Math::Random::MT::Auto: 6.18' >>$(DISTVNAME)/META.yml
-	$(NOECHO) $(ECHO) '    Want: 0.18' >>$(DISTVNAME)/META.yml
+	$(NOECHO) $(ECHO) '  Math::Random::MT::Auto: 6.18' >>$(DISTVNAME)/META.yml
+	$(NOECHO) $(ECHO) '  Want: 0.21' >>$(DISTVNAME)/META.yml
 _MOREMETA_
 
     return $inherited;
