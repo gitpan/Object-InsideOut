@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.93';
+our $VERSION = '3.94';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.93;
-use Object::InsideOut::Util 3.93 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.93;
+use Object::InsideOut::Exception 3.94;
+use Object::InsideOut::Util 3.94 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.94;
 
 require B;
 
@@ -687,7 +687,7 @@ sub _ID :Sub
         }
         lock($$reuse{$tree}) if $sharing;
         my $r_tree = $$reuse{$tree};
-        if (! exists($$r_tree[$thread_id])) {
+        if (! defined($$r_tree[$thread_id])) {
             $$r_tree[$thread_id] = ($sharing) ? make_shared([]) : [];
         } else {
             foreach  (@{$$r_tree[$thread_id]}) {
@@ -1356,7 +1356,8 @@ sub CLONE
                                 Scalar::Util::weaken($$fld{$$obj});
                             }
                         } else {
-                            $$fld[$$obj] = delete($$fld[$old_id]);
+                            $$fld[$$obj] = $$fld[$old_id];
+                            undef($$fld[$old_id]);
                             if ($$weak{$fld}) {
                                 Scalar::Util::weaken($$fld[$$obj]);
                             }
@@ -2028,8 +2029,11 @@ sub DESTROY
                         # Workaround (?) for Perl's "in cleanup" bug
                         eval { my $bug = scalar(@{$fld}); };
                         next if ($@);
+                        # XXX - Eventually this will become deprecated
+                        delete($$fld[$$self]);
+                    } else {
+                        undef($$fld[$$self]);
                     }
-                    delete($$fld[$$self]);
                 }
             }
         }

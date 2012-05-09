@@ -82,7 +82,7 @@ MAIN:
         is("$bot_up",   join(q{}, @bot_up)     => 'String chained up');
         is("$top_down", join(q{}, @top_down)   => 'String chained down');
 
-        for my $pkg (keys %$bot_up) {
+        for my $pkg (keys(%{$bot_up})) {
             ok(grep($pkg, @bot_up)   => "Valid up hash key ($pkg)");
             is($pkg, $bot_up->{$pkg} => "Valid up hash value ($pkg)");
         }

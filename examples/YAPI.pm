@@ -2,7 +2,7 @@ package Term::YAPI; {
     use strict;
     use warnings;
 
-    our $VERSION = '3.93';
+    our $VERSION = '3.94';
 
     #####
     #
@@ -22,7 +22,7 @@ package Term::YAPI; {
         $threaded_okay = !$@;
     }
 
-    use Object::InsideOut 3.93;
+    use Object::InsideOut 3.94;
 
     # Default progress indicator is a twirling bar
     my @yapi :Field
@@ -104,7 +104,7 @@ package Term::YAPI; {
 
         } elsif ($$args{'type'} =~ /^countdown$/i) {
             $type[$$self] = 'countdown';
-            if (! exists($countdown[$$self])) {
+            if (! defined($countdown[$$self])) {
                 OIO::Args->die(
                     'message'  => q/Missing 'From' parameter for countdown timer/,
                     'location' => [ caller(1) ]);
@@ -253,7 +253,8 @@ package Term::YAPI; {
         my ($self, $msg) = @_;
 
         # Ignore if not running
-        return if (! delete($running[$$self]));
+        return if (! $running[$$self]);
+        undef($running[$$self]);
 
         # No longer currently running indicator
         undef($current);

@@ -62,7 +62,7 @@ sub dump
                             $dump{$pkg}{$name} = $$field{$$self};
                         }
                     } else {
-                        if (exists($$field[$$self])) {
+                        if (defined($$field[$$self])) {
                             $dump{$pkg}{$name} = $$field[$$self];
                         }
                     }
@@ -79,7 +79,7 @@ sub dump
                             $dump{$pkg}{$field} = $$field{$$self};
                         }
                     } else {
-                        if (exists($$field[$$self])) {
+                        if (defined($$field[$$self])) {
                             $dump{$pkg}{$field} = $$field[$$self];
                         }
                     }
@@ -206,7 +206,7 @@ sub dump
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.93)
+($Object::InsideOut::VERSION == 3.94)
     or die("Version mismatch\n");
 
 # EOF

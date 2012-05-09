@@ -206,11 +206,11 @@ package Object::InsideOut::Results; {
 use strict;
 use warnings;
 
-our $VERSION = '3.93';
+our $VERSION = '3.94';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut 3.93;
-use Object::InsideOut::Metadata 3.93;
+use Object::InsideOut 3.94;
+use Object::InsideOut::Metadata 3.94;
 
 my @VALUES  :Field :Arg(VALUES);
 my @CLASSES :Field :Arg(CLASSES);
@@ -240,7 +240,7 @@ sub as_hash :Hashify
 {
     my $self = $_[0];
 
-    if (! exists($HASHES[$$self])) {
+    if (! defined($HASHES[$$self])) {
         my %hash;
         @hash{@{$CLASSES[$$self]}} = @{$VALUES[$$self]};
         $self->set(\@HASHES, \%hash);
@@ -260,7 +260,7 @@ add_meta('Object::InsideOut::Results', {
 
 
 # Ensure correct versioning
-($Object::InsideOut::VERSION == 3.93)
+($Object::InsideOut::VERSION == 3.94)
     or die("Version mismatch\n");
 
 # EOF
