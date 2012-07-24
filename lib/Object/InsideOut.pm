@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.94';
+our $VERSION = '3.95';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.94;
-use Object::InsideOut::Util 3.94 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.94;
+use Object::InsideOut::Exception 3.95;
+use Object::InsideOut::Util 3.95 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.95;
 
 require B;
 
@@ -704,7 +704,7 @@ sub _ID :Sub
     # Use a reclaimed ID if available
     if (exists($$reuse{$tree})) {
         lock($$reuse{$tree}) if $sharing;
-        if (exists($$reuse{$tree}[$thread_id])) {
+        if (defined($$reuse{$tree}[$thread_id])) {
             my $id = pop(@{$$reuse{$tree}[$thread_id]});
             if (defined($id)) {
                 return $id;
@@ -921,7 +921,7 @@ sub initialize :Sub(Private)
                         $$reuse{$share_tree} = make_shared([]);
                     }
                     my $r_tree = $$reuse{$share_tree};
-                    if (! exists($$r_tree[0])) {
+                    if (! defined($$r_tree[0])) {
                         $$r_tree[0] = make_shared([]);
                     }
                 }
@@ -2020,20 +2020,15 @@ sub DESTROY
                 if (ref($fld) eq 'HASH') {
                     if ($is_sharing) {
                         # Workaround for Perl's "in cleanup" bug
-                        eval { my $bug = keys(%{$fld}); };
-                        next if ($@);
+                        next if ! defined($$fld{$$self});
                     }
                     delete($$fld{$$self});
                 } else {
                     if ($is_sharing) {
-                        # Workaround (?) for Perl's "in cleanup" bug
-                        eval { my $bug = scalar(@{$fld}); };
-                        next if ($@);
-                        # XXX - Eventually this will become deprecated
-                        delete($$fld[$$self]);
-                    } else {
-                        undef($$fld[$$self]);
+                        # Workaround for Perl's "in cleanup" bug
+                        next if ! defined($$fld[$$self]);
                     }
+                    undef($$fld[$$self]);
                 }
             }
         }

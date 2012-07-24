@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.95 Tue Jul 24 13:30:57 2012
+	- Delete on arrays is deprecated (removed last vestage)
+
 3.94 Wed May  9 17:29:23 EDT 2012
 	- Delete on arrays is deprecated
 
