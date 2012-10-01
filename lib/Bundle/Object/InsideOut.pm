@@ -3,7 +3,7 @@ package Bundle::Object::InsideOut;
 use strict;
 use warnings;
 
-our $VERSION = '3.95';
+our $VERSION = '3.96';
 $VERSION = eval $VERSION;
 
 1;
@@ -28,7 +28,7 @@ Scalar::Util 1.25               - Used by Object::InsideOut
 
 Pod::Escapes 1.04               - Used by Pod::Simple
 
-Pod::Simple 3.22                - Used by Test::Pod
+Pod::Simple 3.23                - Used by Test::Pod
 
 Test::Pod 1.45                  - Checks POD syntax
 
@@ -44,21 +44,21 @@ Test::Pod::Coverage 1.08        - Tests POD coverage
 
 threads 1.86                    - Support for threads
 
-threads::shared 1.40            - Support for sharing objects between threads
+threads::shared 1.41            - Support for sharing objects between threads
 
 Want 0.21                       - :lvalue accessor support
 
 Data::Dumper 2.135              - Object serialization support
 
-Storable 2.35                   - Object serialization support
+Storable 2.39                   - Object serialization support
 
 Devel::StackTrace 1.27          - Used by Exception::Class
 
 Class::Data::Inheritable 0.08   - Used by Exception::Class
 
-Exception::Class 1.32           - Error handling
+Exception::Class 1.35           - Error handling
 
-Object::InsideOut 3.95          - Inside-out object support
+Object::InsideOut 3.96          - Inside-out object support
 
 URI 1.60                        - Used by LWP::UserAgent
 
@@ -70,7 +70,7 @@ LWP::UserAgent 6.04             - Used by Math::Random::MT::Auto
 
 Win32::API 0.68                 - Used by Math::Random::MT::Auto (Win XP only)
 
-Math::Random::MT::Auto 6.18     - Support for :SECURE mode
+Math::Random::MT::Auto 6.22     - Support for :SECURE mode
 
 =head1 DESCRIPTION
 

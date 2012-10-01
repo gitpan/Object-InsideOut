@@ -56,11 +56,13 @@ sub consumer
 
     while (1) {
         my $obj = $fm_main->dequeue();
+        last if (! ref($obj));
         my $id = $$obj;
         undef($obj);
         Test::More::is($id, 1, 'thread');
         $to_main->enqueue($id);
     }
+    $to_main->enqueue('bye');
 }
 
 MAIN:
@@ -80,6 +82,9 @@ MAIN:
         Test::More::is($id, 1, 'main');
         Test::More::is($fm_thr->dequeue(), 1, 'returned');
     }
+
+    $to_thr->enqueue('done');
+    $fm_thr->dequeue();
 }
 
 # EOF

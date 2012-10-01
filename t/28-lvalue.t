@@ -515,7 +515,7 @@ MAIN:
     check_it($obj->num1(7), 7);
 
     eval { $val = $obj->num1()->me(); };
-    like($@, qr/Can't call method/      => 'chain get needs object');
+    like($@, qr/Can't (?:call|locate object) method/ => 'chain get needs object');
 
     $val = $obj->num1(8)->me();
     is($val, 'Foo(1)'                   => 'chain self');
@@ -587,7 +587,7 @@ MAIN:
     is($obj->num3(), 6                  => 'Check did set');
 
     eval { $val = $obj->num3()->me(); };
-    like($@, qr/Can't call method/      => 'chain get needs object');
+    like($@, qr/Can't (?:call|locate object) method/ => 'chain get needs object');
 
     $val = $obj->num3(7)->me();
     is($val, 'Foo(1)'                   => 'chain self');
