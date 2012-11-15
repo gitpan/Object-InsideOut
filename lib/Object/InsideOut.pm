@@ -5,12 +5,12 @@ require 5.006;
 use strict;
 use warnings;
 
-our $VERSION = '3.96';
+our $VERSION = '3.97';
 $VERSION = eval $VERSION;
 
-use Object::InsideOut::Exception 3.96;
-use Object::InsideOut::Util 3.96 qw(create_object hash_re is_it make_shared);
-use Object::InsideOut::Metadata 3.96;
+use Object::InsideOut::Exception 3.97;
+use Object::InsideOut::Util 3.97 qw(create_object hash_re is_it make_shared);
+use Object::InsideOut::Metadata 3.97;
 
 require B;
 
@@ -1935,7 +1935,7 @@ sub DESTROY
     my $err = $@;
 
     # Preserve other error variables
-    local($., $!, $^E, $?);
+    local($!, $^E, $?);
 
     # Workaround for Perl's "in cleanup" bug
     if ($threads::shared::threads_shared && ! $GBL{'term'}) {

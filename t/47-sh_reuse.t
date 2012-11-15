@@ -71,7 +71,7 @@ MAIN:
     my $fm_thr = Thread::Queue->new();
 
     # Consumer
-    threads->create(\&consumer, $to_thr, $fm_thr)->detach();
+    my $thr = threads->create(\&consumer, $to_thr, $fm_thr);
 
     # Producer
     foreach (1..5) {
@@ -85,6 +85,10 @@ MAIN:
 
     $to_thr->enqueue('done');
     $fm_thr->dequeue();
+
+    $thr->join();
 }
+
+exit(0);
 
 # EOF
