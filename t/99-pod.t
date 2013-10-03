@@ -170,4 +170,11 @@ syntaxes
 
 READONLY
 
+Arrayify
+Boolify
+Globify
+Hashify
+Numerify
+PreInit
+YAPI
 __END__

@@ -1,5 +1,8 @@
 Revision history for Perl extension Object::InsideOut.
 
+3.98 Thu Oct  3 19:04:26 2013
+	- User string compare for version checks
+
 3.97 Thu Nov 15 13:34:15 2012
 	- Fix for panic during destroy from Krzysztof Lewicki
 
